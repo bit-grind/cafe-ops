@@ -120,12 +120,7 @@ export default function OpsHome() {
         {loading ? (
           <div style={{ opacity: 0.7 }}>Loading…</div>
         ) : (
-          <>
-            <div style={{ marginTop: 8, opacity: 0.6, letterSpacing: 1 }}>
-              fast. funky. fresh.
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, marginTop: 18 }}>
+          <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, marginTop: 18 }}>
               <div className="bp-card">
                 <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>
                   Today ({computed.today?.business_date})
