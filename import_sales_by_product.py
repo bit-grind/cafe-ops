@@ -75,10 +75,20 @@ def main():
                 print(f"  SKIP (no date): {name}")
                 continue
 
-            with zf.open(name) as f:
-                content = io.TextIOWrapper(f, encoding="utf-8-sig")
-                reader = csv.DictReader(content)
-                for row in reader:
+            with zf.open(name) as raw:
+                raw_bytes = raw.read()
+            reader = None
+            for enc in ("utf-8-sig", "latin-1", "cp1252"):
+                try:
+                    reader = csv.DictReader(io.StringIO(raw_bytes.decode(enc)))
+                    _ = reader.fieldnames  # validate encoding
+                    break
+                except (UnicodeDecodeError, Exception):
+                    reader = None
+            if reader is None:
+                print(f"  SKIP (bad encoding): {name}")
+                continue
+            for row in reader:
                     # Skip malformed rows (e.g. "No results found.")
                     if row.get("Product") is None:
                         continue

@@ -52,7 +52,7 @@ export default function AskPage() {
   return (
     <div style={{ maxWidth: 900, margin: '40px auto', fontFamily: 'system-ui' }}>
       <h1>Ask AI</h1>
-      <p>Ask questions about the last 7 business days.</p>
+      <p></p>
 
       <div style={{ display: 'flex', gap: 10 }}>
         <input
