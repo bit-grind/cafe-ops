@@ -3,6 +3,43 @@ import { createClient } from '@supabase/supabase-js'
 
 type AskBody = { question: string }
 
+const MONTH_MAP: Record<string, number> = {
+  jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
+  january:1,february:2,march:3,april:4,june:6,july:7,august:8,september:9,october:10,november:11,december:12,
+}
+const MON_PAT = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
+
+function extractDateFromQuestion(q: string): { date?: string; yearMonth?: { year: string; month: string } } {
+  const s = q.toLowerCase()
+
+  // ISO: 2024-03-01
+  const iso = s.match(/\b(\d{4}-\d{2}-\d{2})\b/)
+  if (iso) return { date: iso[1] }
+
+  // "1st march 2024" or "1 march 2024"
+  const m1 = s.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+${MON_PAT}\\s+(\\d{4})\\b`))
+  if (m1) {
+    const month = String(MONTH_MAP[m1[2].slice(0,3)] ?? MONTH_MAP[m1[2]]).padStart(2, '0')
+    return { date: `${m1[3]}-${month}-${m1[1].padStart(2, '0')}` }
+  }
+
+  // "march 1st 2024" or "march 1 2024"
+  const m2 = s.match(new RegExp(`\\b${MON_PAT}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s+(\\d{4})\\b`))
+  if (m2) {
+    const month = String(MONTH_MAP[m2[1].slice(0,3)] ?? MONTH_MAP[m2[1]]).padStart(2, '0')
+    return { date: `${m2[3]}-${month}-${m2[2].padStart(2, '0')}` }
+  }
+
+  // "march 2024" (month-level)
+  const m3 = s.match(new RegExp(`\\b${MON_PAT}\\s+(\\d{4})\\b`))
+  if (m3) {
+    const month = String(MONTH_MAP[m3[1].slice(0,3)] ?? MONTH_MAP[m3[1]]).padStart(2, '0')
+    return { yearMonth: { year: m3[2], month } }
+  }
+
+  return {}
+}
+
 function startOfWeekMon(d: Date) {
   const x = new Date(d)
   const day = x.getDay() // 0 Sun .. 6 Sat
@@ -33,47 +70,94 @@ export async function POST(req: Request) {
       .order('business_date', { ascending: false })
       .limit(60)
 
-    if (error || !days || days.length === 0) {
-      return NextResponse.json({ error: error?.message ?? 'No data' }, { status: 500 })
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Fetch product-level data based on date extracted from the question
+    const parsed = extractDateFromQuestion(question)
+    let products: any[] | null = null
+    let productDateRange: { min: string; max: string } | null = null
+
+    const { data: rangeData } = await supabase
+      .from('sales_by_product')
+      .select('business_date')
+      .order('business_date', { ascending: true })
+      .limit(1)
+    const { data: rangeDataMax } = await supabase
+      .from('sales_by_product')
+      .select('business_date')
+      .order('business_date', { ascending: false })
+      .limit(1)
+    if (rangeData?.[0] && rangeDataMax?.[0]) {
+      productDateRange = { min: rangeData[0].business_date, max: rangeDataMax[0].business_date }
+    }
+
+    if (parsed.date) {
+      const { data: pd } = await supabase
+        .from('sales_by_product')
+        .select('business_date,position,product,quantity,sale_amount,cost,gross_profit_pct')
+        .eq('business_date', parsed.date)
+        .order('position', { ascending: true })
+      products = pd ?? null
+    } else if (parsed.yearMonth) {
+      const { year, month } = parsed.yearMonth
+      const from = `${year}-${month}-01`
+      const to = `${year}-${month}-31`
+      const { data: pd } = await supabase
+        .from('sales_by_product')
+        .select('business_date,position,product,quantity,sale_amount')
+        .gte('business_date', from)
+        .lte('business_date', to)
+        .order('business_date', { ascending: true })
+      products = pd ?? null
+    }
+
+    // If no specific date matched, include the most recent day of product data
+    if (!products || products.length === 0) {
+      const { data: pd } = await supabase
+        .from('sales_by_product')
+        .select('business_date,position,product,quantity,sale_amount,cost,gross_profit_pct')
+        .order('business_date', { ascending: false })
+        .order('position', { ascending: true })
+        .limit(80)
+      products = pd ?? null
     }
 
     const total = (arr: any[]) => arr.reduce((s, d) => s + Number(d.gross_sales || 0), 0)
     const avg = (arr: any[]) => (arr.length ? total(arr) / arr.length : 0)
 
-    const today = days[0]
-    const last7 = days.slice(0, 7)
-    const last30 = days.slice(0, 30)
+    const today = days?.[0] ?? null
+    const last7 = days?.slice(0, 7) ?? []
+    const last30 = days?.slice(0, 30) ?? []
 
-    const best30 = last30.reduce((a, b) => (Number(a.gross_sales) > Number(b.gross_sales) ? a : b))
-    const worst30 = last30.reduce((a, b) => (Number(a.gross_sales) < Number(b.gross_sales) ? a : b))
+    const best30 = last30.length ? last30.reduce((a, b) => (Number(a.gross_sales) > Number(b.gross_sales) ? a : b)) : null
+    const worst30 = last30.length ? last30.reduce((a, b) => (Number(a.gross_sales) < Number(b.gross_sales) ? a : b)) : null
 
-    const todayVs7AvgPct = avg(last7) > 0 ? ((Number(today.gross_sales) - avg(last7)) / avg(last7)) * 100 : null
-    const todayVs30AvgPct = avg(last30) > 0 ? ((Number(today.gross_sales) - avg(last30)) / avg(last30)) * 100 : null
+    const todayVs7AvgPct = today && avg(last7) > 0 ? ((Number(today.gross_sales) - avg(last7)) / avg(last7)) * 100 : null
+    const todayVs30AvgPct = today && avg(last30) > 0 ? ((Number(today.gross_sales) - avg(last30)) / avg(last30)) * 100 : null
 
-    // week-to-date vs last week (based on latest business_date)
-    const t = new Date(today.business_date + 'T00:00:00')
-    const mon = startOfWeekMon(t)
-    const prevMon = new Date(mon); prevMon.setDate(prevMon.getDate() - 7)
-    const prevSun = new Date(mon); prevSun.setDate(prevSun.getDate() - 1)
-
-    const monIso = iso(mon)
-    const prevMonIso = iso(prevMon)
-    const prevSunIso = iso(prevSun)
-
-    const wtd = days.filter(d => d.business_date >= monIso && d.business_date <= today.business_date)
-    const lastWeek = days.filter(d => d.business_date >= prevMonIso && d.business_date <= prevSunIso)
-
-    const wtdSales = total(wtd)
-    const lastWeekSales = total(lastWeek)
-    const wowPct = lastWeekSales > 0 ? ((wtdSales - lastWeekSales) / lastWeekSales) * 100 : null
+    let wtdSales = 0, lastWeekSales = 0, wowPct = null
+    if (today) {
+      const t = new Date(today.business_date + 'T00:00:00')
+      const mon = startOfWeekMon(t)
+      const prevMon = new Date(mon); prevMon.setDate(prevMon.getDate() - 7)
+      const prevSun = new Date(mon); prevSun.setDate(prevSun.getDate() - 1)
+      const monIso = iso(mon), prevMonIso = iso(prevMon), prevSunIso = iso(prevSun)
+      const wtd = (days ?? []).filter(d => d.business_date >= monIso && d.business_date <= today.business_date)
+      const lastWeek = (days ?? []).filter(d => d.business_date >= prevMonIso && d.business_date <= prevSunIso)
+      wtdSales = total(wtd)
+      lastWeekSales = total(lastWeek)
+      wowPct = lastWeekSales > 0 ? ((wtdSales - lastWeekSales) / lastWeekSales) * 100 : null
+    }
 
     const summary = {
-      latest_business_date: today.business_date,
-      today: {
+      latest_business_date: today?.business_date ?? null,
+      today: today ? {
         gross_sales: Number(today.gross_sales),
         order_count: Number(today.order_count),
         aov: Number(today.aov),
-      },
+      } : null,
       last_7_days: {
         total_gross_sales: Number(total(last7).toFixed(2)),
         avg_gross_sales: Number(avg(last7).toFixed(2)),
@@ -81,8 +165,8 @@ export async function POST(req: Request) {
       last_30_days: {
         total_gross_sales: Number(total(last30).toFixed(2)),
         avg_gross_sales: Number(avg(last30).toFixed(2)),
-        best_day: { date: best30.business_date, gross_sales: Number(best30.gross_sales) },
-        worst_day: { date: worst30.business_date, gross_sales: Number(worst30.gross_sales) },
+        best_day: best30 ? { date: best30.business_date, gross_sales: Number(best30.gross_sales) } : null,
+        worst_day: worst30 ? { date: worst30.business_date, gross_sales: Number(worst30.gross_sales) } : null,
       },
       comparisons: {
         today_vs_7day_avg_pct: todayVs7AvgPct === null ? null : Number(todayVs7AvgPct.toFixed(1)),
@@ -96,7 +180,7 @@ export async function POST(req: Request) {
     const system = `
 You are Cafe Ops AI for a Brisbane cafe.
 Use ONLY the provided data. Do not invent numbers.
-If the question needs data outside the provided range, say what range you need.
+If the question needs data outside the provided range, say what range is available and what is missing.
 Be practical: what happened, why it likely happened (based on the data), and what to do next.
 `
 
@@ -104,11 +188,14 @@ Be practical: what happened, why it likely happened (based on the data), and wha
 Question:
 ${question}
 
-Precomputed summary metrics:
+Precomputed summary metrics (based on sales_business_day):
 ${JSON.stringify(summary, null, 2)}
 
-Daily data (last 60 business days, most recent first):
-${JSON.stringify(days, null, 2)}
+Daily totals (last 60 business days, most recent first):
+${JSON.stringify(days ?? [], null, 2)}
+
+Product-level sales data available from: ${productDateRange ? `${productDateRange.min} to ${productDateRange.max}` : 'unknown'}
+${products && products.length > 0 ? `Product-level data for the relevant date(s):\n${JSON.stringify(products, null, 2)}` : 'No product-level data matched the requested date.'}
 `
 
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
