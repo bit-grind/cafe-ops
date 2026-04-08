@@ -244,6 +244,16 @@ export async function POST(req: Request) {
     const question = (body.question || '').trim()
     if (!question) return NextResponse.json({ error: 'Missing question' }, { status: 400 })
 
+    // Check auth and block guest accounts
+    const anonClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } }
+    )
+    const { data: { user } } = await anonClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (user.user_metadata?.role === 'guest') return NextResponse.json({ error: 'Access restricted' }, { status: 403 })
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!

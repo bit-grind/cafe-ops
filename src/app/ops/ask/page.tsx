@@ -166,6 +166,10 @@ export default function AskPage() {
     async function check() {
       const { data } = await supabase.auth.getSession()
       if (!data.session) { window.location.href = '/login'; return }
+      if (data.session.user.user_metadata?.role === 'guest') {
+        window.location.href = '/ops'
+        return
+      }
       setEmail(data.session.user.email ?? null)
       setLoading(false)
     }
@@ -188,9 +192,13 @@ export default function AskPage() {
     setMsgs(m => [...m, { role: 'user', text, display: display ?? text }])
     setQuestion('')
 
+    const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch('/api/ask', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token ?? ''}`,
+      },
       body: JSON.stringify({ question: text }),
     })
     const out = await res.json()
