@@ -80,15 +80,22 @@ export default function OpsHome() {
 
     let wtd: Day[] = []
     let lastWeek: Day[] = []
+    let wtdFrom = '', wtdTo = '', weekSun = ''
     if (today?.business_date) {
       const t = new Date(today.business_date + 'T00:00:00')
       const mon = startOfWeekMon(t)
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
       const monIso = iso(mon)
       const prevMon = new Date(mon); prevMon.setDate(prevMon.getDate() - 7)
-      const prevSun = new Date(mon); prevSun.setDate(prevSun.getDate() - 1)
+      // Compare same days last week (Mon→today-7) for a fair comparison
+      const prevEquiv = new Date(t); prevEquiv.setDate(t.getDate() - 7)
+
+      wtdFrom = monIso
+      wtdTo = today.business_date
+      weekSun = iso(sun)
 
       wtd = last30.filter(x => x.business_date >= monIso && x.business_date <= today.business_date)
-      lastWeek = last30.filter(x => x.business_date >= iso(prevMon) && x.business_date <= iso(prevSun))
+      lastWeek = last30.filter(x => x.business_date >= iso(prevMon) && x.business_date <= iso(prevEquiv))
     }
 
     const wtdSales = total(wtd)
@@ -104,6 +111,9 @@ export default function OpsHome() {
       worst,
       wtdSales,
       wowPct,
+      wtdFrom,
+      wtdTo,
+      weekSun,
     }
   }, [days30])
 
@@ -132,10 +142,13 @@ export default function OpsHome() {
               </div>
 
               <div className="bp-card">
-                <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>This week-to-date</div>
+                <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>This week</div>
+                <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>
+                  {computed.wtdFrom ? `${fmtDate(computed.wtdFrom)} – ${fmtDate(computed.weekSun)}` : ''}
+                </div>
                 <div style={{ fontSize: 30, marginTop: 8 }}>{money(computed.wtdSales)}</div>
                 <div style={{ opacity: 0.65, marginTop: 6 }}>
-                  vs last week: {computed.wowPct === null ? 'n/a' : `${computed.wowPct.toFixed(1)}%`}
+                  vs same days last week: {computed.wowPct === null ? 'n/a' : `${computed.wowPct.toFixed(1)}%`}
                 </div>
               </div>
 
