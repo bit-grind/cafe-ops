@@ -9,6 +9,74 @@ const MONTH_MAP: Record<string, number> = {
 }
 const MON_PAT = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
 
+function extractDateRangeFromQuestion(q: string): { from: string; to: string } | null {
+  const s = q.toLowerCase()
+  const now = new Date()
+  const todayIso = iso(now)
+
+  const addDays = (d: Date, n: number) => {
+    const r = new Date(d); r.setDate(r.getDate() + n); return r
+  }
+
+  // "last year" / "past year" → previous calendar year
+  if (/\b(last|past)\s+year\b/.test(s)) {
+    const y = now.getFullYear() - 1
+    return { from: `${y}-01-01`, to: `${y}-12-31` }
+  }
+  // "this year" / "so far this year"
+  if (/\bthis year\b/.test(s)) {
+    return { from: `${now.getFullYear()}-01-01`, to: todayIso }
+  }
+  // "in 2025" / "for 2025" / "during 2025"
+  const yearOnly = s.match(/\b(20\d{2})\b/)
+  if (yearOnly && !s.match(/\d{4}-\d{2}-\d{2}/) && !s.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+${MON_PAT}`)) && !s.match(new RegExp(`${MON_PAT}\\s+\\d{1,2}`))) {
+    const y = yearOnly[1]
+    return { from: `${y}-01-01`, to: `${y}-12-31` }
+  }
+  // "last N weeks" / "past N weeks"
+  const nWeeks = s.match(/\b(?:last|past)\s+(\d+)[\s\-–]+(?:\d+\s+)?weeks?\b/)
+  if (nWeeks) {
+    const n = parseInt(nWeeks[1])
+    return { from: iso(addDays(now, -n * 7)), to: todayIso }
+  }
+  // "last week" / "past week"
+  if (/\b(last|past)\s+week\b/.test(s)) {
+    return { from: iso(addDays(now, -7)), to: todayIso }
+  }
+  // "this week"
+  if (/\bthis\s+week\b/.test(s)) {
+    const mon = new Date(now)
+    const day = mon.getDay()
+    mon.setDate(mon.getDate() - (day === 0 ? 6 : day - 1))
+    return { from: iso(mon), to: todayIso }
+  }
+  // "last N months" / "past N months"
+  const nMonths = s.match(/\b(?:last|past)\s+(\d+)\s+months?\b/)
+  if (nMonths) {
+    return { from: iso(addDays(now, -parseInt(nMonths[1]) * 30)), to: todayIso }
+  }
+  // "last month" / "past month"
+  if (/\b(last|past)\s+month\b/.test(s)) {
+    return { from: iso(addDays(now, -30)), to: todayIso }
+  }
+  // "this month"
+  if (/\bthis\s+month\b/.test(s)) {
+    return { from: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`, to: todayIso }
+  }
+  // "last N days" / "past N days"
+  const nDays = s.match(/\b(?:last|past)\s+(\d+)\s+days?\b/)
+  if (nDays) {
+    return { from: iso(addDays(now, -parseInt(nDays[1]))), to: todayIso }
+  }
+  // "last 7 business days" etc — treat like N days
+  const nBizDays = s.match(/\b(?:last|past)\s+(\d+)\s+business\s+days?\b/)
+  if (nBizDays) {
+    return { from: iso(addDays(now, -parseInt(nBizDays[1]) * 1.5)), to: todayIso }
+  }
+
+  return null
+}
+
 function extractDateFromQuestion(q: string): { date?: string; yearMonth?: { year: string; month: string } } {
   const s = q.toLowerCase()
 
@@ -74,26 +142,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Fetch product-level data based on date extracted from the question
+    // Fetch product-level data based on date/range extracted from the question
+    const dateRange = extractDateRangeFromQuestion(question)
     const parsed = extractDateFromQuestion(question)
     let products: any[] | null = null
+    let productsAggregated = false
     let productDateRange: { min: string; max: string } | null = null
 
-    const { data: rangeData } = await supabase
-      .from('sales_by_product')
-      .select('business_date')
-      .order('business_date', { ascending: true })
-      .limit(1)
-    const { data: rangeDataMax } = await supabase
-      .from('sales_by_product')
-      .select('business_date')
-      .order('business_date', { ascending: false })
-      .limit(1)
-    if (rangeData?.[0] && rangeDataMax?.[0]) {
-      productDateRange = { min: rangeData[0].business_date, max: rangeDataMax[0].business_date }
+    const [rangeMin, rangeMax] = await Promise.all([
+      supabase.from('sales_by_product').select('business_date').order('business_date', { ascending: true }).limit(1),
+      supabase.from('sales_by_product').select('business_date').order('business_date', { ascending: false }).limit(1),
+    ])
+    if (rangeMin.data?.[0] && rangeMax.data?.[0]) {
+      productDateRange = { min: rangeMin.data[0].business_date, max: rangeMax.data[0].business_date }
     }
 
-    if (parsed.date) {
+    if (dateRange) {
+      // Multi-day range → aggregate via DB function
+      const { data: agg } = await supabase.rpc('get_top_products', {
+        date_from: dateRange.from,
+        date_to: dateRange.to,
+        top_n: 50,
+      })
+      products = agg ?? null
+      productsAggregated = true
+    } else if (parsed.date) {
+      // Single specific date → raw rows
       const { data: pd } = await supabase
         .from('sales_by_product')
         .select('business_date,position,product,quantity,sale_amount,cost,gross_profit_pct')
@@ -101,19 +175,18 @@ export async function POST(req: Request) {
         .order('position', { ascending: true })
       products = pd ?? null
     } else if (parsed.yearMonth) {
+      // Specific month → aggregate
       const { year, month } = parsed.yearMonth
-      const from = `${year}-${month}-01`
-      const to = `${year}-${month}-31`
-      const { data: pd } = await supabase
-        .from('sales_by_product')
-        .select('business_date,position,product,quantity,sale_amount')
-        .gte('business_date', from)
-        .lte('business_date', to)
-        .order('business_date', { ascending: true })
-      products = pd ?? null
+      const { data: agg } = await supabase.rpc('get_top_products', {
+        date_from: `${year}-${month}-01`,
+        date_to: `${year}-${month}-31`,
+        top_n: 50,
+      })
+      products = agg ?? null
+      productsAggregated = true
     }
 
-    // If no specific date matched, include the most recent day of product data
+    // Fallback: most recent day's products
     if (!products || products.length === 0) {
       const { data: pd } = await supabase
         .from('sales_by_product')
@@ -195,7 +268,12 @@ Daily totals (last 60 business days, most recent first):
 ${JSON.stringify(days ?? [], null, 2)}
 
 Product-level sales data available from: ${productDateRange ? `${productDateRange.min} to ${productDateRange.max}` : 'unknown'}
-${products && products.length > 0 ? `Product-level data for the relevant date(s):\n${JSON.stringify(products, null, 2)}` : 'No product-level data matched the requested date.'}
+${dateRange ? `Date range queried for products: ${dateRange.from} to ${dateRange.to}` : ''}
+${products && products.length > 0
+  ? productsAggregated
+    ? `Top products aggregated over the queried period (sorted by total quantity sold):\n${JSON.stringify(products, null, 2)}`
+    : `Product-level data for the relevant date(s):\n${JSON.stringify(products, null, 2)}`
+  : 'No product-level data matched the requested date.'}
 `
 
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
