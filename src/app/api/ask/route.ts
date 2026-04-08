@@ -250,9 +250,9 @@ export async function POST(req: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } }
     )
-    const { data: { user } } = await anonClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    if (user.user_metadata?.role === 'guest') return NextResponse.json({ error: 'Access restricted' }, { status: 403 })
+    const { data: { user: authUser } } = await anonClient.auth.getUser()
+    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (authUser.user_metadata?.role === 'guest') return NextResponse.json({ error: 'Access restricted' }, { status: 403 })
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
