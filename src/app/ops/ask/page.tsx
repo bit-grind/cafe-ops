@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import BpHeader from '@/components/BpHeader'
 
-type Msg = { role: 'user' | 'ai', text: string }
+type Msg = { role: 'user' | 'ai', text: string, display?: string }
 
 const QUICK_PROMPTS = [
   { label: 'Top products this week', q: 'What were our top selling products this week?' },
@@ -46,7 +46,7 @@ function formatHolidayDate(dateStr: string) {
   return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 }
 
-function HolidayDropdown({ onSelect, disabled }: { onSelect: (q: string) => void, disabled: boolean }) {
+function HolidayDropdown({ onSelect, disabled }: { onSelect: (q: string, display: string) => void, disabled: boolean }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -67,7 +67,10 @@ function HolidayDropdown({ onSelect, disabled }: { onSelect: (q: string) => void
 
   function select(name: string) {
     setOpen(false)
-    onSelect(`What were the total gross sales on ${name}, what was the weather like, and what were the top 10 selling food items (exclude coffees, drinks, and beverages from the list but do not mention the exclusion in your response — just say "Top 10 selling food items")? Show gross sales only, not net. Be brief and factual — no summary or recommendations.`)
+    onSelect(
+      `What were the total gross sales on ${name}, what was the weather like, and what were the top 10 selling food items (exclude coffees, drinks, and beverages from the list but do not mention the exclusion in your response — just say "Top 10 selling food items")? Show gross sales only, not net. Be brief and factual — no summary or recommendations.`,
+      name
+    )
   }
 
   return (
@@ -178,11 +181,11 @@ export default function AskPage() {
     window.location.href = '/login'
   }
 
-  async function ask(q?: string) {
+  async function ask(q?: string, display?: string) {
     const text = (q ?? question).trim()
     if (!text || busy) return
     setBusy(true)
-    setMsgs(m => [...m, { role: 'user', text }])
+    setMsgs(m => [...m, { role: 'user', text, display: display ?? text }])
     setQuestion('')
 
     const res = await fetch('/api/ask', {
@@ -219,7 +222,7 @@ export default function AskPage() {
         {QUICK_PROMPTS.map(p => (
           <button
             key={p.label}
-            onClick={() => ask(p.q)}
+            onClick={() => ask(p.q, p.label)}
             disabled={busy}
             style={{
               padding: '6px 12px',
@@ -238,7 +241,7 @@ export default function AskPage() {
             {p.label}
           </button>
         ))}
-        <HolidayDropdown onSelect={q => ask(q)} disabled={busy} />
+        <HolidayDropdown onSelect={(q, display) => ask(q, display)} disabled={busy} />
       </div>
 
       {/* Conversation window */}
@@ -294,7 +297,7 @@ export default function AskPage() {
                 }}>
                   {m.role === 'user' ? 'You' : 'AI'}
                 </div>
-                {m.text}
+                {m.role === 'user' ? (m.display ?? m.text) : m.text}
               </div>
             </div>
           ))
