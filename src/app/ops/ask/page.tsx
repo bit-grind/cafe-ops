@@ -67,7 +67,7 @@ function HolidayDropdown({ onSelect, disabled }: { onSelect: (q: string) => void
 
   function select(name: string) {
     setOpen(false)
-    onSelect(`What were the total sales on ${name}, what was the weather like, and what were the top selling food items (exclude coffees, drinks, and beverages from the product list)?`)
+    onSelect(`What were the total sales on ${name}, what was the weather like, and what were the top 10 selling food items (exclude coffees, drinks, and beverages)? Be brief and factual — no summary or recommendations.`)
   }
 
   return (
