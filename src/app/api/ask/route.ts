@@ -108,6 +108,106 @@ function extractDateFromQuestion(q: string): { date?: string; yearMonth?: { year
   return {}
 }
 
+// ── Australian holiday date resolution ────────────────────────────────────────
+
+function easterSunday(y: number): Date {
+  // Anonymous Gregorian algorithm
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31)
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+  return new Date(y, month - 1, day)
+}
+
+function nthWeekday(y: number, month: number, weekday: number, n: number): Date {
+  // n=1 → first, n=2 → second, n=-1 → last
+  if (n > 0) {
+    const d = new Date(y, month - 1, 1)
+    let count = 0
+    while (count < n) {
+      if (d.getDay() === weekday) count++
+      if (count < n) d.setDate(d.getDate() + 1)
+    }
+    return d
+  } else {
+    const d = new Date(y, month, 0) // last day of month
+    while (d.getDay() !== weekday) d.setDate(d.getDate() - 1)
+    return d
+  }
+}
+
+function resolveHolidayDate(q: string): string | null {
+  const s = q.toLowerCase()
+  const today = new Date()
+  const explicitYear = q.match(/\b(20\d{2})\b/)
+  const wantsLast = /\blast\b/.test(s)
+
+  function pickYear(holidayFn: (y: number) => Date): string {
+    if (explicitYear) return iso(holidayFn(parseInt(explicitYear[1])))
+    const thisYearDate = holidayFn(today.getFullYear())
+    if (wantsLast) {
+      // "last X" → most recent occurrence before today
+      return thisYearDate < today
+        ? iso(thisYearDate)
+        : iso(holidayFn(today.getFullYear() - 1))
+    }
+    return iso(thisYearDate)
+  }
+
+  if (/mother'?s?\s*day/.test(s))    return pickYear(y => nthWeekday(y, 5, 0, 2))  // 2nd Sun May
+  if (/father'?s?\s*day/.test(s))    return pickYear(y => nthWeekday(y, 9, 0, 1))  // 1st Sun Sep (QLD)
+  if (/australia\s*day/.test(s))      return pickYear(y => new Date(y, 0, 26))
+  if (/anzac\s*day/.test(s))          return pickYear(y => new Date(y, 3, 25))
+  if (/christmas\s*day|xmas\s*day/.test(s)) return pickYear(y => new Date(y, 11, 25))
+  if (/boxing\s*day/.test(s))         return pickYear(y => new Date(y, 11, 26))
+  if (/new\s*year'?s?\s*day/.test(s)) return pickYear(y => new Date(y, 0, 1))
+  if (/new\s*year'?s?\s*eve/.test(s)) return pickYear(y => new Date(y - 1, 11, 31))
+  if (/good\s*friday/.test(s))        return pickYear(y => { const e = easterSunday(y); e.setDate(e.getDate() - 2); return e })
+  if (/easter\s*monday/.test(s))      return pickYear(y => { const e = easterSunday(y); e.setDate(e.getDate() + 1); return e })
+  if (/easter/.test(s))               return pickYear(y => easterSunday(y))
+  if (/queens?\s*birthday|king'?s?\s*birthday/.test(s)) return pickYear(y => nthWeekday(y, 6, 1, 2)) // 2nd Mon Jun (QLD)
+  if (/labour\s*day|labor\s*day/.test(s))               return pickYear(y => nthWeekday(y, 5, 1, 1)) // 1st Mon May (QLD)
+
+  return null
+}
+
+// ── Brisbane historical weather (Open-Meteo, free, no key) ────────────────────
+
+const WMO_CODES: Record<number, string> = {
+  0:'Clear sky', 1:'Mainly clear', 2:'Partly cloudy', 3:'Overcast',
+  45:'Fog', 48:'Icy fog', 51:'Light drizzle', 53:'Moderate drizzle', 55:'Heavy drizzle',
+  61:'Slight rain', 63:'Moderate rain', 65:'Heavy rain',
+  71:'Slight snow', 73:'Moderate snow', 75:'Heavy snow',
+  80:'Slight showers', 81:'Moderate showers', 82:'Violent showers',
+  95:'Thunderstorm', 96:'Thunderstorm with hail', 99:'Heavy thunderstorm with hail',
+}
+
+async function fetchBrisbaneWeather(date: string): Promise<Record<string, any> | null> {
+  try {
+    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=-27.47&longitude=153.02&start_date=${date}&end_date=${date}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&timezone=Australia%2FBrisbane`
+    const resp = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    if (!resp.ok) return null
+    const data = await resp.json()
+    const d = data.daily
+    if (!d) return null
+    const code = d.weathercode?.[0]
+    return {
+      date,
+      max_temp_c: d.temperature_2m_max?.[0],
+      min_temp_c: d.temperature_2m_min?.[0],
+      precipitation_mm: d.precipitation_sum?.[0],
+      conditions: code != null ? (WMO_CODES[code] ?? `Code ${code}`) : 'Unknown',
+    }
+  } catch { return null }
+}
+
+function needsWeather(q: string): boolean {
+  return /\b(weather|temperature|temp|hot|cold|warm|rain|sunny|cloudy|forecast|humid|wind)\b/i.test(q)
+}
+
 function startOfWeekMon(d: Date) {
   const x = new Date(d)
   const day = x.getDay() // 0 Sun .. 6 Sat
@@ -142,9 +242,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Fetch product-level data based on date/range extracted from the question
-    const dateRange = extractDateRangeFromQuestion(question)
-    const parsed = extractDateFromQuestion(question)
+    // Resolve holiday names to dates first, then fall through to normal parsing
+    const holidayDate = resolveHolidayDate(question)
+    const dateRange = !holidayDate ? extractDateRangeFromQuestion(question) : null
+    const parsed = !holidayDate ? extractDateFromQuestion(question) : { date: holidayDate }
+
+    // Fetch weather if question asks for it and we have a specific date
+    const targetDate = holidayDate ?? parsed.date ?? null
+    const weatherData = (needsWeather(question) && targetDate)
+      ? await fetchBrisbaneWeather(targetDate)
+      : null
     let products: any[] | null = null
     let productsAggregated = false
     let productDateRange: { min: string; max: string } | null = null
@@ -268,7 +375,9 @@ Daily totals (last 60 business days, most recent first):
 ${JSON.stringify(days ?? [], null, 2)}
 
 Product-level sales data available from: ${productDateRange ? `${productDateRange.min} to ${productDateRange.max}` : 'unknown'}
+${holidayDate ? `Holiday/event resolved to date: ${holidayDate}` : ''}
 ${dateRange ? `Date range queried for products: ${dateRange.from} to ${dateRange.to}` : ''}
+${weatherData ? `Brisbane weather on ${weatherData.date}: ${weatherData.conditions}, max ${weatherData.max_temp_c}°C, min ${weatherData.min_temp_c}°C, ${weatherData.precipitation_mm}mm rain` : ''}
 ${products && products.length > 0
   ? productsAggregated
     ? `Top products aggregated over the queried period (sorted by total quantity sold):\n${JSON.stringify(products, null, 2)}`
