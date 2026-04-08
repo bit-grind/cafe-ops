@@ -378,6 +378,7 @@ Use ONLY the provided data. Do not invent numbers.
 If the question needs data outside the provided range, say what range is available and what is missing.
 Be practical: what happened, why it likely happened (based on the data), and what to do next.
 Always format dates as DD/MM/YY (e.g. 28/02/26, not 2026-02-28).
+When asked to exclude coffees, drinks, or beverages from a product list, filter out any item that is a coffee, milk, tea, juice, smoothie, soft drink, or other beverage. Only list food items.
 `
 
     const user = `
