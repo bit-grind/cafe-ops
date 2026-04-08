@@ -11,10 +11,143 @@ const QUICK_PROMPTS = [
   { label: 'Best day last month', q: 'What was our best day last month and what drove it?' },
   { label: 'Top products last year', q: 'What were our most popular products last year?' },
   { label: '30-day trend', q: 'What is the sales trend over the last 30 days? What should we do next week?' },
-  { label: "Last Mother's Day", q: "What were our top selling items on last Mother's Day and what was the weather like?" },
   { label: 'Worst day this year', q: 'What was our worst performing day this year and why might that be?' },
   { label: 'This month vs last', q: 'How is this month tracking compared to last month?' },
 ]
+
+// Queensland public holidays + key cafe dates, sorted chronologically
+const HOLIDAYS = [
+  { name: "Christmas Day 2025", date: "2025-12-25" },
+  { name: "Boxing Day 2025", date: "2025-12-26" },
+  { name: "New Year's Day", date: "2026-01-01" },
+  { name: "Australia Day", date: "2026-01-26" },
+  { name: "Valentine's Day", date: "2026-02-14" },
+  { name: "Good Friday", date: "2026-04-03" },
+  { name: "Easter Monday", date: "2026-04-06" },
+  { name: "Anzac Day", date: "2026-04-25" },
+  { name: "Labour Day (QLD)", date: "2026-05-04" },
+  { name: "Mother's Day", date: "2026-05-10" },
+  { name: "Father's Day", date: "2026-09-06" },
+  { name: "King's Birthday (QLD)", date: "2026-10-26" },
+  { name: "Christmas Day 2026", date: "2026-12-25" },
+  { name: "Boxing Day 2026", date: "2026-12-26" },
+  { name: "New Year's Day 2027", date: "2027-01-01" },
+  { name: "Australia Day 2027", date: "2027-01-26" },
+  { name: "Good Friday 2027", date: "2027-03-26" },
+  { name: "Easter Monday 2027", date: "2027-03-29" },
+  { name: "Anzac Day 2027", date: "2027-04-25" },
+  { name: "Labour Day (QLD) 2027", date: "2027-05-03" },
+  { name: "Mother's Day 2027", date: "2027-05-09" },
+]
+
+function formatHolidayDate(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+}
+
+function HolidayDropdown({ onSelect, disabled }: { onSelect: (q: string) => void, disabled: boolean }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const nextHoliday = HOLIDAYS.find(h => new Date(h.date + 'T00:00:00') >= today)
+  const pastHolidays = HOLIDAYS.filter(h => new Date(h.date + 'T00:00:00') < today).reverse()
+  const futureHolidays = HOLIDAYS.filter(h => new Date(h.date + 'T00:00:00') >= today)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  function select(name: string) {
+    setOpen(false)
+    onSelect(`What were our top selling items on ${name} and what was the weather like?`)
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => !disabled && setOpen(o => !o)}
+        disabled={disabled}
+        style={{
+          padding: '6px 12px',
+          borderRadius: 20,
+          border: `1px solid ${open ? '#555' : '#333'}`,
+          background: '#1a1a1a',
+          color: open ? '#fff' : '#ccc',
+          fontSize: 12,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          whiteSpace: 'nowrap',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+        }}
+      >
+        {nextHoliday ? `Next: ${nextHoliday.name}` : 'Holidays'}
+        <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 6px)',
+          left: 0,
+          zIndex: 100,
+          background: '#1a1a1a',
+          border: '1px solid #333',
+          borderRadius: 10,
+          overflow: 'hidden',
+          minWidth: 220,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+        }}>
+          {futureHolidays.length > 0 && (
+            <>
+              <div style={{ padding: '6px 12px 2px', fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Upcoming</div>
+              {futureHolidays.map(h => (
+                <button key={h.date} onClick={() => select(h.name)} style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '8px 14px', background: 'none', border: 'none',
+                  color: h === nextHoliday ? '#fff' : '#bbb', fontSize: 13, cursor: 'pointer',
+                  borderLeft: h === nextHoliday ? '2px solid #666' : '2px solid transparent',
+                }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#262626')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                >
+                  <span style={{ flex: 1 }}>{h.name}</span>
+                  <span style={{ float: 'right', color: '#555', fontSize: 11 }}>{formatHolidayDate(h.date)}</span>
+                </button>
+              ))}
+            </>
+          )}
+          {pastHolidays.length > 0 && (
+            <>
+              <div style={{ padding: '8px 12px 2px', fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', borderTop: '1px solid #222' }}>Recent</div>
+              {pastHolidays.slice(0, 6).map(h => (
+                <button key={h.date} onClick={() => select(h.name)} style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '8px 14px', background: 'none', border: 'none',
+                  color: '#888', fontSize: 13, cursor: 'pointer',
+                  borderLeft: '2px solid transparent',
+                }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#262626')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                >
+                  {h.name}
+                  <span style={{ float: 'right', color: '#444', fontSize: 11 }}>{formatHolidayDate(h.date)}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function AskPage() {
   const [loading, setLoading] = useState(true)
@@ -101,6 +234,7 @@ export default function AskPage() {
             {p.label}
           </button>
         ))}
+        <HolidayDropdown onSelect={q => ask(q)} disabled={busy} />
       </div>
 
       {/* Conversation window */}
