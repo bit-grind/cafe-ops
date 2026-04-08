@@ -233,6 +233,11 @@ function iso(d: Date) {
   return d.toISOString().slice(0, 10)
 }
 
+function fmtDate(isoStr: string) {
+  const [y, m, d] = isoStr.split('-')
+  return `${d}/${m}/${y.slice(2)}`
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as AskBody
@@ -264,6 +269,21 @@ export async function POST(req: Request) {
     const weatherData = (needsWeather(question) && targetDate)
       ? await fetchBrisbaneWeather(targetDate)
       : null
+
+    // Fetch the specific day's totals if not already in the 60-day window
+    let specificDayTotals: any = null
+    if (targetDate) {
+      specificDayTotals = days?.find(d => d.business_date === targetDate) ?? null
+      if (!specificDayTotals) {
+        const { data: sd } = await supabase
+          .from('sales_business_day')
+          .select('business_date,gross_sales,net_sales,tax,order_count,aov')
+          .eq('business_date', targetDate)
+          .maybeSingle()
+        specificDayTotals = sd ?? null
+      }
+    }
+
     let products: any[] | null = null
     let productsAggregated = false
     let productDateRange: { min: string; max: string } | null = null
@@ -393,9 +413,10 @@ Daily totals (last 60 business days, most recent first):
 ${JSON.stringify(days ?? [], null, 2)}
 
 Product-level sales data available from: ${productDateRange ? `${productDateRange.min} to ${productDateRange.max}` : 'unknown'}
-${holiday ? `Holiday/event resolved to date: ${holiday.date}${holiday.upcoming ? ` (showing last year's data — the upcoming occurrence is on ${holiday.upcoming}, which hasn't happened yet)` : ''}` : ''}
-${dateRange ? `Date range queried for products: ${dateRange.from} to ${dateRange.to}` : ''}
-${weatherData ? `Brisbane weather on ${weatherData.date}: ${weatherData.conditions}, max ${weatherData.max_temp_c}°C, min ${weatherData.min_temp_c}°C, ${weatherData.precipitation_mm}mm rain` : ''}
+${holiday ? `Holiday/event resolved to date: ${fmtDate(holiday.date)}${holiday.upcoming ? ` (showing last year's data — the upcoming occurrence is on ${fmtDate(holiday.upcoming)}, which hasn't happened yet)` : ''}` : ''}
+${specificDayTotals ? `Daily totals for ${fmtDate(specificDayTotals.business_date)}: gross_sales=$${specificDayTotals.gross_sales}, order_count=${specificDayTotals.order_count}, aov=$${specificDayTotals.aov}, net_sales=$${specificDayTotals.net_sales}, tax=$${specificDayTotals.tax}` : ''}
+${dateRange ? `Date range queried for products: ${fmtDate(dateRange.from)} to ${fmtDate(dateRange.to)}` : ''}
+${weatherData ? `Brisbane weather on ${fmtDate(weatherData.date)}: ${weatherData.conditions}, max ${weatherData.max_temp_c}°C, min ${weatherData.min_temp_c}°C, ${weatherData.precipitation_mm}mm rain` : ''}
 ${products && products.length > 0
   ? productsAggregated
     ? `Top products aggregated over the queried period (sorted by total quantity sold):\n${JSON.stringify(products, null, 2)}`
