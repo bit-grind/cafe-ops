@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import BpHeader from '@/components/BpHeader'
 
 type Msg = { role: 'user' | 'ai', text: string }
 
@@ -151,6 +152,7 @@ function HolidayDropdown({ onSelect, disabled }: { onSelect: (q: string) => void
 
 export default function AskPage() {
   const [loading, setLoading] = useState(true)
+  const [email, setEmail] = useState<string | null>(null)
   const [question, setQuestion] = useState('')
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [busy, setBusy] = useState(false)
@@ -161,6 +163,7 @@ export default function AskPage() {
     async function check() {
       const { data } = await supabase.auth.getSession()
       if (!data.session) { window.location.href = '/login'; return }
+      setEmail(data.session.user.email ?? null)
       setLoading(false)
     }
     check()
@@ -169,6 +172,11 @@ export default function AskPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [msgs])
+
+  async function signOut() {
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
 
   async function ask(q?: string) {
     const text = (q ?? question).trim()
@@ -191,24 +199,20 @@ export default function AskPage() {
   if (loading) return <div style={{ padding: 40, color: '#fff' }}>Loading…</div>
 
   return (
-    <div style={{
-      maxWidth: 860,
-      margin: '0 auto',
-      padding: '32px 24px',
-      fontFamily: 'system-ui, sans-serif',
-      display: 'flex',
-      flexDirection: 'column',
-      height: 'calc(100vh - 80px)',
-      boxSizing: 'border-box',
-    }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <BpHeader email={email} onSignOut={signOut} activeTab="ask" />
 
-      {/* Header */}
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#fff' }}>Ask AI</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>
-          Ask anything about your sales — products, trends, specific dates, weather, holidays.
-        </p>
-      </div>
+      <div style={{
+        flex: 1,
+        minHeight: 0,
+        maxWidth: 860,
+        width: '100%',
+        margin: '0 auto',
+        padding: '24px 20px 16px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
 
       {/* Quick prompts */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
@@ -350,6 +354,7 @@ export default function AskPage() {
         >
           {busy ? '…' : 'Ask'}
         </button>
+      </div>
       </div>
     </div>
   )

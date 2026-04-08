@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import BpHeader from '@/components/BpHeader'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -114,7 +113,7 @@ export default function OpsHome() {
 
   return (
     <div>
-      <BpHeader email={email} onSignOut={signOut} />
+      <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" />
 
       <div className="bp-container">
         {loading ? (
@@ -155,11 +154,6 @@ export default function OpsHome() {
               </div>
             </div>
 
-            <div style={{ marginTop: 18 }}>
-              <Link href="/ops/ask" className="bp-btn">
-                Ask AI →
-              </Link>
-            </div>
           </>
         )}
       </div>

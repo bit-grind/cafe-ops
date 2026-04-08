@@ -1,12 +1,19 @@
 import Image from "next/image"
 import Link from "next/link"
 
+const TABS = [
+  { label: 'Dashboard', tab: 'dashboard' as const, href: '/ops' },
+  { label: 'Ask AI', tab: 'ask' as const, href: '/ops/ask' },
+]
+
 export default function BpHeader({
   email,
   onSignOut,
+  activeTab,
 }: {
   email?: string | null
   onSignOut?: () => void
+  activeTab?: 'dashboard' | 'ask'
 }) {
   return (
     <header style={{ borderBottom: "1px solid rgba(255,255,255,0.10)" }}>
@@ -14,7 +21,7 @@ export default function BpHeader({
         className="bp-container"
         style={{
           paddingTop: 22,
-          paddingBottom: 22,
+          paddingBottom: activeTab ? 0 : 22,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -42,6 +49,27 @@ export default function BpHeader({
           ) : null}
         </div>
       </div>
+
+      {activeTab && (
+        <div className="bp-container" style={{ paddingTop: 0, paddingBottom: 0, display: 'flex', gap: 4 }}>
+          {TABS.map(({ label, tab, href }) => (
+            <Link
+              key={tab}
+              href={href}
+              style={{
+                padding: '10px 16px',
+                fontSize: 13,
+                fontWeight: activeTab === tab ? 600 : 400,
+                color: activeTab === tab ? '#fff' : '#555',
+                borderBottom: `2px solid ${activeTab === tab ? '#fff' : 'transparent'}`,
+                textDecoration: 'none',
+              }}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+      )}
     </header>
   )
 }
