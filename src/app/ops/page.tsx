@@ -31,7 +31,7 @@ function startOfWeekMon(d: Date) {
 export default function OpsHome() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
-  const [days30, setDays30] = useState<Day[]>([])
+  const [days, setDays] = useState<Day[]>([])
 
   useEffect(() => {
     async function load() {
@@ -47,9 +47,9 @@ export default function OpsHome() {
         .from('sales_business_day')
         .select('business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov')
         .order('business_date', { ascending: false })
-        .limit(30)
+        .limit(90)
 
-      setDays30((data as any) ?? [])
+      setDays((data as any) ?? [])
       setLoading(false)
     }
 
@@ -62,113 +62,122 @@ export default function OpsHome() {
   }
 
   const computed = useMemo(() => {
-    const d = days30
-    const today = d[0]
+    const today = days[0] ?? null
+    if (!today) return null
 
     const total = (arr: Day[]) => arr.reduce((s, x) => s + Number(x.gross_sales || 0), 0)
     const orders = (arr: Day[]) => arr.reduce((s, x) => s + Number(x.order_count || 0), 0)
 
-    const last7 = d.slice(0, 7)
-    const last30 = d.slice(0, 30)
+    const t = new Date(today.business_date + 'T00:00:00')
 
-    let best: Day | null = null
-    let worst: Day | null = null
-    for (const x of last30) {
-      if (!best || Number(x.gross_sales) > Number(best.gross_sales)) best = x
-      if (!worst || Number(x.gross_sales) < Number(worst.gross_sales)) worst = x
-    }
+    // ── This week (Mon → today) ──────────────────────────────────────────────
+    const mon = startOfWeekMon(t)
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+    const prevMon = new Date(mon); prevMon.setDate(mon.getDate() - 7)
+    const prevEquiv = new Date(t); prevEquiv.setDate(t.getDate() - 7) // same day last week
 
-    let wtd: Day[] = []
-    let lastWeek: Day[] = []
-    let wtdFrom = '', wtdTo = '', weekSun = ''
-    if (today?.business_date) {
-      const t = new Date(today.business_date + 'T00:00:00')
-      const mon = startOfWeekMon(t)
-      const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
-      const monIso = iso(mon)
-      const prevMon = new Date(mon); prevMon.setDate(prevMon.getDate() - 7)
-      // Compare same days last week (Mon→today-7) for a fair comparison
-      const prevEquiv = new Date(t); prevEquiv.setDate(t.getDate() - 7)
-
-      wtdFrom = monIso
-      wtdTo = today.business_date
-      weekSun = iso(sun)
-
-      wtd = last30.filter(x => x.business_date >= monIso && x.business_date <= today.business_date)
-      lastWeek = last30.filter(x => x.business_date >= iso(prevMon) && x.business_date <= iso(prevEquiv))
-    }
-
+    const wtd = days.filter(x => x.business_date >= iso(mon) && x.business_date <= today.business_date)
+    const lastWeekSameDays = days.filter(x => x.business_date >= iso(prevMon) && x.business_date <= iso(prevEquiv))
     const wtdSales = total(wtd)
-    const lastWeekSales = total(lastWeek)
-    const wowPct = lastWeekSales > 0 ? ((wtdSales - lastWeekSales) / lastWeekSales) * 100 : null
+    const wowPct = total(lastWeekSameDays) > 0
+      ? ((wtdSales - total(lastWeekSameDays)) / total(lastWeekSameDays)) * 100
+      : null
+
+    // ── Last week (previous Mon–Sun) ─────────────────────────────────────────
+    const prevSun = new Date(mon); prevSun.setDate(mon.getDate() - 1)
+    const lastWeekFull = days.filter(x => x.business_date >= iso(prevMon) && x.business_date <= iso(prevSun))
+    const lastWeekSales = total(lastWeekFull)
+    const lastWeekOrders = orders(lastWeekFull)
+
+    // ── Month to date ────────────────────────────────────────────────────────
+    const mtdFrom = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-01`
+    const mtd = days.filter(x => x.business_date >= mtdFrom && x.business_date <= today.business_date)
+    const mtdSales = total(mtd)
+
+    // ── Last month (full calendar month) ────────────────────────────────────
+    const lmStart = new Date(t.getFullYear(), t.getMonth() - 1, 1)
+    const lmEnd = new Date(t.getFullYear(), t.getMonth(), 0)
+    const lmFrom = iso(lmStart)
+    const lmTo = iso(lmEnd)
+    const lastMonth = days.filter(x => x.business_date >= lmFrom && x.business_date <= lmTo)
+    const lastMonthSales = total(lastMonth)
+    const momPct = lastMonthSales > 0 ? ((mtdSales - lastMonthSales) / lastMonthSales) * 100 : null
 
     return {
       today,
-      last7Sales: total(last7),
-      last7Orders: orders(last7),
-      last30Sales: total(last30),
-      best,
-      worst,
-      wtdSales,
-      wowPct,
-      wtdFrom,
-      wtdTo,
-      weekSun,
+      wtdSales, wowPct,
+      wtdFrom: iso(mon), weekSun: iso(sun),
+      lastWeekSales, lastWeekOrders,
+      lastWeekFrom: iso(prevMon), lastWeekTo: iso(prevSun),
+      mtdSales, mtdFrom,
+      lastMonthSales, lmFrom, lmTo, momPct,
     }
-  }, [days30])
+  }, [days])
 
   const fmt = (n: any) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })
   const money = (n: any) =>
     '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-  const fmtDate = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y.slice(2)}` }
+  const fmtDate = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y.slice(2)}` }
 
   return (
     <div>
       <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" />
 
       <div className="bp-container">
-        {loading ? (
+        {loading || !computed ? (
           <div style={{ opacity: 0.7 }}>Loading…</div>
         ) : (
-          <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, marginTop: 18 }}>
-              <div className="bp-card">
-                <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>
-                  Today ({computed.today ? fmtDate(computed.today.business_date) : ''})
-                </div>
-                <div style={{ fontSize: 30, marginTop: 8 }}>{money(computed.today?.gross_sales)}</div>
-                <div style={{ opacity: 0.65, marginTop: 6 }}>
-                  Orders: {fmt(computed.today?.order_count)} • AOV: {money(computed.today?.aov)}
-                </div>
-              </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, marginTop: 18 }}>
 
-              <div className="bp-card">
-                <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>This week</div>
-                <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>
-                  {computed.wtdFrom ? `${fmtDate(computed.wtdFrom)} – ${fmtDate(computed.weekSun)}` : ''}
-                </div>
-                <div style={{ fontSize: 30, marginTop: 8 }}>{money(computed.wtdSales)}</div>
-                <div style={{ opacity: 0.65, marginTop: 6 }}>
-                  vs same days last week: {computed.wowPct === null ? 'n/a' : `${computed.wowPct.toFixed(1)}%`}
-                </div>
+            {/* Today */}
+            <div className="bp-card">
+              <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>
+                Today ({fmtDate(computed.today.business_date)})
               </div>
-
-              <div className="bp-card">
-                <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>Last 7 days</div>
-                <div style={{ fontSize: 30, marginTop: 8 }}>{money(computed.last7Sales)}</div>
-                <div style={{ opacity: 0.65, marginTop: 6 }}>Orders: {fmt(computed.last7Orders)}</div>
-              </div>
-
-              <div className="bp-card">
-                <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>Last 30 days</div>
-                <div style={{ fontSize: 30, marginTop: 8 }}>{money(computed.last30Sales)}</div>
-                <div style={{ opacity: 0.65, marginTop: 6, lineHeight: 1.5 }}>
-                  Best: {computed.best ? fmtDate(computed.best.business_date) : ''} ({money(computed.best?.gross_sales)})<br />
-                  Worst: {computed.worst ? fmtDate(computed.worst.business_date) : ''} ({money(computed.worst?.gross_sales)})
-                </div>
+              <div style={{ fontSize: 30, marginTop: 8 }}>{money(computed.today.gross_sales)}</div>
+              <div style={{ opacity: 0.65, marginTop: 6 }}>
+                Orders: {fmt(computed.today.order_count)} • AOV: {money(computed.today.aov)}
               </div>
             </div>
 
-          </>
+            {/* This week */}
+            <div className="bp-card">
+              <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>This week</div>
+              <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>
+                {fmtDate(computed.wtdFrom)} – {fmtDate(computed.weekSun)}
+              </div>
+              <div style={{ fontSize: 30, marginTop: 8 }}>{money(computed.wtdSales)}</div>
+              <div style={{ opacity: 0.65, marginTop: 6 }}>
+                vs same days last week: {computed.wowPct === null ? 'n/a' : `${computed.wowPct.toFixed(1)}%`}
+              </div>
+            </div>
+
+            {/* Last week */}
+            <div className="bp-card">
+              <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>Last week</div>
+              <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>
+                {fmtDate(computed.lastWeekFrom)} – {fmtDate(computed.lastWeekTo)}
+              </div>
+              <div style={{ fontSize: 30, marginTop: 8 }}>{money(computed.lastWeekSales)}</div>
+              <div style={{ opacity: 0.65, marginTop: 6 }}>Orders: {fmt(computed.lastWeekOrders)}</div>
+            </div>
+
+            {/* This month vs last month */}
+            <div className="bp-card">
+              <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>This month</div>
+              <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>
+                {fmtDate(computed.mtdFrom)} – today
+              </div>
+              <div style={{ fontSize: 30, marginTop: 8 }}>{money(computed.mtdSales)}</div>
+              <div style={{ opacity: 0.65, marginTop: 6 }}>
+                Last month ({fmtDate(computed.lmFrom).slice(3)}): {money(computed.lastMonthSales)}
+                {computed.momPct !== null && (
+                  <span style={{ marginLeft: 6 }}>({computed.momPct.toFixed(1)}%)</span>
+                )}
+              </div>
+            </div>
+
+          </div>
         )}
       </div>
     </div>
