@@ -110,6 +110,11 @@ function extractDateFromQuestion(q: string): { date?: string; yearMonth?: { year
 
 // ── Australian holiday date resolution ────────────────────────────────────────
 
+interface HolidayInfo {
+  date: string       // the date to query (always in the past)
+  upcoming?: string  // the upcoming occurrence if this year's hasn't happened yet
+}
+
 function easterSunday(y: number): Date {
   // Anonymous Gregorian algorithm
   const a = y % 19, b = Math.floor(y / 100), c = y % 100
@@ -139,22 +144,29 @@ function nthWeekday(y: number, month: number, weekday: number, n: number): Date 
   }
 }
 
-function resolveHolidayDate(q: string): string | null {
+function resolveHolidayDate(q: string): HolidayInfo | null {
   const s = q.toLowerCase()
   const today = new Date()
+  today.setHours(0, 0, 0, 0)
   const explicitYear = q.match(/\b(20\d{2})\b/)
   const wantsLast = /\blast\b/.test(s)
 
-  function pickYear(holidayFn: (y: number) => Date): string {
-    if (explicitYear) return iso(holidayFn(parseInt(explicitYear[1])))
+  function pickYear(holidayFn: (y: number) => Date): HolidayInfo {
+    if (explicitYear) return { date: iso(holidayFn(parseInt(explicitYear[1]))) }
     const thisYearDate = holidayFn(today.getFullYear())
-    if (wantsLast) {
-      // "last X" → most recent occurrence before today
-      return thisYearDate < today
-        ? iso(thisYearDate)
-        : iso(holidayFn(today.getFullYear() - 1))
+    thisYearDate.setHours(0, 0, 0, 0)
+    // If the holiday hasn't happened yet this year (or user said "last"), use last year's occurrence.
+    // Return the upcoming date so the AI can reference it.
+    if (thisYearDate > today || wantsLast) {
+      const pastDate = thisYearDate <= today
+        ? thisYearDate
+        : holidayFn(today.getFullYear() - 1)
+      return {
+        date: iso(pastDate),
+        upcoming: thisYearDate > today ? iso(thisYearDate) : undefined,
+      }
     }
-    return iso(thisYearDate)
+    return { date: iso(thisYearDate) }
   }
 
   if (/mother'?s?\s*day/.test(s))    return pickYear(y => nthWeekday(y, 5, 0, 2))  // 2nd Sun May
@@ -243,12 +255,12 @@ export async function POST(req: Request) {
     }
 
     // Resolve holiday names to dates first, then fall through to normal parsing
-    const holidayDate = resolveHolidayDate(question)
-    const dateRange = !holidayDate ? extractDateRangeFromQuestion(question) : null
-    const parsed = !holidayDate ? extractDateFromQuestion(question) : { date: holidayDate }
+    const holiday = resolveHolidayDate(question)
+    const dateRange = !holiday ? extractDateRangeFromQuestion(question) : null
+    const parsed = !holiday ? extractDateFromQuestion(question) : { date: holiday.date }
 
     // Fetch weather if question asks for it and we have a specific date
-    const targetDate = holidayDate ?? parsed.date ?? null
+    const targetDate = holiday?.date ?? parsed.date ?? null
     const weatherData = (needsWeather(question) && targetDate)
       ? await fetchBrisbaneWeather(targetDate)
       : null
@@ -273,7 +285,7 @@ export async function POST(req: Request) {
       })
       products = agg ?? null
       productsAggregated = true
-    } else if (parsed.date) {
+    } else if (parsed.date && parsed.date <= iso(new Date())) {
       // Single specific date → raw rows
       const { data: pd } = await supabase
         .from('sales_by_product')
@@ -379,7 +391,7 @@ Daily totals (last 60 business days, most recent first):
 ${JSON.stringify(days ?? [], null, 2)}
 
 Product-level sales data available from: ${productDateRange ? `${productDateRange.min} to ${productDateRange.max}` : 'unknown'}
-${holidayDate ? `Holiday/event resolved to date: ${holidayDate}` : ''}
+${holiday ? `Holiday/event resolved to date: ${holiday.date}${holiday.upcoming ? ` (showing last year's data — the upcoming occurrence is on ${holiday.upcoming}, which hasn't happened yet)` : ''}` : ''}
 ${dateRange ? `Date range queried for products: ${dateRange.from} to ${dateRange.to}` : ''}
 ${weatherData ? `Brisbane weather on ${weatherData.date}: ${weatherData.conditions}, max ${weatherData.max_temp_c}°C, min ${weatherData.min_temp_c}°C, ${weatherData.precipitation_mm}mm rain` : ''}
 ${products && products.length > 0
