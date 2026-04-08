@@ -13,7 +13,8 @@ export default function LoginPage() {
     e.preventDefault()
     setBusy(true)
     setMsg(null)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const resolvedEmail = email.trim() === 'guest' ? 'guest@example.com' : email
+    const { error } = await supabase.auth.signInWithPassword({ email: resolvedEmail, password })
     setBusy(false)
     if (error) setMsg(error.message)
     else window.location.href = '/ops'
