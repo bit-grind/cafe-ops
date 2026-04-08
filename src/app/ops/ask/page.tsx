@@ -166,10 +166,6 @@ export default function AskPage() {
     async function check() {
       const { data } = await supabase.auth.getSession()
       if (!data.session) { window.location.href = '/login'; return }
-      if (data.session.user.user_metadata?.role === 'guest') {
-        window.location.href = '/ops'
-        return
-      }
       setEmail(data.session.user.email ?? null)
       setLoading(false)
     }

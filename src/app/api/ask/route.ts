@@ -252,7 +252,7 @@ export async function POST(req: Request) {
     )
     const { data: { user: authUser } } = await anonClient.auth.getUser()
     if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    if (authUser.user_metadata?.role === 'guest') return NextResponse.json({ error: 'Access restricted' }, { status: 403 })
+    const isGuest = authUser.user_metadata?.role === 'guest' || authUser.email === 'guest@example.com'
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -401,6 +401,10 @@ export async function POST(req: Request) {
 
     const actualToday = iso(new Date())
 
+    const guestClause = isGuest
+      ? `\nIMPORTANT: This user is a guest with READ-ONLY access. You may only answer questions about sales data, products, trends, and general business metrics. If the user asks you to modify, delete, update, or change any data, settings, or configurations, politely decline and explain that guests have read-only access.`
+      : ''
+
     const system = `
 You are Cafe Ops AI for a Brisbane cafe.
 Today's actual date is ${actualToday}. Always use this as "today" — do not confuse it with the latest date in the sales data.
@@ -410,7 +414,7 @@ Be practical: what happened, why it likely happened (based on the data), and wha
 Always format dates as DD/MM/YY (e.g. 28/02/26, not 2026-02-28).
 When asked to exclude coffees, drinks, or beverages from a product list, filter out any item that is a coffee, milk, tea, juice, smoothie, soft drink, or other beverage. Only list food items.
 When the question asks to "be brief and factual" or says "no summary or recommendations", respond with only the requested data points — no summary paragraph, no recommendations section, no closing notes.
-IMPORTANT: This cafe is significantly busier on weekends (Saturday and Sunday) than weekdays. Always account for day-of-week when analysing trends or comparing days. A weekday below the overall average is not necessarily a concern — compare weekdays to weekdays and weekends to weekends. When identifying "slow" days or drops, note whether it is a weekday or weekend and adjust the interpretation accordingly. When making recommendations for "next week", distinguish between weekday and weekend expectations.
+IMPORTANT: This cafe is significantly busier on weekends (Saturday and Sunday) than weekdays. Always account for day-of-week when analysing trends or comparing days. A weekday below the overall average is not necessarily a concern — compare weekdays to weekdays and weekends to weekends. When identifying "slow" days or drops, note whether it is a weekday or weekend and adjust the interpretation accordingly. When making recommendations for "next week", distinguish between weekday and weekend expectations.${guestClause}
 `
 
     const user = `
