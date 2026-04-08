@@ -357,11 +357,15 @@ export async function POST(req: Request) {
       },
     }
 
+    const actualToday = iso(new Date())
+
     const system = `
 You are Cafe Ops AI for a Brisbane cafe.
+Today's actual date is ${actualToday}. Always use this as "today" — do not confuse it with the latest date in the sales data.
 Use ONLY the provided data. Do not invent numbers.
 If the question needs data outside the provided range, say what range is available and what is missing.
 Be practical: what happened, why it likely happened (based on the data), and what to do next.
+Always format dates as DD/MM/YY (e.g. 28/02/26, not 2026-02-28).
 `
 
     const user = `
