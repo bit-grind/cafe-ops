@@ -110,6 +110,7 @@ export default function OpsHome() {
   const fmt = (n: any) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })
   const money = (n: any) =>
     '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  const fmtDate = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y.slice(2)}` }
 
   return (
     <div>
@@ -122,7 +123,7 @@ export default function OpsHome() {
           <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, marginTop: 18 }}>
               <div className="bp-card">
                 <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>
-                  Today ({computed.today?.business_date})
+                  Today ({computed.today ? fmtDate(computed.today.business_date) : ''})
                 </div>
                 <div style={{ fontSize: 30, marginTop: 8 }}>{money(computed.today?.gross_sales)}</div>
                 <div style={{ opacity: 0.65, marginTop: 6 }}>
@@ -148,8 +149,8 @@ export default function OpsHome() {
                 <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>Last 30 days</div>
                 <div style={{ fontSize: 30, marginTop: 8 }}>{money(computed.last30Sales)}</div>
                 <div style={{ opacity: 0.65, marginTop: 6, lineHeight: 1.5 }}>
-                  Best: {computed.best?.business_date} ({money(computed.best?.gross_sales)})<br />
-                  Worst: {computed.worst?.business_date} ({money(computed.worst?.gross_sales)})
+                  Best: {computed.best ? fmtDate(computed.best.business_date) : ''} ({money(computed.best?.gross_sales)})<br />
+                  Worst: {computed.worst ? fmtDate(computed.worst.business_date) : ''} ({money(computed.worst?.gross_sales)})
                 </div>
               </div>
             </div>
