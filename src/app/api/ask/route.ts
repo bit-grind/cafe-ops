@@ -379,6 +379,7 @@ If the question needs data outside the provided range, say what range is availab
 Be practical: what happened, why it likely happened (based on the data), and what to do next.
 Always format dates as DD/MM/YY (e.g. 28/02/26, not 2026-02-28).
 When asked to exclude coffees, drinks, or beverages from a product list, filter out any item that is a coffee, milk, tea, juice, smoothie, soft drink, or other beverage. Only list food items.
+IMPORTANT: This cafe is significantly busier on weekends (Saturday and Sunday) than weekdays. Always account for day-of-week when analysing trends or comparing days. A weekday below the overall average is not necessarily a concern — compare weekdays to weekdays and weekends to weekends. When identifying "slow" days or drops, note whether it is a weekday or weekend and adjust the interpretation accordingly. When making recommendations for "next week", distinguish between weekday and weekend expectations.
 `
 
     const user = `
