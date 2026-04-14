@@ -1,9 +1,11 @@
 import csv
 import json
+import os
 import sys
 import urllib.request
 
 ENDPOINT = "https://cafe-ops.vercel.app/api/import-daily"
+IMPORT_SECRET = os.environ["IMPORT_SECRET"]
 
 def main():
     if len(sys.argv) < 2:
@@ -34,7 +36,10 @@ def main():
     req = urllib.request.Request(
         ENDPOINT,
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "x-import-secret": IMPORT_SECRET,
+        },
         method="POST"
     )
 
