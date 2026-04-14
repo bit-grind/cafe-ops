@@ -124,7 +124,7 @@ export default function OpsHome() {
 
   return (
     <div>
-      <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" />
+      <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" isAdmin={email === 'admin@example.com'} />
 
       <div className="bp-container">
         {loading || !computed ? (

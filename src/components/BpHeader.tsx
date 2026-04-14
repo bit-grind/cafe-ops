@@ -6,15 +6,20 @@ const TABS = [
   { label: 'Ask AI', tab: 'ask' as const, href: '/ops/ask' },
 ]
 
+const ADMIN_TAB = { label: 'Admin', tab: 'admin' as const, href: '/ops/admin' }
+
 export default function BpHeader({
   email,
   onSignOut,
   activeTab,
+  isAdmin,
 }: {
   email?: string | null
   onSignOut?: () => void
-  activeTab?: 'dashboard' | 'ask'
+  activeTab?: 'dashboard' | 'ask' | 'admin'
+  isAdmin?: boolean
 }) {
+  const tabs = isAdmin ? [...TABS, ADMIN_TAB] : TABS
   return (
     <header style={{ borderBottom: "1px solid rgba(255,255,255,0.10)" }}>
       <div
@@ -52,7 +57,7 @@ export default function BpHeader({
 
       {activeTab && (
         <div className="bp-container" style={{ paddingTop: 0, paddingBottom: 0, display: 'flex', gap: 4 }}>
-          {TABS.map(({ label, tab, href }) => (
+          {tabs.map(({ label, tab, href }) => (
             <Link
               key={tab}
               href={href}

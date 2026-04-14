@@ -207,7 +207,7 @@ export default function AskPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <BpHeader email={email} onSignOut={signOut} activeTab="ask" />
+      <BpHeader email={email} onSignOut={signOut} activeTab="ask" isAdmin={email === 'admin@example.com'} />
 
       <div style={{
         flex: 1,
