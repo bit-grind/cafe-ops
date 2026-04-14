@@ -12,7 +12,7 @@ import urllib.request
 import zipfile
 
 SUPABASE_URL = "https://pzhqjdpbeyfndeckkhlu.supabase.co"
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6aHFqZHBiZXlmbmRlY2traGx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNDI4MTYsImV4cCI6MjA4NzkxODgxNn0.gTX7hLCN6nFRoehNLoPn1dMbPJK_Jjzch0miMneqcpU")
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 
 def parse_money(s):
     """'$4,561.90' -> 4561.90"""

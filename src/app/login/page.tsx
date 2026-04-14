@@ -16,7 +16,7 @@ export default function LoginPage() {
     const resolvedEmail = email.trim() === 'guest' ? 'guest@example.com' : email
     const { error } = await supabase.auth.signInWithPassword({ email: resolvedEmail, password })
     setBusy(false)
-    if (error) setMsg(error.message)
+    if (error) setMsg('Invalid email or password.')
     else window.location.href = '/ops'
   }
 
