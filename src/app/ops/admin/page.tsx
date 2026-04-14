@@ -12,6 +12,16 @@ type User = {
   last_sign_in_at: string | null
 }
 
+type UserDetail = {
+  user: User & { email_confirmed_at: string | null }
+  queries: Array<{
+    id: number
+    question: string
+    answer: string | null
+    created_at: string
+  }>
+}
+
 const ADMIN_EMAIL = 'admin@example.com'
 
 export default function AdminPage() {
@@ -24,6 +34,30 @@ export default function AdminPage() {
   const [newEmail, setNewEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [newRole, setNewRole] = useState<'user' | 'guest'>('user')
+
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<UserDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  async function toggleDetail(id: string) {
+    if (expandedId === id) {
+      setExpandedId(null)
+      setDetail(null)
+      return
+    }
+    setExpandedId(id)
+    setDetail(null)
+    setDetailLoading(true)
+    const res = await fetch(`/api/admin/users/${id}`, { headers: await authHeaders() })
+    const json = await res.json()
+    setDetailLoading(false)
+    if (!res.ok) {
+      setMsg(json.error ?? 'Failed to load user detail')
+      setExpandedId(null)
+      return
+    }
+    setDetail(json)
+  }
 
   async function authHeaders(extra?: Record<string, string>): Promise<HeadersInit> {
     const { data } = await supabase.auth.getSession()
@@ -164,36 +198,131 @@ export default function AdminPage() {
             Users ({users.length})
           </h2>
           <div style={{ display: 'grid', gap: 8 }}>
-            {users.map((u) => (
-              <div
-                key={u.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 100px 140px 100px',
-                  gap: 12,
-                  alignItems: 'center',
-                  padding: '10px 12px',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: 6,
-                }}
-              >
-                <div style={{ fontSize: 13 }}>{u.email ?? '(no email)'}</div>
-                <div style={{ fontSize: 12, opacity: 0.6 }}>{u.role}</div>
-                <div style={{ fontSize: 12, opacity: 0.6 }}>
-                  {u.last_sign_in_at
-                    ? new Date(u.last_sign_in_at).toLocaleDateString()
-                    : 'never'}
-                </div>
-                <button
-                  onClick={() => deleteUser(u.id, u.email)}
-                  disabled={busy || u.email === ADMIN_EMAIL}
-                  className="bp-btn"
-                  style={{ fontSize: 12 }}
+            {users.map((u) => {
+              const isExpanded = expandedId === u.id
+              return (
+                <div
+                  key={u.id}
+                  style={{
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: 6,
+                  }}
                 >
-                  Delete
-                </button>
-              </div>
-            ))}
+                  <div
+                    onClick={() => toggleDetail(u.id)}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 100px 140px 100px',
+                      gap: 12,
+                      alignItems: 'center',
+                      padding: '10px 12px',
+                      cursor: 'pointer',
+                      background: isExpanded ? 'rgba(255,255,255,0.03)' : 'transparent',
+                    }}
+                  >
+                    <div style={{ fontSize: 13 }}>
+                      <span style={{ marginRight: 8, opacity: 0.5 }}>{isExpanded ? '▾' : '▸'}</span>
+                      {u.email ?? '(no email)'}
+                    </div>
+                    <div style={{ fontSize: 12, opacity: 0.6 }}>{u.role}</div>
+                    <div style={{ fontSize: 12, opacity: 0.6 }}>
+                      {u.last_sign_in_at
+                        ? new Date(u.last_sign_in_at).toLocaleDateString()
+                        : 'never'}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteUser(u.id, u.email)
+                      }}
+                      disabled={busy || u.email === ADMIN_EMAIL}
+                      className="bp-btn"
+                      style={{ fontSize: 12 }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+
+                  {isExpanded && (
+                    <div
+                      style={{
+                        borderTop: '1px solid rgba(255,255,255,0.06)',
+                        padding: 16,
+                        fontSize: 12,
+                      }}
+                    >
+                      {detailLoading && <div style={{ opacity: 0.6 }}>Loading…</div>}
+                      {detail && detail.user.id === u.id && (
+                        <>
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: '140px 1fr',
+                              rowGap: 6,
+                              columnGap: 12,
+                              marginBottom: 16,
+                            }}
+                          >
+                            <div style={{ opacity: 0.5 }}>User ID</div>
+                            <div style={{ fontFamily: 'monospace', fontSize: 11 }}>{detail.user.id}</div>
+
+                            <div style={{ opacity: 0.5 }}>Created</div>
+                            <div>{new Date(detail.user.created_at).toLocaleString()}</div>
+
+                            <div style={{ opacity: 0.5 }}>Last sign in</div>
+                            <div>
+                              {detail.user.last_sign_in_at
+                                ? new Date(detail.user.last_sign_in_at).toLocaleString()
+                                : 'never'}
+                            </div>
+
+                            <div style={{ opacity: 0.5 }}>Email confirmed</div>
+                            <div>
+                              {detail.user.email_confirmed_at
+                                ? new Date(detail.user.email_confirmed_at).toLocaleString()
+                                : 'no'}
+                            </div>
+                          </div>
+
+                          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>
+                            Ask AI queries ({detail.queries.length})
+                          </div>
+                          {detail.queries.length === 0 ? (
+                            <div style={{ opacity: 0.5 }}>No queries yet.</div>
+                          ) : (
+                            <div style={{ display: 'grid', gap: 10 }}>
+                              {detail.queries.map((q) => (
+                                <div
+                                  key={q.id}
+                                  style={{
+                                    padding: 10,
+                                    background: 'rgba(255,255,255,0.02)',
+                                    border: '1px solid rgba(255,255,255,0.06)',
+                                    borderRadius: 4,
+                                  }}
+                                >
+                                  <div style={{ opacity: 0.5, fontSize: 11, marginBottom: 4 }}>
+                                    {new Date(q.created_at).toLocaleString()}
+                                  </div>
+                                  <div style={{ marginBottom: 6 }}>
+                                    <span style={{ opacity: 0.5 }}>Q:</span> {q.question}
+                                  </div>
+                                  {q.answer && (
+                                    <div style={{ opacity: 0.75, whiteSpace: 'pre-wrap' }}>
+                                      <span style={{ opacity: 0.5 }}>A:</span> {q.answer}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </section>
       </main>

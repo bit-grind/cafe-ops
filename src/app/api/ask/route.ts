@@ -459,6 +459,19 @@ ${products && products.length > 0
     const answer = out?.choices?.[0]?.message?.content
     if (!answer) return NextResponse.json({ error: 'No answer returned', raw: out }, { status: 500 })
 
+    // Log query (fire-and-forget — don't block the response if this fails).
+    void supabase
+      .from('ask_queries')
+      .insert({
+        user_id: authUser.id,
+        email: authUser.email ?? null,
+        question,
+        answer: typeof answer === 'string' ? answer.slice(0, 4000) : null,
+      })
+      .then(({ error: logErr }) => {
+        if (logErr) console.error('ask_queries insert failed:', logErr.message)
+      })
+
     return NextResponse.json({ answer })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Unknown error' }, { status: 500 })
