@@ -25,8 +25,6 @@ type Attachment = {
   contentLength: number
 }
 
-const ADMIN_EMAIL = 'admin@example.com'
-
 // Suppliers to show on the Bills dashboard. Each entry has a short display
 // label and a list of lowercase keywords used to match Xero contact names.
 // Matching is substring-based after stripping apostrophes, so "big michael"
@@ -81,6 +79,7 @@ function fmtDate(s: string | null) {
 export default function BillsPage() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const [connected, setConnected] = useState<boolean | null>(null)
   const [bills, setBills] = useState<Bill[]>([])
@@ -111,6 +110,19 @@ export default function BillsPage() {
       if (!data.session) { window.location.href = '/login'; return }
       const u = data.session.user
       setEmail(u.email ?? null)
+
+      // Ask the server whether we're admin — admin email lives in a
+      // server-only env var and is never sent to the browser.
+      try {
+        const meRes = await fetch('/api/me', {
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+        })
+        if (meRes.ok) {
+          const me = await meRes.json()
+          setIsAdmin(!!me.isAdmin)
+        }
+      } catch { /* non-fatal */ }
+
       setLoading(false)
 
       // Read callback flash messages
@@ -308,18 +320,18 @@ export default function BillsPage() {
 
   return (
     <div>
-      <BpHeader email={email} onSignOut={signOut} activeTab="bills" isAdmin={email === ADMIN_EMAIL} />
+      <BpHeader email={email} onSignOut={signOut} activeTab="bills" isAdmin={isAdmin} />
 
       <div className="bp-container" style={{ paddingTop: 24 }}>
         {connected === false ? (
           <div className="bp-card" style={{ padding: 24 }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>Xero not connected</div>
             <div style={{ opacity: 0.7, fontSize: 13, marginBottom: 16 }}>
-              {email === ADMIN_EMAIL
+              {isAdmin
                 ? 'Connect your Xero org to start pulling supplier bills.'
                 : 'An admin needs to connect Xero before bills can appear here.'}
             </div>
-            {email === ADMIN_EMAIL && (
+            {isAdmin && (
               <button onClick={connectXero} className="bp-btn" style={{ fontSize: 13 }}>
                 Connect Xero
               </button>
@@ -503,7 +515,7 @@ export default function BillsPage() {
               </div>
             </div>
 
-            {email === ADMIN_EMAIL && (
+            {isAdmin && (
               <div style={{ marginTop: 14, fontSize: 11, opacity: 0.5 }}>
                 <button
                   onClick={connectXero}

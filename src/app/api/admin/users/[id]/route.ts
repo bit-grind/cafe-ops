@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin, adminClient, ADMIN_EMAIL } from '@/lib/adminAuth'
+import { requireAdmin, adminClient, isAdminEmail } from '@/lib/adminAuth'
 
 export async function GET(
   req: Request,
@@ -55,7 +55,7 @@ export async function DELETE(
 
   // Refuse to delete the admin account itself.
   const { data: target } = await supabase.auth.admin.getUserById(id)
-  if (target?.user?.email === ADMIN_EMAIL) {
+  if (isAdminEmail(target?.user?.email)) {
     return NextResponse.json({ error: 'Cannot delete the admin account' }, { status: 400 })
   }
 

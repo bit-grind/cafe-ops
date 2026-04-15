@@ -1,10 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-export const ADMIN_EMAIL = 'admin@example.com'
-
+/**
+ * Admin email lives in the ADMIN_EMAIL env var, never in source. Set it in
+ * .env.local for local dev and in the Vercel project env for production.
+ *
+ * The helpers below only ever run server-side, so it's safe to compare
+ * against process.env directly — nothing here is bundled to the browser.
+ */
 export function isAdminEmail(email?: string | null): boolean {
-  return email === ADMIN_EMAIL
+  const admin = process.env.ADMIN_EMAIL
+  return !!admin && !!email && email === admin
 }
 
 /**

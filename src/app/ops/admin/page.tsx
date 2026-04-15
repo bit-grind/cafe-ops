@@ -22,11 +22,10 @@ type UserDetail = {
   }>
 }
 
-const ADMIN_EMAIL = 'admin@example.com'
-
 export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [users, setUsers] = useState<User[]>([])
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -86,7 +85,22 @@ export default function AdminPage() {
       }
       const userEmail = sessionData.session.user.email ?? null
       setEmail(userEmail)
-      if (userEmail !== ADMIN_EMAIL) {
+      setCurrentUserId(sessionData.session.user.id)
+
+      // Ask the server whether this user is the admin — admin email lives
+      // in a server-only env var.
+      let isAdmin = false
+      try {
+        const meRes = await fetch('/api/me', {
+          headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+        })
+        if (meRes.ok) {
+          const me = await meRes.json()
+          isAdmin = !!me.isAdmin
+        }
+      } catch { /* treat as non-admin */ }
+
+      if (!isAdmin) {
         window.location.href = '/ops'
         return
       }
@@ -235,7 +249,7 @@ export default function AdminPage() {
                         e.stopPropagation()
                         deleteUser(u.id, u.email)
                       }}
-                      disabled={busy || u.email === ADMIN_EMAIL}
+                      disabled={busy || u.id === currentUserId}
                       className="bp-btn"
                       style={{ fontSize: 12 }}
                     >

@@ -156,6 +156,7 @@ function HolidayDropdown({ onSelect, disabled }: { onSelect: (q: string, display
 export default function AskPage() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [question, setQuestion] = useState('')
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [busy, setBusy] = useState(false)
@@ -167,6 +168,15 @@ export default function AskPage() {
       const { data } = await supabase.auth.getSession()
       if (!data.session) { window.location.href = '/login'; return }
       setEmail(data.session.user.email ?? null)
+      try {
+        const meRes = await fetch('/api/me', {
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+        })
+        if (meRes.ok) {
+          const me = await meRes.json()
+          setIsAdmin(!!me.isAdmin)
+        }
+      } catch { /* non-fatal */ }
       setLoading(false)
     }
     check()
@@ -207,7 +217,7 @@ export default function AskPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <BpHeader email={email} onSignOut={signOut} activeTab="ask" isAdmin={email === 'admin@example.com'} />
+      <BpHeader email={email} onSignOut={signOut} activeTab="ask" isAdmin={isAdmin} />
 
       <div style={{
         flex: 1,

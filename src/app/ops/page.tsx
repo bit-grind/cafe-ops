@@ -34,6 +34,7 @@ function startOfWeekMon(d: Date) {
 export default function OpsHome() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [days, setDays] = useState<Day[]>([])
 
   useEffect(() => {
@@ -45,6 +46,18 @@ export default function OpsHome() {
       }
 
       setEmail(sessionData.session.user.email ?? null)
+
+      // Ask the server whether we're admin — the admin email lives in an
+      // env var server-side and is never sent to the browser.
+      try {
+        const meRes = await fetch('/api/me', {
+          headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+        })
+        if (meRes.ok) {
+          const me = await meRes.json()
+          setIsAdmin(!!me.isAdmin)
+        }
+      } catch { /* non-fatal — treat as non-admin */ }
 
       const { data } = await supabase
         .from('sales_business_day')
@@ -124,7 +137,7 @@ export default function OpsHome() {
 
   return (
     <div>
-      <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" isAdmin={email === 'admin@example.com'} />
+      <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" isAdmin={isAdmin} />
 
       <div className="bp-container">
         {loading || !computed ? (
