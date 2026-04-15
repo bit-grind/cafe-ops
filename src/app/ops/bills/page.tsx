@@ -571,11 +571,7 @@ function BillDetailModal({
             <div style={{ fontSize: 12, opacity: 0.55, marginTop: 4 }}>
               {bill.invoiceNumber ? `#${bill.invoiceNumber} · ` : ''}
               {fmtDate(bill.date)}
-              {bill.dueDate ? ` · due ${fmtDate(bill.dueDate)}` : ''}
               {' · '}{money(bill.total, bill.currencyCode)}
-              {bill.amountDue > 0 && (
-                <span style={{ color: '#f5b841' }}> · {money(bill.amountDue, bill.currencyCode)} owing</span>
-              )}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
