@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { listBills, getXeroConnection, type BillSummary } from '@/lib/xero'
 
 type AskBody = { question: string }
+
+// Triggers Xero bills lookup in the Ask AI prompt.
+function needsBills(q: string): boolean {
+  return /\b(bill|bills|invoice|invoices|supplier|suppliers|owing|unpaid|payable|payables|xero|vendor|vendors)\b/i.test(q)
+}
 
 const MONTH_MAP: Record<string, number> = {
   jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
@@ -280,6 +286,39 @@ export async function POST(req: Request) {
       ? await fetchBrisbaneWeather(targetDate)
       : null
 
+    // Fetch Xero bills if the question mentions them. Guests are already
+    // blocked from modifying data, but bills are still business data we
+    // allow read-only for them. Skip if no Xero connection yet.
+    let billsData: BillSummary[] | null = null
+    let billsConnected = false
+    let billsTenantName: string | null = null
+    let billsError: string | null = null
+    if (needsBills(question)) {
+      try {
+        const conn = await getXeroConnection()
+        if (conn) {
+          billsConnected = true
+          billsTenantName = conn.tenant_name
+          // If the question has a date range, scope to it; otherwise default
+          // to bills from the last 12 months so prompts like "unpaid bills"
+          // still get recent history without blowing up the prompt.
+          const today = new Date()
+          const yearAgo = new Date(today); yearAgo.setFullYear(today.getFullYear() - 1)
+          const from = dateRange?.from ?? iso(yearAgo)
+          const to = dateRange?.to ?? iso(today)
+          // Fetch with line items so the AI can answer detail questions
+          // ("what was on the Bunnings bill from March?", "how much did we
+          // spend on milk last month?", etc.).
+          billsData = await listBills({ dateFrom: from, dateTo: to }, { includeLineItems: true })
+          // Cap to keep prompt size reasonable — line items are chatty.
+          if (billsData.length > 60) billsData = billsData.slice(0, 60)
+        }
+      } catch (e: any) {
+        billsError = e?.message ?? 'Failed to fetch Xero bills'
+        console.error('Xero bills fetch failed:', billsError)
+      }
+    }
+
     // Fetch the specific day's totals if not already in the 60-day window
     let specificDayTotals: any = null
     if (targetDate) {
@@ -414,7 +453,9 @@ Be practical: what happened, why it likely happened (based on the data), and wha
 Always format dates as DD/MM/YY (e.g. 28/02/26, not 2026-02-28).
 When asked to exclude coffees, drinks, or beverages from a product list, filter out any item that is a coffee, milk, tea, juice, smoothie, soft drink, or other beverage. Only list food items.
 When the question asks to "be brief and factual" or says "no summary or recommendations", respond with only the requested data points — no summary paragraph, no recommendations section, no closing notes.
-IMPORTANT: This cafe is significantly busier on weekends (Saturday and Sunday) than weekdays. Always account for day-of-week when analysing trends or comparing days. A weekday below the overall average is not necessarily a concern — compare weekdays to weekdays and weekends to weekends. When identifying "slow" days or drops, note whether it is a weekday or weekend and adjust the interpretation accordingly. When making recommendations for "next week", distinguish between weekday and weekend expectations.${guestClause}
+IMPORTANT: This cafe is significantly busier on weekends (Saturday and Sunday) than weekdays. Always account for day-of-week when analysing trends or comparing days. A weekday below the overall average is not necessarily a concern — compare weekdays to weekdays and weekends to weekends. When identifying "slow" days or drops, note whether it is a weekday or weekend and adjust the interpretation accordingly. When making recommendations for "next week", distinguish between weekday and weekend expectations.
+When supplier bills from Xero are included in the context: "Status=AUTHORISED" means the bill has been approved but not yet fully paid, so amountDue > 0 is outstanding. "Status=PAID" means it is fully settled. Totals are in AUD unless the currencyCode says otherwise. When asked about "unpaid", "owing", or "outstanding" bills, filter to those where amountDue > 0. When asked about bills for a specific supplier, match case-insensitively on contactName. Always format bill amounts as currency with a $ prefix.
+Each bill has a lineItems array with description, quantity, unitAmount, lineAmount, accountCode and taxType — use these to answer questions about what was bought ("what did we buy from X", "how much did we spend on Y", "what's the line item breakdown"). When summing category spend (e.g. "how much did we spend on milk?"), match descriptions case-insensitively and sum lineAmount. lineAmountTypes tells you whether line amounts are tax-inclusive ("Inclusive"), exclusive ("Exclusive"), or "NoTax" — bear this in mind when totals don't tie exactly.${guestClause}
 `
 
     const user = `
@@ -432,6 +473,11 @@ ${holiday ? `Holiday/event resolved to date: ${fmtDate(holiday.date)}${holiday.u
 ${specificDayTotals ? `Daily totals for ${fmtDate(specificDayTotals.business_date)}: gross_sales=$${specificDayTotals.gross_sales}, order_count=${specificDayTotals.order_count}, aov=$${specificDayTotals.aov}, net_sales=$${specificDayTotals.net_sales}, tax=$${specificDayTotals.tax}` : ''}
 ${dateRange ? `Date range queried for products: ${fmtDate(dateRange.from)} to ${fmtDate(dateRange.to)}` : ''}
 ${weatherData ? `Brisbane weather on ${fmtDate(weatherData.date)}: ${weatherData.conditions}, max ${weatherData.max_temp_c}°C, min ${weatherData.min_temp_c}°C, ${weatherData.precipitation_mm}mm rain` : ''}
+${needsBills(question) && !billsConnected ? `Xero is not yet connected — bill data is unavailable. Tell the user an admin needs to connect Xero on the Bills page.` : ''}
+${billsError ? `Xero bill lookup failed: ${billsError}` : ''}
+${billsData && billsData.length > 0
+  ? `Supplier bills from Xero${billsTenantName ? ` (${billsTenantName})` : ''} — type ACCPAY, showing up to 150 most recent:\n${JSON.stringify(billsData, null, 2)}`
+  : ''}
 ${products && products.length > 0
   ? productsAggregated
     ? `Top products aggregated over the queried period (sorted by total quantity sold):\n${JSON.stringify(products, null, 2)}`
