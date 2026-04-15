@@ -4,7 +4,7 @@ import Link from "next/link"
 const TABS = [
   { label: 'Dashboard', tab: 'dashboard' as const, href: '/ops' },
   { label: 'Ask AI', tab: 'ask' as const, href: '/ops/ask' },
-  { label: 'Bills', tab: 'bills' as const, href: '/ops/bills' },
+  { label: 'Suppliers', tab: 'bills' as const, href: '/ops/bills' },
 ]
 
 const ADMIN_TAB = { label: 'Admin', tab: 'admin' as const, href: '/ops/admin' }
