@@ -78,15 +78,6 @@ function fmtDate(s: string | null) {
   return `${d}/${m}/${y.slice(2)}`
 }
 
-const STATUS_COLOURS: Record<string, { bg: string; fg: string }> = {
-  AUTHORISED: { bg: '#2a1f0d', fg: '#f5b841' },
-  PAID:       { bg: '#0d2a14', fg: '#4cc77d' },
-  DRAFT:      { bg: '#1a1a1a', fg: '#888' },
-  SUBMITTED:  { bg: '#0d1a2a', fg: '#5ab0ff' },
-  VOIDED:     { bg: '#2a0d0d', fg: '#c77070' },
-  DELETED:    { bg: '#2a0d0d', fg: '#c77070' },
-}
-
 export default function BillsPage() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
@@ -519,7 +510,6 @@ function BillDetailModal({
   error: string | null
   onClose: () => void
 }) {
-  const chip = STATUS_COLOURS[bill.status] ?? STATUS_COLOURS.DRAFT
   const active = attachments[activeIdx] ?? null
   const isImage = mime?.startsWith('image/')
   const isPdf = mime === 'application/pdf' || active?.fileName.toLowerCase().endsWith('.pdf')
@@ -575,12 +565,6 @@ function BillDetailModal({
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <span style={{
-              padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-              background: chip.bg, color: chip.fg,
-            }}>
-              {bill.status}
-            </span>
             <button
               onClick={onClose}
               aria-label="Close"
