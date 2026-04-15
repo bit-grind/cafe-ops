@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import BpHeader from '@/components/BpHeader'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -94,6 +94,8 @@ export default function BillsPage() {
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
   const [activeSupplier, setActiveSupplier] = useState<string>(SUPPLIERS[0].label)
+  const [dateOpen, setDateOpen] = useState(false)
+  const dateRef = useRef<HTMLDivElement>(null)
 
   // Detail modal
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null)
@@ -205,6 +207,18 @@ export default function BillsPage() {
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBill])
+
+  // Close date popover on outside click
+  useEffect(() => {
+    if (!dateOpen) return
+    function onClick(e: MouseEvent) {
+      if (dateRef.current && !dateRef.current.contains(e.target as Node)) {
+        setDateOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [dateOpen])
 
   // Whenever the active attachment changes, fetch its bytes as a blob URL so
   // an <iframe>/<img> can render it without needing to send auth headers.
@@ -322,8 +336,87 @@ export default function BillsPage() {
         ) : (
           <>
             {/* Header */}
-            <div style={{ marginBottom: 14 }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              marginBottom: 14,
+            }}>
               <div style={{ fontWeight: 700, fontSize: 22 }}>{activeSupplier}</div>
+
+              <div ref={dateRef} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setDateOpen(o => !o)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: 20,
+                    border: `1px solid ${(dateFrom || dateTo) ? '#555' : '#333'}`,
+                    background: (dateFrom || dateTo) ? '#1a1a1a' : 'transparent',
+                    color: (dateFrom || dateTo) ? '#fff' : '#999',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {dateFrom || dateTo
+                    ? `${dateFrom ? fmtDate(dateFrom) : '…'} – ${dateTo ? fmtDate(dateTo) : '…'}`
+                    : 'Date range'}
+                  <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+                </button>
+
+                {dateOpen && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    right: 0,
+                    zIndex: 120,
+                    background: '#121212',
+                    border: '1px solid #2a2a2a',
+                    borderRadius: 12,
+                    padding: 14,
+                    boxShadow: '0 12px 32px rgba(0,0,0,0.6)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                    minWidth: 260,
+                  }}>
+                    <Field label="From">
+                      <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={inputStyle} />
+                    </Field>
+                    <Field label="To">
+                      <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={inputStyle} />
+                    </Field>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                      <button
+                        onClick={() => { loadBills(); setDateOpen(false) }}
+                        disabled={busy}
+                        className="bp-btn"
+                        style={{ fontSize: 13, padding: '8px 18px', flex: 1, opacity: busy ? 0.5 : 1 }}
+                      >
+                        {busy ? 'Loading…' : 'Apply'}
+                      </button>
+                      {(dateFrom || dateTo) && (
+                        <button
+                          onClick={() => {
+                            setDateFrom(''); setDateTo('')
+                            setTimeout(() => { loadBills(); setDateOpen(false) }, 0)
+                          }}
+                          style={{
+                            fontSize: 12, background: 'none', border: '1px solid #333', color: '#888',
+                            padding: '8px 14px', borderRadius: 8, cursor: 'pointer',
+                          }}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Supplier tabs */}
@@ -372,47 +465,6 @@ export default function BillsPage() {
 
             {flash && <div style={{ color: '#4cc77d', fontSize: 12, marginBottom: 10 }}>{flash}</div>}
             {error && <div style={{ color: '#c77070', fontSize: 12, marginBottom: 10 }}>{error}</div>}
-
-            {/* Filters */}
-            <div
-              className="bp-card"
-              style={{
-                padding: 14,
-                marginBottom: 14,
-                display: 'flex',
-                gap: 10,
-                flexWrap: 'wrap',
-                alignItems: 'flex-end',
-              }}
-            >
-              <Field label="From">
-                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={inputStyle} />
-              </Field>
-              <Field label="To">
-                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={inputStyle} />
-              </Field>
-              <button
-                onClick={loadBills}
-                disabled={busy}
-                className="bp-btn"
-                style={{ fontSize: 13, padding: '8px 18px', opacity: busy ? 0.5 : 1 }}
-              >
-                {busy ? 'Loading…' : 'Apply'}
-              </button>
-              {(dateFrom || dateTo) && (
-                <button
-                  onClick={() => {
-                    setDateFrom(''); setDateTo('')
-                    setTimeout(loadBills, 0)
-                  }}
-                  style={{
-                    fontSize: 12, background: 'none', border: 'none', color: '#888', cursor: 'pointer',
-                  }}
-                >
-                  Clear
-                </button>
-              )}
-            </div>
 
             {/* Table */}
             <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
