@@ -441,7 +441,7 @@ export async function POST(req: Request) {
     const actualToday = iso(new Date())
 
     const guestClause = isGuest
-      ? `\nIMPORTANT: This user is a guest with READ-ONLY access. You may only answer questions about sales data, products, trends, and general business metrics. If the user asks you to modify, delete, update, or change any data, settings, or configurations, politely decline and explain that guests have read-only access.`
+      ? `\nIMPORTANT: This user is a guest with READ-ONLY access. You may answer questions about sales data, products, trends, general business metrics, and supplier bills (including specific line items, amounts, and suppliers). If the user asks you to modify, delete, update, or change any data, settings, or configurations, politely decline and explain that guests have read-only access.`
       : ''
 
     const system = `

@@ -6,7 +6,7 @@ import { getBill, getXeroConnection } from '@/lib/xero'
  * GET /api/xero/bills/:id — fetch a single supplier bill (ACCPAY invoice)
  * with full line-item detail from Xero.
  *
- * Auth: any logged-in, non-guest user.
+ * Auth: any logged-in user (guests included — bills are read-only data).
  */
 export async function GET(
   req: Request,
@@ -20,8 +20,6 @@ export async function GET(
     )
     const { data: { user } } = await anonClient.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const isGuest = user.user_metadata?.role === 'guest' || user.email === 'guest@example.com'
-    if (isGuest) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const conn = await getXeroConnection()
     if (!conn) return NextResponse.json({ error: 'Xero not connected' }, { status: 400 })

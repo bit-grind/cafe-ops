@@ -5,7 +5,7 @@ import { listAllBills, getXeroConnection } from '@/lib/xero'
 /**
  * Lists supplier bills (ACCPAY invoices) from the connected Xero tenant.
  *
- * Auth: any logged-in, non-guest user. Guests get 403 (the Ask AI pattern).
+ * Auth: any logged-in user (guests included — bills are read-only data).
  *
  * Query params:
  *   status               - AUTHORISED | PAID | DRAFT | SUBMITTED | VOIDED
@@ -30,8 +30,6 @@ export async function GET(req: Request) {
     )
     const { data: { user } } = await anonClient.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const isGuest = user.user_metadata?.role === 'guest' || user.email === 'guest@example.com'
-    if (isGuest) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const conn = await getXeroConnection()
     if (!conn) {

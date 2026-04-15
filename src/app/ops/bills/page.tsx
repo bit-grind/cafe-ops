@@ -81,7 +81,6 @@ function fmtDate(s: string | null) {
 export default function BillsPage() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
-  const [isGuest, setIsGuest] = useState(false)
 
   const [connected, setConnected] = useState<boolean | null>(null)
   const [bills, setBills] = useState<Bill[]>([])
@@ -112,8 +111,6 @@ export default function BillsPage() {
       if (!data.session) { window.location.href = '/login'; return }
       const u = data.session.user
       setEmail(u.email ?? null)
-      const guest = u.user_metadata?.role === 'guest' || u.email === 'guest@example.com'
-      setIsGuest(guest)
       setLoading(false)
 
       // Read callback flash messages
@@ -126,7 +123,7 @@ export default function BillsPage() {
         window.history.replaceState({}, '', '/ops/bills')
       }
 
-      if (!guest) await loadBills()
+      await loadBills()
     }
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -314,11 +311,7 @@ export default function BillsPage() {
       <BpHeader email={email} onSignOut={signOut} activeTab="bills" isAdmin={email === ADMIN_EMAIL} />
 
       <div className="bp-container" style={{ paddingTop: 24 }}>
-        {isGuest ? (
-          <div style={{ color: '#888', fontSize: 14 }}>
-            Guest accounts don&apos;t have access to supplier bills.
-          </div>
-        ) : connected === false ? (
+        {connected === false ? (
           <div className="bp-card" style={{ padding: 24 }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>Xero not connected</div>
             <div style={{ opacity: 0.7, fontSize: 13, marginBottom: 16 }}>
