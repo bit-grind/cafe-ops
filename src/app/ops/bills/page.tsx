@@ -47,7 +47,7 @@ const SUPPLIERS: SupplierDef[] = [
   { label: "Big Michael's",    keywords: ['big michael'] },
   { label: "Michael's Meats",  keywords: ['michaels meats', 'michael meats'] },
   { label: 'A La Carte',       keywords: ['a la carte'] },
-  { label: 'Breadtop',         keywords: ['breadtop'] },
+  { label: 'Breadtop',         keywords: ['breadtop', 'quality factory'] },
   { label: 'Filla',            keywords: ['filla'] },
   { label: 'Southside Milk',   keywords: ['southside milk', 'southside'], excludeInvoicePrefixes: ['RB'] },
   { label: 'APAK',             keywords: ['apak'] },
