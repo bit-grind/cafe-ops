@@ -80,6 +80,7 @@ export default function BillsPage() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [allowedTabs, setAllowedTabs] = useState<string[]>([])
 
   const [connected, setConnected] = useState<boolean | null>(null)
   const [bills, setBills] = useState<Bill[]>([])
@@ -120,6 +121,7 @@ export default function BillsPage() {
         if (meRes.ok) {
           const me = await meRes.json()
           setIsAdmin(!!me.isAdmin)
+          setAllowedTabs(me.allowedTabs ?? [])
         }
       } catch { /* non-fatal */ }
 
@@ -320,7 +322,7 @@ export default function BillsPage() {
 
   return (
     <div>
-      <BpHeader email={email} onSignOut={signOut} activeTab="bills" isAdmin={isAdmin} />
+      <BpHeader email={email} onSignOut={signOut} activeTab="bills" allowedTabs={allowedTabs} />
 
       <div className="bp-container" style={{ paddingTop: 24 }}>
         {connected === false ? (

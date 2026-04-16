@@ -3,14 +3,13 @@ import { createClient } from '@supabase/supabase-js'
 import { isAdminEmail } from '@/lib/adminAuth'
 
 /**
- * GET /api/me — returns the current user's identity plus an `isAdmin` flag
- * computed server-side. This keeps the admin email out of client JavaScript
- * (which we would expose if we used a NEXT_PUBLIC env var).
+ * GET /api/me — returns the current user's identity, role, and permission
+ * flags. Keeps the admin email out of client JavaScript.
  *
  * Response shape:
- *   { email: string | null, isAdmin: boolean, isGuest: boolean }
+ *   { email, role, isAdmin, isGuest, isKitchen, allowedTabs }
  *
- * Requires an Authorization header carrying the Supabase access token.
+ * `allowedTabs` lists the tab keys the user should see in the header.
  */
 export async function GET(req: Request) {
   const anonClient = createClient(
@@ -22,12 +21,28 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const email = user.email ?? null
-  const isGuest =
-    user.user_metadata?.role === 'guest' || email === 'guest@example.com'
+  const role = (user.user_metadata?.role as string) ?? null
+  const isAdmin = isAdminEmail(email)
+  const isGuest = role === 'guest' || email === 'guest@example.com'
+  const isKitchen = role === 'kitchen'
+
+  // Determine which header tabs the user may see.
+  let allowedTabs: string[]
+  if (isKitchen) {
+    allowedTabs = ['bills']
+  } else if (isAdmin) {
+    allowedTabs = ['dashboard', 'ask', 'bills', 'admin']
+  } else {
+    // Regular users and guests see everything except admin.
+    allowedTabs = ['dashboard', 'ask', 'bills']
+  }
 
   return NextResponse.json({
     email,
-    isAdmin: isAdminEmail(email),
+    role,
+    isAdmin,
     isGuest,
+    isKitchen,
+    allowedTabs,
   })
 }

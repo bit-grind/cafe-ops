@@ -157,7 +157,7 @@ export default function AdminPage() {
   if (loading) {
     return (
       <>
-        <BpHeader email={email} onSignOut={signOut} activeTab="admin" isAdmin />
+        <BpHeader email={email} onSignOut={signOut} activeTab="admin" allowedTabs={['dashboard', 'ask', 'bills', 'admin']} />
         <main className="bp-container" style={{ padding: 24 }}>
           <div style={{ opacity: 0.6 }}>Loading…</div>
         </main>
@@ -167,7 +167,7 @@ export default function AdminPage() {
 
   return (
     <>
-      <BpHeader email={email} onSignOut={signOut} activeTab="admin" isAdmin />
+      <BpHeader email={email} onSignOut={signOut} activeTab="admin" allowedTabs={['dashboard', 'ask', 'bills', 'admin']} />
       <main className="bp-container" style={{ padding: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 20 }}>User management</h1>
 

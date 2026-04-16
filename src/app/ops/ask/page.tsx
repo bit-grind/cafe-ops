@@ -156,7 +156,7 @@ function HolidayDropdown({ onSelect, disabled }: { onSelect: (q: string, display
 export default function AskPage() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [allowedTabs, setAllowedTabs] = useState<string[]>([])
   const [question, setQuestion] = useState('')
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [busy, setBusy] = useState(false)
@@ -174,7 +174,8 @@ export default function AskPage() {
         })
         if (meRes.ok) {
           const me = await meRes.json()
-          setIsAdmin(!!me.isAdmin)
+          setAllowedTabs(me.allowedTabs ?? [])
+          if (me.isKitchen) { window.location.href = '/ops/bills'; return }
         }
       } catch { /* non-fatal */ }
       setLoading(false)
@@ -217,7 +218,7 @@ export default function AskPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <BpHeader email={email} onSignOut={signOut} activeTab="ask" isAdmin={isAdmin} />
+      <BpHeader email={email} onSignOut={signOut} activeTab="ask" allowedTabs={allowedTabs} />
 
       <div style={{
         flex: 1,

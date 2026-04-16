@@ -34,7 +34,7 @@ function startOfWeekMon(d: Date) {
 export default function OpsHome() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [allowedTabs, setAllowedTabs] = useState<string[]>([])
   const [days, setDays] = useState<Day[]>([])
 
   useEffect(() => {
@@ -47,17 +47,17 @@ export default function OpsHome() {
 
       setEmail(sessionData.session.user.email ?? null)
 
-      // Ask the server whether we're admin — the admin email lives in an
-      // env var server-side and is never sent to the browser.
       try {
         const meRes = await fetch('/api/me', {
           headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
         })
         if (meRes.ok) {
           const me = await meRes.json()
-          setIsAdmin(!!me.isAdmin)
+          setAllowedTabs(me.allowedTabs ?? [])
+          // Kitchen users can only see Suppliers — redirect them.
+          if (me.isKitchen) { window.location.href = '/ops/bills'; return }
         }
-      } catch { /* non-fatal — treat as non-admin */ }
+      } catch { /* non-fatal */ }
 
       const { data } = await supabase
         .from('sales_business_day')
@@ -137,7 +137,7 @@ export default function OpsHome() {
 
   return (
     <div>
-      <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" isAdmin={isAdmin} />
+      <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" allowedTabs={allowedTabs} />
 
       <div className="bp-container">
         {loading || !computed ? (

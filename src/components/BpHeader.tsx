@@ -1,26 +1,30 @@
 import Image from "next/image"
 import Link from "next/link"
 
-const TABS = [
+const ALL_TABS = [
   { label: 'Dashboard', tab: 'dashboard' as const, href: '/ops' },
   { label: 'Ask AI', tab: 'ask' as const, href: '/ops/ask' },
   { label: 'Suppliers', tab: 'bills' as const, href: '/ops/bills' },
+  { label: 'Admin', tab: 'admin' as const, href: '/ops/admin' },
 ]
-
-const ADMIN_TAB = { label: 'Admin', tab: 'admin' as const, href: '/ops/admin' }
 
 export default function BpHeader({
   email,
   onSignOut,
   activeTab,
-  isAdmin,
+  allowedTabs,
 }: {
   email?: string | null
   onSignOut?: () => void
   activeTab?: 'dashboard' | 'ask' | 'bills' | 'admin'
-  isAdmin?: boolean
+  allowedTabs?: string[]
 }) {
-  const tabs = isAdmin ? [...TABS, ADMIN_TAB] : TABS
+  // Filter header tabs to those the user is allowed to see. If no
+  // allowedTabs prop is given, default to the non-admin set.
+  const visible = allowedTabs
+    ? ALL_TABS.filter(t => allowedTabs.includes(t.tab))
+    : ALL_TABS.filter(t => t.tab !== 'admin')
+
   return (
     <header style={{ borderBottom: "1px solid rgba(255,255,255,0.10)" }}>
       <div
@@ -34,7 +38,7 @@ export default function BpHeader({
           gap: 14,
         }}
       >
-        <Link href="/ops" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <Link href="/ops/bills" style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <Image src="/brand/logo.png" alt="The Cafe" width={52} height={52} priority />
           <div>
             <div style={{ fontWeight: 700, letterSpacing: 1.2, fontSize: 14 }}>
@@ -58,7 +62,7 @@ export default function BpHeader({
 
       {activeTab && (
         <div className="bp-container" style={{ paddingTop: 0, paddingBottom: 0, display: 'flex', gap: 4 }}>
-          {tabs.map(({ label, tab, href }) => (
+          {visible.map(({ label, tab, href }) => (
             <Link
               key={tab}
               href={href}
