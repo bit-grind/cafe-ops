@@ -438,6 +438,58 @@ export async function POST(req: Request) {
       },
     }
 
+    // ── Extracted invoice line items (from AI-scanned PDFs) ──────────────────
+    // If the question mentions specific products, ingredients, or suppliers,
+    // search the extracted line items table for relevant results.
+    let extractedItems: Array<{
+      description: string
+      quantity: number | null
+      unit_price: number | null
+      total: number | null
+      supplier: string | null
+      invoice_date: string | null
+    }> | null = null
+
+    const needsExtracted = /\b(buy|bought|purchase|order|spend|spent|cost|price|pay|paid|item|items|product|products|ingredient|ingredients|how much|what did)\b/i.test(question)
+    if (needsExtracted) {
+      try {
+        // Extract search terms from the question — simple heuristic: words > 3 chars, excluding stop words
+        const stopWords = new Set(['what','were','with','that','this','from','have','been','does','about','much','last','did','the','and','for','how','our','was','are','has'])
+        const words = question.toLowerCase().match(/\b[a-z]{4,}\b/g)?.filter(w => !stopWords.has(w)) ?? []
+
+        if (words.length > 0) {
+          // Search for each word and combine results (limit to top 50)
+          const pattern = words.slice(0, 3).map(w => `%${w}%`)
+          let query = supabase
+            .from('extracted_line_items')
+            .select('description, quantity, unit_price, total, xero_invoice_id, extraction_runs!inner(supplier_name, invoice_date)')
+            .limit(50)
+
+          // Use OR condition for multiple search terms
+          if (pattern.length === 1) {
+            query = query.ilike('description', pattern[0])
+          } else {
+            query = query.or(pattern.map(p => `description.ilike.${p}`).join(','))
+          }
+
+          const { data: eiData } = await query
+          if (eiData && eiData.length > 0) {
+            extractedItems = eiData.map((r: Record<string, unknown>) => {
+              const run = r.extraction_runs as Record<string, unknown> | null
+              return {
+                description: String(r.description ?? ''),
+                quantity: r.quantity as number | null,
+                unit_price: r.unit_price as number | null,
+                total: r.total as number | null,
+                supplier: (run?.supplier_name as string) ?? null,
+                invoice_date: (run?.invoice_date as string) ?? null,
+              }
+            })
+          }
+        }
+      } catch { /* non-fatal — extracted items are a bonus, not required */ }
+    }
+
     const actualToday = iso(new Date())
 
     const guestClause = isGuest
@@ -455,7 +507,8 @@ When asked to exclude coffees, drinks, or beverages from a product list, filter 
 When the question asks to "be brief and factual" or says "no summary or recommendations", respond with only the requested data points — no summary paragraph, no recommendations section, no closing notes.
 IMPORTANT: This cafe is significantly busier on weekends (Saturday and Sunday) than weekdays. Always account for day-of-week when analysing trends or comparing days. A weekday below the overall average is not necessarily a concern — compare weekdays to weekdays and weekends to weekends. When identifying "slow" days or drops, note whether it is a weekday or weekend and adjust the interpretation accordingly. When making recommendations for "next week", distinguish between weekday and weekend expectations.
 When supplier bills from Xero are included in the context: "Status=AUTHORISED" means the bill has been approved but not yet fully paid, so amountDue > 0 is outstanding. "Status=PAID" means it is fully settled. Totals are in AUD unless the currencyCode says otherwise. When asked about "unpaid", "owing", or "outstanding" bills, filter to those where amountDue > 0. When asked about bills for a specific supplier, match case-insensitively on contactName. Always format bill amounts as currency with a $ prefix.
-Each bill has a lineItems array with description, quantity, unitAmount, lineAmount, accountCode and taxType — use these to answer questions about what was bought ("what did we buy from X", "how much did we spend on Y", "what's the line item breakdown"). When summing category spend (e.g. "how much did we spend on milk?"), match descriptions case-insensitively and sum lineAmount. lineAmountTypes tells you whether line amounts are tax-inclusive ("Inclusive"), exclusive ("Exclusive"), or "NoTax" — bear this in mind when totals don't tie exactly.${guestClause}
+Each bill has a lineItems array with description, quantity, unitAmount, lineAmount, accountCode and taxType — use these to answer questions about what was bought ("what did we buy from X", "how much did we spend on Y", "what's the line item breakdown"). When summing category spend (e.g. "how much did we spend on milk?"), match descriptions case-insensitively and sum lineAmount. lineAmountTypes tells you whether line amounts are tax-inclusive ("Inclusive"), exclusive ("Exclusive"), or "NoTax" — bear this in mind when totals don't tie exactly.
+When "Extracted invoice line items" are provided, these are detailed product-level data read directly from the supplier PDF invoices using AI. They contain the actual items purchased (e.g. "Bega Tasty Cheddar 1kg"), quantities, and unit prices — much more granular than Xero's accounting line items. Prefer these when answering specific product/ingredient questions. Each extracted item includes the supplier name and invoice date for context.${guestClause}
 `
 
     const user = `
@@ -483,6 +536,9 @@ ${products && products.length > 0
     ? `Top products aggregated over the queried period (sorted by total quantity sold):\n${JSON.stringify(products, null, 2)}`
     : `Product-level data for the relevant date(s):\n${JSON.stringify(products, null, 2)}`
   : 'No product-level data matched the requested date.'}
+${extractedItems && extractedItems.length > 0
+  ? `\nExtracted invoice line items (from AI-scanned supplier PDFs — detailed product-level purchase data):\n${JSON.stringify(extractedItems, null, 2)}`
+  : ''}
 `
 
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {

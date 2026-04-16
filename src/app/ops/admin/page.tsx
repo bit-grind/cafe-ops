@@ -38,6 +38,17 @@ export default function AdminPage() {
   const [detail, setDetail] = useState<UserDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
+  // Batch extraction state
+  const [extractPending, setExtractPending] = useState<Array<{
+    invoiceId: string; supplier: string; invoiceNumber: string | null
+  }>>([])
+  const [extractTotal, setExtractTotal] = useState(0)
+  const [extractProcessed, setExtractProcessed] = useState(0)
+  const [extracting, setExtracting] = useState(false)
+  const [extractProgress, setExtractProgress] = useState(0)
+  const [extractMsg, setExtractMsg] = useState<string | null>(null)
+  const extractAbortRef = { current: false }
+
   async function toggleDetail(id: string) {
     if (expandedId === id) {
       setExpandedId(null)
@@ -105,6 +116,7 @@ export default function AdminPage() {
         return
       }
       await loadUsers()
+      loadExtractionStatus()
       setLoading(false)
     }
     init()
@@ -177,6 +189,52 @@ export default function AdminPage() {
     }
     // Update the users list
     await loadUsers()
+  }
+
+  async function loadExtractionStatus() {
+    try {
+      const res = await fetch('/api/extract-lines/batch', { headers: await authHeaders() })
+      const json = await res.json()
+      if (res.ok) {
+        setExtractPending(json.bills ?? [])
+        setExtractTotal(json.total ?? 0)
+        setExtractProcessed(json.processed ?? 0)
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  async function runBatchExtraction() {
+    setExtracting(true)
+    setExtractProgress(0)
+    extractAbortRef.current = false
+    const pending = [...extractPending]
+    let done = 0
+    let failed = 0
+    for (const bill of pending) {
+      if (extractAbortRef.current) break
+      try {
+        const res = await fetch('/api/extract-lines', {
+          method: 'POST',
+          headers: await authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ invoiceId: bill.invoiceId }),
+        })
+        if (!res.ok) {
+          const json = await res.json()
+          console.error(`Failed ${bill.invoiceId}:`, json.error)
+          failed++
+        }
+      } catch {
+        failed++
+      }
+      done++
+      setExtractProgress(done)
+      setExtractMsg(`Processing ${done}/${pending.length}${failed ? ` (${failed} failed)` : ''}`)
+      // Small delay to avoid rate limiting
+      await new Promise(r => setTimeout(r, 300))
+    }
+    setExtractMsg(`Done! Processed ${done} invoice${done !== 1 ? 's' : ''}${failed ? `, ${failed} failed` : ''}.`)
+    setExtracting(false)
+    await loadExtractionStatus()
   }
 
   if (loading) {
@@ -386,6 +444,67 @@ export default function AdminPage() {
               )
             })}
           </div>
+        </section>
+
+        <section className="bp-card" style={{ padding: 20 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
+            Invoice line extraction
+          </h2>
+          <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 12 }}>
+            Use AI to read line items from supplier invoice PDFs and make them searchable.
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 16 }}>
+            {extractTotal > 0
+              ? `${extractProcessed} of ${extractTotal} invoices processed • ${extractPending.length} pending`
+              : 'Loading extraction status…'}
+          </div>
+
+          {extractPending.length > 0 && !extracting && (
+            <button
+              onClick={runBatchExtraction}
+              className="bp-btn"
+              style={{ fontSize: 13, marginBottom: 12 }}
+            >
+              Extract {extractPending.length} pending invoice{extractPending.length !== 1 ? 's' : ''}
+            </button>
+          )}
+
+          {extracting && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{
+                height: 6,
+                borderRadius: 3,
+                background: '#222',
+                overflow: 'hidden',
+                marginBottom: 8,
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${extractPending.length > 0 ? (extractProgress / extractPending.length) * 100 : 0}%`,
+                  background: '#4cc77d',
+                  borderRadius: 3,
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+              <button
+                onClick={() => { extractAbortRef.current = true }}
+                className="bp-btn"
+                style={{ fontSize: 12 }}
+              >
+                Stop
+              </button>
+            </div>
+          )}
+
+          {extractMsg && (
+            <div style={{ fontSize: 12, opacity: 0.7 }}>{extractMsg}</div>
+          )}
+
+          {extractPending.length === 0 && extractTotal > 0 && !extracting && (
+            <div style={{ fontSize: 12, color: '#4cc77d' }}>
+              All invoices have been processed.
+            </div>
+          )}
         </section>
       </main>
     </>

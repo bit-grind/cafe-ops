@@ -96,6 +96,24 @@ export default function BillsPage() {
   const [dateOpen, setDateOpen] = useState(false)
   const dateRef = useRef<HTMLDivElement>(null)
 
+  // Line item search
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<Array<{
+    id: number
+    description: string
+    quantity: number | null
+    unit: string | null
+    unit_price: number | null
+    total: number | null
+    category: string | null
+    supplier: string | null
+    invoiceNumber: string | null
+    invoiceDate: string | null
+    invoiceId: string
+  }>>([])
+  const [searchBusy, setSearchBusy] = useState(false)
+  const [searchActive, setSearchActive] = useState(false)
+
   // Detail modal
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
@@ -292,6 +310,32 @@ export default function BillsPage() {
     window.location.href = '/login'
   }
 
+  async function runSearch(q?: string) {
+    const query = (q ?? searchQuery).trim()
+    if (!query) { setSearchActive(false); setSearchResults([]); return }
+    setSearchBusy(true)
+    setSearchActive(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/api/extract-lines/search?q=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+      })
+      const out = await res.json()
+      if (res.ok) {
+        setSearchResults(out.results ?? [])
+      } else {
+        setError(out.error ?? 'Search failed')
+      }
+    } catch { setError('Search failed') }
+    finally { setSearchBusy(false) }
+  }
+
+  function clearSearch() {
+    setSearchQuery('')
+    setSearchActive(false)
+    setSearchResults([])
+  }
+
   // Group all loaded bills by matched supplier label. Any bill whose contact
   // isn't in the SUPPLIERS list is dropped. Per-supplier invoice-prefix
   // exclusions (e.g. Southside Milk "RB…") are applied here too.
@@ -426,8 +470,60 @@ export default function BillsPage() {
               </div>
             </div>
 
+            {/* Search bar */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') runSearch() }}
+                placeholder="Search invoice line items (e.g. milk, salmon, cheddar)…"
+                style={{
+                  flex: 1,
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  border: '1px solid #333',
+                  background: '#111',
+                  color: '#e0e0e0',
+                  fontSize: 13,
+                  outline: 'none',
+                }}
+              />
+              <button
+                onClick={() => runSearch()}
+                disabled={searchBusy || !searchQuery.trim()}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: searchBusy || !searchQuery.trim() ? '#222' : '#fff',
+                  color: searchBusy || !searchQuery.trim() ? '#444' : '#000',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: searchBusy || !searchQuery.trim() ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {searchBusy ? '…' : 'Search'}
+              </button>
+              {searchActive && (
+                <button
+                  onClick={clearSearch}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: '1px solid #333',
+                    background: 'transparent',
+                    color: '#999',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
             {/* Supplier tabs */}
-            <div style={{
+            {!searchActive && <div style={{
               display: 'flex',
               flexWrap: 'wrap',
               gap: 6,
@@ -468,54 +564,105 @@ export default function BillsPage() {
                   </button>
                 )
               })}
-            </div>
+            </div>}
 
             {flash && <div style={{ color: '#4cc77d', fontSize: 12, marginBottom: 10 }}>{flash}</div>}
             {error && <div style={{ color: '#c77070', fontSize: 12, marginBottom: 10 }}>{error}</div>}
 
-            {/* Table */}
-            <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: '#141414', color: '#888', textAlign: 'left' }}>
-                      <Th>Date</Th>
-                      <Th>Supplier</Th>
-                      <Th>Invoice #</Th>
-                      <Th right>Total</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleBills.length === 0 && !busy ? (
-                      <tr>
-                        <td colSpan={4} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
-                          {bills.length === 0 && totalScanned > 0
-                            ? `Scanned ${totalScanned} bills — none have an attached invoice file in Xero.`
-                            : bills.length === 0
-                            ? 'No bills match those filters.'
-                            : `No ${activeSupplier} bills with attachments in the scanned ${totalScanned} bills.`}
-                        </td>
-                      </tr>
-                    ) : (
-                      visibleBills.map(b => (
-                        <tr
-                          key={b.invoiceID}
-                          onClick={() => openBill(b)}
-                          style={{ borderTop: '1px solid #1e1e1e', cursor: 'pointer' }}
-                          onMouseEnter={e => (e.currentTarget.style.background = '#141414')}
-                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        >
-                          <Td>{fmtDate(b.date)}</Td>
-                          <Td>{b.contactName}</Td>
-                          <Td mono>{b.invoiceNumber ?? '—'}</Td>
-                          <Td right>{money(b.total, b.currencyCode)}</Td>
+            {/* Search results */}
+            {searchActive && (
+              <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #1e1e1e', fontSize: 12, color: '#888' }}>
+                  {searchBusy ? 'Searching…' : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${searchQuery}"`}
+                </div>
+                {searchResults.length > 0 && (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: '#141414', color: '#888', textAlign: 'left' }}>
+                          <Th>Item</Th>
+                          <Th right>Qty</Th>
+                          <Th right>Unit Price</Th>
+                          <Th right>Total</Th>
+                          <Th>Supplier</Th>
+                          <Th>Date</Th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {searchResults.map(r => (
+                          <tr
+                            key={r.id}
+                            onClick={() => {
+                              const bill = bills.find(b => b.invoiceID === r.invoiceId)
+                              if (bill) openBill(bill)
+                            }}
+                            style={{
+                              borderTop: '1px solid #1e1e1e',
+                              cursor: bills.find(b => b.invoiceID === r.invoiceId) ? 'pointer' : 'default',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#141414')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <Td>{r.description}</Td>
+                            <Td right>{r.quantity != null ? `${r.quantity}${r.unit ? ` ${r.unit}` : ''}` : '—'}</Td>
+                            <Td right>{r.unit_price != null ? money(r.unit_price) : '—'}</Td>
+                            <Td right>{r.total != null ? money(r.total) : '—'}</Td>
+                            <Td>{r.supplier ?? '—'}</Td>
+                            <Td>{fmtDate(r.invoiceDate)}</Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
+
+            {/* Bill table (normal view) */}
+            {!searchActive && (
+              <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: '#141414', color: '#888', textAlign: 'left' }}>
+                        <Th>Date</Th>
+                        <Th>Supplier</Th>
+                        <Th>Invoice #</Th>
+                        <Th right>Total</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleBills.length === 0 && !busy ? (
+                        <tr>
+                          <td colSpan={4} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
+                            {bills.length === 0 && totalScanned > 0
+                              ? `Scanned ${totalScanned} bills — none have an attached invoice file in Xero.`
+                              : bills.length === 0
+                              ? 'No bills match those filters.'
+                              : `No ${activeSupplier} bills with attachments in the scanned ${totalScanned} bills.`}
+                          </td>
+                        </tr>
+                      ) : (
+                        visibleBills.map(b => (
+                          <tr
+                            key={b.invoiceID}
+                            onClick={() => openBill(b)}
+                            style={{ borderTop: '1px solid #1e1e1e', cursor: 'pointer' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#141414')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <Td>{fmtDate(b.date)}</Td>
+                            <Td>{b.contactName}</Td>
+                            <Td mono>{b.invoiceNumber ?? '—'}</Td>
+                            <Td right>{money(b.total, b.currencyCode)}</Td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {isAdmin && (
               <div style={{ marginTop: 14, fontSize: 11, opacity: 0.5 }}>
