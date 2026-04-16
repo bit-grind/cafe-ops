@@ -19,7 +19,7 @@ export type ExtractionResult = {
 
 // ── Prompt ───────────────────────────────────────────────────────────────────
 
-const EXTRACTION_PROMPT = `You are an invoice line-item extractor for a cafe. You will receive the text content of a supplier invoice (or an image of one). Extract every individual line item into a JSON array.
+const EXTRACTION_PROMPT = `You are an invoice line-item extractor for a cafe. You will receive a supplier invoice (as a file or image). Extract every individual line item into a JSON array.
 
 For each line item return:
 - "description": the product/item name exactly as written on the invoice
@@ -39,36 +39,46 @@ Rules:
 
 const MODEL = 'gpt-4.1-mini'
 
-// ── Text extraction from PDF ─────────────────────────────────────────────────
+// ── OpenAI call ──────────────────────────────────────────────────────────────
 
-// pdfjs-dist (used internally by pdf-parse) expects browser globals like
-// DOMMatrix that don't exist in Vercel's serverless Node.js runtime.
-// Polyfill them before first import.
-if (typeof globalThis.DOMMatrix === 'undefined') {
+/**
+ * Send a file (PDF or image) directly to OpenAI using their file content
+ * type for PDFs, or image_url for images. No server-side PDF parsing needed.
+ */
+async function extractViaOpenAI(
+  base64Data: string,
+  contentType: string,
+  fileName: string
+): Promise<ExtractionResult> {
+  // Build the content parts based on file type
+  const isPdf = contentType.toLowerCase().includes('pdf')
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(globalThis as any).DOMMatrix = class DOMMatrix {
-    m11=1;m12=0;m13=0;m14=0;m21=0;m22=1;m23=0;m24=0
-    m31=0;m32=0;m33=1;m34=0;m41=0;m42=0;m43=0;m44=1
-    a=1;b=0;c=0;d=1;e=0;f=0;is2D=true;isIdentity=true
+  let userContent: any[]
+
+  if (isPdf) {
+    // Use OpenAI's file input type for PDFs
+    userContent = [
+      { type: 'text', text: 'Extract all line items from this supplier invoice.' },
+      {
+        type: 'file',
+        file: {
+          data: base64Data,
+          filename: fileName,
+        },
+      },
+    ]
+  } else {
+    // Use image_url for image files
+    userContent = [
+      { type: 'text', text: 'Extract all line items from this supplier invoice image.' },
+      {
+        type: 'image_url',
+        image_url: { url: `data:${contentType};base64,${base64Data}`, detail: 'high' },
+      },
+    ]
   }
-}
-if (typeof globalThis.Path2D === 'undefined') {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(globalThis as any).Path2D = class Path2D { constructor() {} }
-}
 
-async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string> {
-  // pdf-parse expects a Buffer in Node.js
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
-  const nodeBuffer = Buffer.from(buffer)
-  const data = await pdfParse(nodeBuffer)
-  return data.text
-}
-
-// ── OpenAI calls ─────────────────────────────────────────────────────────────
-
-async function extractViaText(text: string): Promise<ExtractionResult> {
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -81,7 +91,7 @@ async function extractViaText(text: string): Promise<ExtractionResult> {
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: EXTRACTION_PROMPT },
-        { role: 'user', content: `Here is the text content of a supplier invoice. Extract all line items:\n\n${text}` },
+        { role: 'user', content: userContent },
       ],
     }),
   })
@@ -89,49 +99,6 @@ async function extractViaText(text: string): Promise<ExtractionResult> {
   if (!resp.ok) {
     const err = await resp.text()
     throw new Error(`OpenAI API error: ${resp.status} ${err}`)
-  }
-
-  const json = await resp.json()
-  const raw = json.choices?.[0]?.message?.content ?? '{}'
-  const parsed = JSON.parse(raw)
-
-  return {
-    items: (parsed.items ?? []).map(normaliseItem),
-    rawResponse: raw,
-    model: MODEL,
-  }
-}
-
-async function extractViaVision(base64Image: string, mimeType: string): Promise<ExtractionResult> {
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      temperature: 0.1,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: EXTRACTION_PROMPT },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Extract all line items from this supplier invoice image.' },
-            {
-              type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64Image}`, detail: 'high' },
-            },
-          ],
-        },
-      ],
-    }),
-  })
-
-  if (!resp.ok) {
-    const err = await resp.text()
-    throw new Error(`OpenAI Vision API error: ${resp.status} ${err}`)
   }
 
   const json = await resp.json()
@@ -163,11 +130,9 @@ function normaliseItem(raw: Record<string, unknown>): ExtractedItem {
 /**
  * Fetch an invoice attachment from Xero and extract line items using AI.
  *
- * For PDFs: extracts text first, then sends text to LLM (cheapest/fastest).
- * For images: sends directly to OpenAI vision.
- *
- * If the PDF text extraction yields very little text (likely a scanned image),
- * falls back to vision by converting the first page to an image.
+ * Sends the file directly to OpenAI — PDFs via file input, images via
+ * image_url. No server-side PDF parsing needed, so this works reliably
+ * in Vercel's serverless environment.
  */
 export async function extractLinesFromInvoice(
   invoiceID: string,
@@ -186,30 +151,9 @@ export async function extractLinesFromInvoice(
   if (!result) throw new Error(`Attachment not found: ${attName}`)
 
   const { buffer, contentType } = result
-  const ct = contentType.toLowerCase()
+  const base64 = Buffer.from(buffer).toString('base64')
 
-  let extraction: ExtractionResult
-
-  if (ct.includes('pdf')) {
-    // Try text extraction first (fast and cheap)
-    const text = await extractTextFromPdf(buffer)
-
-    if (text.trim().length > 50) {
-      // Good text content — use text-based extraction
-      extraction = await extractViaText(text)
-    } else {
-      // Very little text — likely a scanned image PDF
-      // Send the entire PDF as a base64 image (OpenAI can handle some PDFs)
-      const base64 = Buffer.from(buffer).toString('base64')
-      extraction = await extractViaVision(base64, 'application/pdf')
-    }
-  } else if (ct.includes('image')) {
-    // Direct image attachment — use vision
-    const base64 = Buffer.from(buffer).toString('base64')
-    extraction = await extractViaVision(base64, contentType)
-  } else {
-    throw new Error(`Unsupported attachment type: ${contentType}`)
-  }
+  const extraction = await extractViaOpenAI(base64, contentType, attName)
 
   return { ...extraction, attachmentName: attName }
 }
