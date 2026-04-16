@@ -220,7 +220,8 @@ export async function xeroGet(path: string, query?: Record<string, string | unde
   })
   if (!resp.ok) {
     const text = await resp.text()
-    throw new Error(`Xero GET ${path} failed: ${resp.status} ${text}`)
+    const retryAfter = resp.headers.get('retry-after')
+    throw new Error(`Xero GET ${path} failed: ${resp.status} ${text}${retryAfter ? ` (retry-after: ${retryAfter}s)` : ''}`)
   }
   return resp.json()
 }
