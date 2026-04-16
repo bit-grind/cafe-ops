@@ -1,19 +1,31 @@
 import { NextResponse } from 'next/server'
 import { adminClient } from '@/lib/adminAuth'
 import { extractLinesFromInvoice } from '@/lib/extractLines'
-import { listAllBills, getBill } from '@/lib/xero'
+import { listAllBills } from '@/lib/xero'
 
-const BATCH_SIZE = 10
+// Allow up to 60s on Hobby plan (default is 10s)
+export const maxDuration = 60
+
+// With ~8-12s per invoice and 60s budget, process 5 safely
+const BATCH_SIZE = 5
 
 /**
- * POST /api/extract-lines/cron
+ * GET /api/extract-lines/cron
  *
- * Automated batch extraction endpoint. Processes up to BATCH_SIZE
- * invoices per call. Protected by CRON_SECRET env var.
+ * Vercel Cron handler. Processes up to BATCH_SIZE pending invoices.
+ * Protected by CRON_SECRET env var (Vercel sends this automatically).
  *
- * Returns: { processed, failed, remaining }
+ * Also accepts POST for manual triggering.
  */
+export async function GET(req: Request) {
+  return handleCron(req)
+}
+
 export async function POST(req: Request) {
+  return handleCron(req)
+}
+
+async function handleCron(req: Request) {
   const secret = process.env.CRON_SECRET
   if (!secret) {
     return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 })
