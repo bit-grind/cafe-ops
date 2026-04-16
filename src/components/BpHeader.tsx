@@ -38,7 +38,7 @@ export default function BpHeader({
           gap: 14,
         }}
       >
-        <Link href="/ops/bills" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <Link href="/ops" style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <Image src="/brand/logo.png" alt="The Cafe" width={52} height={52} priority />
           <div>
             <div style={{ fontWeight: 700, letterSpacing: 1.2, fontSize: 14 }}>
