@@ -450,16 +450,25 @@ export async function POST(req: Request) {
       invoice_date: string | null
     }> | null = null
 
-    const needsExtracted = /\b(buy|bought|purchase|order|spend|spent|cost|price|pay|paid|item|items|product|products|ingredient|ingredients|how much|what did)\b/i.test(question)
-    if (needsExtracted) {
+    // Always try to search extracted line items — the cost is a single
+    // ILIKE query and the benefit is product-level purchase data from
+    // actual supplier PDFs. Extract candidate search terms from the
+    // question: any word 3+ chars that isn't a common stop word.
+    {
       try {
-        // Extract search terms from the question — simple heuristic: words > 3 chars, excluding stop words
-        const stopWords = new Set(['what','were','with','that','this','from','have','been','does','about','much','last','did','the','and','for','how','our','was','are','has'])
-        const words = question.toLowerCase().match(/\b[a-z]{4,}\b/g)?.filter(w => !stopWords.has(w)) ?? []
+        const stopWords = new Set([
+          'what','were','with','that','this','from','have','been','does',
+          'about','much','last','did','the','and','for','how','our','was',
+          'are','has','many','there','they','than','them','then','will',
+          'would','could','should','their','which','where','when','your',
+          'week','month','year','today','total','sales','gross','compare',
+          'trend','best','worst','day','days',
+        ])
+        const words = question.toLowerCase().match(/\b[a-z]{3,}\b/g)?.filter(w => !stopWords.has(w)) ?? []
 
         if (words.length > 0) {
           // Search for each word and combine results (limit to top 50)
-          const pattern = words.slice(0, 3).map(w => `%${w}%`)
+          const pattern = words.slice(0, 5).map(w => `%${w}%`)
           let query = supabase
             .from('extracted_line_items')
             .select('description, quantity, unit_price, total, xero_invoice_id, extraction_runs!inner(supplier_name, invoice_date)')
