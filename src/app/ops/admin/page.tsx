@@ -229,8 +229,8 @@ export default function AdminPage() {
       done++
       setExtractProgress(done)
       setExtractMsg(`Processing ${done}/${pending.length}${failed ? ` (${failed} failed)` : ''}`)
-      // Small delay to avoid rate limiting
-      await new Promise(r => setTimeout(r, 300))
+      // Delay to avoid Xero API rate limits (60 req/min, each extraction = 2 calls)
+      await new Promise(r => setTimeout(r, 2000))
     }
     setExtractMsg(`Done! Processed ${done} invoice${done !== 1 ? 's' : ''}${failed ? `, ${failed} failed` : ''}.`)
     setExtracting(false)
