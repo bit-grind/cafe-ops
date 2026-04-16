@@ -54,8 +54,6 @@ export default function OpsHome() {
         if (meRes.ok) {
           const me = await meRes.json()
           setAllowedTabs(me.allowedTabs ?? [])
-          // Kitchen users can only see Suppliers — redirect them.
-          if (me.isKitchen) { window.location.href = '/ops/bills'; return }
         }
       } catch { /* non-fatal */ }
 

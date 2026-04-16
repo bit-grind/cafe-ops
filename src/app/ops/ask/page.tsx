@@ -175,7 +175,6 @@ export default function AskPage() {
         if (meRes.ok) {
           const me = await meRes.json()
           setAllowedTabs(me.allowedTabs ?? [])
-          if (me.isKitchen) { window.location.href = '/ops/bills'; return }
         }
       } catch { /* non-fatal */ }
       setLoading(false)
