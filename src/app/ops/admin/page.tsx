@@ -193,12 +193,17 @@ export default function AdminPage() {
 
   async function loadExtractionStatus() {
     try {
+      // Fast mode: just DB counts, no Xero calls
       const res = await fetch('/api/extract-lines/batch', { headers: await authHeaders() })
       const json = await res.json()
       if (res.ok) {
-        setExtractPending(json.bills ?? [])
-        setExtractTotal(json.total ?? 0)
-        setExtractProcessed(json.processed ?? 0)
+        setExtractProcessed(json.completed ?? 0)
+        setExtractTotal((json.completed ?? 0) + (json.failed ?? 0) + (json.processing ?? 0))
+        setExtractMsg(
+          json.failed > 0
+            ? `${json.completed} completed, ${json.failed} failed • ${json.itemCount ?? 0} line items extracted`
+            : `${json.completed} invoices processed • ${json.itemCount ?? 0} line items extracted`
+        )
       }
     } catch { /* non-fatal */ }
   }
@@ -454,20 +459,12 @@ export default function AdminPage() {
             Use AI to read line items from supplier invoice PDFs and make them searchable.
           </div>
           <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 16 }}>
-            {extractTotal > 0
-              ? `${extractProcessed} of ${extractTotal} invoices processed • ${extractPending.length} pending`
-              : 'Loading extraction status…'}
+            {extractMsg ?? 'Loading extraction status…'}
           </div>
 
-          {extractPending.length > 0 && !extracting && (
-            <button
-              onClick={runBatchExtraction}
-              className="bp-btn"
-              style={{ fontSize: 13, marginBottom: 12 }}
-            >
-              Extract {extractPending.length} pending invoice{extractPending.length !== 1 ? 's' : ''}
-            </button>
-          )}
+          <div style={{ fontSize: 12, opacity: 0.5, marginBottom: 12 }}>
+            Auto-extraction runs every 2 minutes via Supabase cron.
+          </div>
 
           {extracting && (
             <div style={{ marginBottom: 12 }}>
@@ -500,11 +497,13 @@ export default function AdminPage() {
             <div style={{ fontSize: 12, opacity: 0.7 }}>{extractMsg}</div>
           )}
 
-          {extractPending.length === 0 && extractTotal > 0 && !extracting && (
-            <div style={{ fontSize: 12, color: '#4cc77d' }}>
-              All invoices have been processed.
-            </div>
-          )}
+          <button
+            onClick={loadExtractionStatus}
+            className="bp-btn"
+            style={{ fontSize: 12 }}
+          >
+            Refresh status
+          </button>
         </section>
       </main>
     </>
