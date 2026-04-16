@@ -1,11 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [
-    {
-      "path": "/api/extract-lines/cron",
-      "schedule": "0 20,23,2,4 * * *"
-    }
-  ],
   "functions": {
     "src/app/api/extract-lines/cron/route.ts": {
       "maxDuration": 60
