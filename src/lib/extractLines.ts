@@ -45,31 +45,61 @@ const MODEL = 'gpt-4.1-mini'
  * Send a file (PDF or image) directly to OpenAI using their file content
  * type for PDFs, or image_url for images. No server-side PDF parsing needed.
  */
+/**
+ * Upload a file to OpenAI's Files API and return the file_id.
+ * Used for PDFs since Chat Completions requires a file_id reference.
+ */
+async function uploadToOpenAI(buffer: Buffer, fileName: string): Promise<string> {
+  const formData = new FormData()
+  formData.append('purpose', 'assistants')
+  formData.append('file', new Blob([new Uint8Array(buffer)]), fileName)
+
+  const resp = await fetch('https://api.openai.com/v1/files', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    body: formData,
+  })
+
+  if (!resp.ok) {
+    const err = await resp.text()
+    throw new Error(`OpenAI file upload failed: ${resp.status} ${err}`)
+  }
+
+  const json = await resp.json()
+  return json.id as string
+}
+
+async function deleteOpenAIFile(fileId: string): Promise<void> {
+  await fetch(`https://api.openai.com/v1/files/${fileId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+  }).catch(() => { /* best-effort cleanup */ })
+}
+
 async function extractViaOpenAI(
+  fileBuffer: Buffer,
   base64Data: string,
   contentType: string,
   fileName: string
 ): Promise<ExtractionResult> {
-  // Build the content parts based on file type
   const isPdf = contentType.toLowerCase().includes('pdf')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let userContent: any[]
+  let uploadedFileId: string | null = null
 
   if (isPdf) {
-    // Use OpenAI's file input type for PDFs
+    // Upload PDF to OpenAI Files API, then reference by file_id
+    uploadedFileId = await uploadToOpenAI(fileBuffer, fileName)
     userContent = [
       { type: 'text', text: 'Extract all line items from this supplier invoice.' },
       {
         type: 'file',
-        file: {
-          data: base64Data,
-          filename: fileName,
-        },
+        file: { file_id: uploadedFileId },
       },
     ]
   } else {
-    // Use image_url for image files
+    // Use image_url for image files (inline base64)
     userContent = [
       { type: 'text', text: 'Extract all line items from this supplier invoice image.' },
       {
@@ -79,36 +109,41 @@ async function extractViaOpenAI(
     ]
   }
 
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
+  try {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        temperature: 0.1,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: EXTRACTION_PROMPT },
+          { role: 'user', content: userContent },
+        ],
+      }),
+    })
+
+    if (!resp.ok) {
+      const err = await resp.text()
+      throw new Error(`OpenAI API error: ${resp.status} ${err}`)
+    }
+
+    const json = await resp.json()
+    const raw = json.choices?.[0]?.message?.content ?? '{}'
+    const parsed = JSON.parse(raw)
+
+    return {
+      items: (parsed.items ?? []).map(normaliseItem),
+      rawResponse: raw,
       model: MODEL,
-      temperature: 0.1,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: EXTRACTION_PROMPT },
-        { role: 'user', content: userContent },
-      ],
-    }),
-  })
-
-  if (!resp.ok) {
-    const err = await resp.text()
-    throw new Error(`OpenAI API error: ${resp.status} ${err}`)
-  }
-
-  const json = await resp.json()
-  const raw = json.choices?.[0]?.message?.content ?? '{}'
-  const parsed = JSON.parse(raw)
-
-  return {
-    items: (parsed.items ?? []).map(normaliseItem),
-    rawResponse: raw,
-    model: MODEL,
+    }
+  } finally {
+    // Clean up uploaded file
+    if (uploadedFileId) void deleteOpenAIFile(uploadedFileId)
   }
 }
 
@@ -151,9 +186,10 @@ export async function extractLinesFromInvoice(
   if (!result) throw new Error(`Attachment not found: ${attName}`)
 
   const { buffer, contentType } = result
-  const base64 = Buffer.from(buffer).toString('base64')
+  const nodeBuffer = Buffer.from(buffer)
+  const base64 = nodeBuffer.toString('base64')
 
-  const extraction = await extractViaOpenAI(base64, contentType, attName)
+  const extraction = await extractViaOpenAI(nodeBuffer, base64, contentType, attName)
 
   return { ...extraction, attachmentName: attName }
 }
