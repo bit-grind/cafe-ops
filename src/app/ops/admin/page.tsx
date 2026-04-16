@@ -32,7 +32,7 @@ export default function AdminPage() {
 
   const [newEmail, setNewEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
-  const [newRole, setNewRole] = useState<'user' | 'guest'>('user')
+  const [newRole, setNewRole] = useState<'user' | 'guest' | 'kitchen'>('user')
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<UserDetail | null>(null)
@@ -154,6 +154,31 @@ export default function AdminPage() {
     await loadUsers()
   }
 
+  async function updateUserRole(id: string, newRole: 'user' | 'guest') {
+    setBusy(true)
+    setMsg(null)
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ role: newRole }),
+    })
+    const json = await res.json()
+    setBusy(false)
+    if (!res.ok) {
+      setMsg(json.error ?? 'Failed to update user role')
+      return
+    }
+    // Update the detail view with the new role
+    if (detail && detail.user.id === id) {
+      setDetail({
+        ...detail,
+        user: { ...detail.user, role: newRole },
+      })
+    }
+    // Update the users list
+    await loadUsers()
+  }
+
   if (loading) {
     return (
       <>
@@ -194,10 +219,11 @@ export default function AdminPage() {
             <select
               className="bp-input"
               value={newRole}
-              onChange={(e) => setNewRole(e.target.value as 'user' | 'guest')}
+              onChange={(e) => setNewRole(e.target.value as 'user' | 'guest' | 'kitchen')}
             >
               <option value="user">user (full access)</option>
               <option value="guest">guest (read-only Ask AI)</option>
+              <option value="kitchen">kitchen (Bills only)</option>
             </select>
             <button type="submit" disabled={busy} className="bp-btn">
               {busy ? 'Working…' : 'Create user'}
@@ -295,6 +321,28 @@ export default function AdminPage() {
                               {detail.user.email_confirmed_at
                                 ? new Date(detail.user.email_confirmed_at).toLocaleString()
                                 : 'no'}
+                            </div>
+
+                            <div style={{ opacity: 0.5 }}>Role</div>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <select
+                                value={detail.user.role}
+                                onChange={(e) => updateUserRole(detail.user.id, e.target.value as 'user' | 'guest')}
+                                disabled={busy}
+                                style={{
+                                  padding: '4px 8px',
+                                  borderRadius: 4,
+                                  border: '1px solid #333',
+                                  background: '#111',
+                                  color: '#ccc',
+                                  fontSize: 12,
+                                  cursor: busy ? 'not-allowed' : 'pointer',
+                                }}
+                              >
+                                <option value="user">user (full access)</option>
+                                <option value="guest">guest (read-only Ask AI)</option>
+                                <option value="kitchen">kitchen (Bills only)</option>
+                              </select>
                             </div>
                           </div>
 

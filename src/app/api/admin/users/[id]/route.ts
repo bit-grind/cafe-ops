@@ -41,6 +41,50 @@ export async function GET(
   })
 }
 
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
+  const { id } = await params
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  const body = (await req.json().catch(() => ({}))) as {
+    role?: string
+  }
+  const newRole = ['guest', 'kitchen'].includes(body.role || '') ? body.role : 'user'
+
+  const supabase = adminClient()
+
+  // Get the user first to check if it's the admin account
+  const { data: target } = await supabase.auth.admin.getUserById(id)
+  if (!target?.user) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  }
+  if (isAdminEmail(target.user.email)) {
+    return NextResponse.json({ error: 'Cannot change the admin account role' }, { status: 400 })
+  }
+
+  // Update the user's role in metadata
+  const { data, error } = await supabase.auth.admin.updateUserById(id, {
+    user_metadata: { role: newRole },
+  })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({
+    user: {
+      id: data.user.id,
+      email: data.user.email ?? null,
+      role: ((data.user.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'user',
+      created_at: data.user.created_at,
+      last_sign_in_at: data.user.last_sign_in_at ?? null,
+      email_confirmed_at: data.user.email_confirmed_at ?? null,
+    },
+  })
+}
+
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
