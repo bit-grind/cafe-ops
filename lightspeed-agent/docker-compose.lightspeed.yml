@@ -1,0 +1,26 @@
+# Add this service to your existing docker-compose.yml on m75q,
+# or run standalone: docker compose -f docker-compose.lightspeed.yml up -d
+
+services:
+  home-network-mcp:
+    build: .
+    ports:
+      - "8888:8888"
+    environment:
+      # Supabase
+      - SUPABASE_URL=https://pzhqjdpbeyfndeckkhlu.supabase.co
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+
+      # Lightspeed portal (for browser automation)
+      - LIGHTSPEED_URL=${LIGHTSPEED_URL}
+      - LIGHTSPEED_USER=${LIGHTSPEED_USER}
+      - LIGHTSPEED_PASS=${LIGHTSPEED_PASS}
+
+      # Download directory
+      - DOWNLOAD_DIR=/data/downloads
+    volumes:
+      - lightspeed-data:/data/downloads
+    restart: unless-stopped
+
+volumes:
+  lightspeed-data:

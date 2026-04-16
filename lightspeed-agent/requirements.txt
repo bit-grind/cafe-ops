@@ -1,0 +1,2 @@
+# Add these to your existing requirements.txt on home-network-mcp
+playwright>=1.49.0

@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  home-network-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: home-network-mcp
+    ports:
+      - "8888:8888"
+    environment:
+      # Supabase
+      - SUPABASE_URL=https://pzhqjdpbeyfndeckkhlu.supabase.co
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+
+      # Lightspeed portal (for browser automation)
+      - LIGHTSPEED_URL=${LIGHTSPEED_URL}
+      - LIGHTSPEED_USER=${LIGHTSPEED_USER}
+      - LIGHTSPEED_PASS=${LIGHTSPEED_PASS}
+
+      # Download directory
+      - DOWNLOAD_DIR=/data/downloads
+    volumes:
+      - /volume1/docker/home-network-mcp/downloads:/data/downloads
+      - /volume1/docker/home-network-mcp/config:/app/config
+    restart: unless-stopped
+    network_mode: bridge
+    # Synology Container Manager health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3

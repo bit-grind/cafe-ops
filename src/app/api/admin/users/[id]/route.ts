@@ -54,7 +54,7 @@ export async function PATCH(
   const body = (await req.json().catch(() => ({}))) as {
     role?: string
   }
-  const newRole = ['guest', 'kitchen'].includes(body.role || '') ? body.role : 'user'
+  const newRole = ['guest', 'kitchen'].includes(body.role || '') ? body.role : 'admin'
 
   const supabase = adminClient()
 

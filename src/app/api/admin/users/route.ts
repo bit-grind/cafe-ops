@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   }
   const email = (body.email || '').trim().toLowerCase()
   const password = body.password || ''
-  const role = ['guest', 'kitchen'].includes(body.role || '') ? body.role : 'user'
+  const role = ['guest', 'kitchen'].includes(body.role || '') ? body.role : 'admin'
 
   if (!email || !password) {
     return NextResponse.json({ error: 'email and password are required' }, { status: 400 })

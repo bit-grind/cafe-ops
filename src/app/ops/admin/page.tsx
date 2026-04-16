@@ -32,7 +32,7 @@ export default function AdminPage() {
 
   const [newEmail, setNewEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
-  const [newRole, setNewRole] = useState<'user' | 'guest' | 'kitchen'>('user')
+  const [newRole, setNewRole] = useState<'admin' | 'guest' | 'kitchen'>('admin')
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<UserDetail | null>(null)
@@ -219,9 +219,9 @@ export default function AdminPage() {
             <select
               className="bp-input"
               value={newRole}
-              onChange={(e) => setNewRole(e.target.value as 'user' | 'guest' | 'kitchen')}
+              onChange={(e) => setNewRole(e.target.value as 'admin' | 'guest' | 'kitchen')}
             >
-              <option value="user">user (full access)</option>
+              <option value="admin">admin (full access)</option>
               <option value="guest">guest (read-only Ask AI)</option>
               <option value="kitchen">kitchen (Bills only)</option>
             </select>
@@ -327,7 +327,7 @@ export default function AdminPage() {
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                               <select
                                 value={detail.user.role}
-                                onChange={(e) => updateUserRole(detail.user.id, e.target.value as 'user' | 'guest')}
+                                onChange={(e) => updateUserRole(detail.user.id, e.target.value as 'admin' | 'guest' | 'kitchen')}
                                 disabled={busy}
                                 style={{
                                   padding: '4px 8px',
@@ -339,7 +339,7 @@ export default function AdminPage() {
                                   cursor: busy ? 'not-allowed' : 'pointer',
                                 }}
                               >
-                                <option value="user">user (full access)</option>
+                                <option value="admin">admin (full access)</option>
                                 <option value="guest">guest (read-only Ask AI)</option>
                                 <option value="kitchen">kitchen (Bills only)</option>
                               </select>
