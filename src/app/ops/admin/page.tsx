@@ -133,7 +133,7 @@ export default function AdminPage() {
     setMsg(`Created ${json.user.email}`)
     setNewEmail('')
     setNewPassword('')
-    setNewRole('user')
+    setNewRole('admin')
     await loadUsers()
   }
 
@@ -154,7 +154,7 @@ export default function AdminPage() {
     await loadUsers()
   }
 
-  async function updateUserRole(id: string, newRole: 'user' | 'guest') {
+  async function updateUserRole(id: string, newRole: 'admin' | 'guest' | 'kitchen') {
     setBusy(true)
     setMsg(null)
     const res = await fetch(`/api/admin/users/${id}`, {

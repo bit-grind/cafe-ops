@@ -32,7 +32,7 @@ export async function GET(
     user: {
       id: u.id,
       email: u.email ?? null,
-      role: ((u.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'user',
+      role: ((u.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'admin',
       created_at: u.created_at,
       last_sign_in_at: u.last_sign_in_at ?? null,
       email_confirmed_at: u.email_confirmed_at ?? null,
@@ -77,7 +77,7 @@ export async function PATCH(
     user: {
       id: data.user.id,
       email: data.user.email ?? null,
-      role: ((data.user.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'user',
+      role: ((data.user.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'admin',
       created_at: data.user.created_at,
       last_sign_in_at: data.user.last_sign_in_at ?? null,
       email_confirmed_at: data.user.email_confirmed_at ?? null,

@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const users = data.users.map((u) => ({
     id: u.id,
     email: u.email ?? null,
-    role: ((u.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'user',
+    role: ((u.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'admin',
     created_at: u.created_at,
     last_sign_in_at: u.last_sign_in_at ?? null,
   }))
