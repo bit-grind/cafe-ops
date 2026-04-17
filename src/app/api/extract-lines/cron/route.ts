@@ -10,8 +10,9 @@ const TIME_BUDGET_MS = 45_000
 
 // How many invoices to process per cron invocation.
 // Each extraction = 2 Xero API calls (listAttachments + fetchAttachment).
-// Keep low to stay well under Xero's 1000 calls/day limit.
-const MAX_PER_RUN = 2
+// Set to 4 for burn-through mode — will hit daily rate limit but finish
+// the backlog in ~3 hours once Xero unlocks. 429 detection pauses gracefully.
+const MAX_PER_RUN = 4
 
 // When cache is stale (older than this), refresh it from Xero.
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
