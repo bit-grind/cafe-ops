@@ -379,14 +379,14 @@ export default function BillsPage() {
     return allVisibleBills.slice(startIdx, startIdx + PAGE_SIZE)
   }, [allVisibleBills, currentPage])
 
-  if (loading) return <div style={{ padding: 40, color: '#fff' }}>Loading…</div>
-
   return (
     <div>
       <BpHeader email={email} onSignOut={signOut} activeTab="bills" allowedTabs={allowedTabs} />
 
       <div className="bp-container" style={{ paddingTop: 24 }}>
-        {connected === false ? (
+        {loading ? (
+          <div style={{ opacity: 0.6 }}>Loading…</div>
+        ) : connected === false ? (
           <div className="bp-card" style={{ padding: 24 }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>Xero not connected</div>
             <div style={{ opacity: 0.7, fontSize: 13, marginBottom: 16 }}>

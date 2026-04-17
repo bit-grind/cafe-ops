@@ -198,8 +198,6 @@ export default function AskPage() {
     setTimeout(() => inputRef.current?.focus(), 50)
   }
 
-  if (loading) return <div style={{ padding: 40, color: '#fff' }}>Loading…</div>
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
       <BpHeader email={email} onSignOut={signOut} activeTab="ask" allowedTabs={allowedTabs} />
