@@ -96,6 +96,10 @@ export default function BillsPage() {
   const [dateOpen, setDateOpen] = useState(false)
   const dateRef = useRef<HTMLDivElement>(null)
 
+  // Pagination
+  const PAGE_SIZE = 20
+  const [currentPage, setCurrentPage] = useState(1)
+
   // Line item search
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Array<{
@@ -357,7 +361,7 @@ export default function BillsPage() {
     return map
   }, [bills])
 
-  const visibleBills = useMemo(() => {
+  const allVisibleBills = useMemo(() => {
     if (activeSupplier === 'All') {
       // Flatten all matched bills, sorted by date desc
       const all: Bill[] = []
@@ -366,6 +370,18 @@ export default function BillsPage() {
     }
     return bySupplier.get(activeSupplier) ?? []
   }, [bySupplier, activeSupplier])
+
+  const totalPages = Math.max(1, Math.ceil(allVisibleBills.length / PAGE_SIZE))
+
+  // Reset to page 1 when the filtered set changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [activeSupplier, dateFrom, dateTo])
+
+  const visibleBills = useMemo(() => {
+    const startIdx = (currentPage - 1) * PAGE_SIZE
+    return allVisibleBills.slice(startIdx, startIdx + PAGE_SIZE)
+  }, [allVisibleBills, currentPage])
 
   if (loading) return <div style={{ padding: 40, color: '#fff' }}>Loading…</div>
 
@@ -698,6 +714,88 @@ export default function BillsPage() {
                       )}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* Pagination controls */}
+            {!searchActive && allVisibleBills.length > PAGE_SIZE && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginTop: 12,
+                fontSize: 12,
+                color: '#888',
+              }}>
+                <div>
+                  Showing {(currentPage - 1) * PAGE_SIZE + 1}–
+                  {Math.min(currentPage * PAGE_SIZE, allVisibleBills.length)} of {allVisibleBills.length}
+                </div>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #262626',
+                      background: 'transparent',
+                      color: currentPage === 1 ? '#444' : '#999',
+                      fontSize: 12,
+                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    ‹ Prev
+                  </button>
+                  {(() => {
+                    // Build a compact page list: first, last, current, and neighbours
+                    const pages: (number | '…')[] = []
+                    const add = (n: number) => { if (!pages.includes(n) && n >= 1 && n <= totalPages) pages.push(n) }
+                    add(1)
+                    if (currentPage - 1 > 2) pages.push('…')
+                    for (let n = currentPage - 1; n <= currentPage + 1; n++) add(n)
+                    if (currentPage + 1 < totalPages - 1) pages.push('…')
+                    add(totalPages)
+                    return pages.map((p, i) =>
+                      p === '…' ? (
+                        <span key={`e${i}`} style={{ padding: '4px 6px', color: '#555' }}>…</span>
+                      ) : (
+                        <button
+                          key={p}
+                          onClick={() => setCurrentPage(p)}
+                          style={{
+                            minWidth: 28,
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            border: `1px solid ${p === currentPage ? '#555' : '#262626'}`,
+                            background: p === currentPage ? '#1a1a1a' : 'transparent',
+                            color: p === currentPage ? '#fff' : '#999',
+                            fontSize: 12,
+                            fontWeight: p === currentPage ? 600 : 400,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {p}
+                        </button>
+                      )
+                    )
+                  })()}
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #262626',
+                      background: 'transparent',
+                      color: currentPage === totalPages ? '#444' : '#999',
+                      fontSize: 12,
+                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    Next ›
+                  </button>
                 </div>
               </div>
             )}
