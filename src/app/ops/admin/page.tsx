@@ -38,16 +38,8 @@ export default function AdminPage() {
   const [detail, setDetail] = useState<UserDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
-  // Batch extraction state
-  const [extractPending, setExtractPending] = useState<Array<{
-    invoiceId: string; supplier: string; invoiceNumber: string | null
-  }>>([])
-  const [extractTotal, setExtractTotal] = useState(0)
-  const [extractProcessed, setExtractProcessed] = useState(0)
-  const [extracting, setExtracting] = useState(false)
-  const [extractProgress, setExtractProgress] = useState(0)
+  // Batch extraction status (read-only — actual extraction runs via Supabase cron)
   const [extractMsg, setExtractMsg] = useState<string | null>(null)
-  const extractAbortRef = { current: false }
 
   async function toggleDetail(id: string) {
     if (expandedId === id) {
@@ -193,12 +185,9 @@ export default function AdminPage() {
 
   async function loadExtractionStatus() {
     try {
-      // Fast mode: just DB counts, no Xero calls
       const res = await fetch('/api/extract-lines/batch', { headers: await authHeaders() })
       const json = await res.json()
       if (res.ok) {
-        setExtractProcessed(json.completed ?? 0)
-        setExtractTotal((json.completed ?? 0) + (json.failed ?? 0) + (json.processing ?? 0))
         setExtractMsg(
           json.failed > 0
             ? `${json.completed} completed, ${json.failed} failed • ${json.itemCount ?? 0} line items extracted`
@@ -206,40 +195,6 @@ export default function AdminPage() {
         )
       }
     } catch { /* non-fatal */ }
-  }
-
-  async function runBatchExtraction() {
-    setExtracting(true)
-    setExtractProgress(0)
-    extractAbortRef.current = false
-    const pending = [...extractPending]
-    let done = 0
-    let failed = 0
-    for (const bill of pending) {
-      if (extractAbortRef.current) break
-      try {
-        const res = await fetch('/api/extract-lines', {
-          method: 'POST',
-          headers: await authHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ invoiceId: bill.invoiceId }),
-        })
-        if (!res.ok) {
-          const json = await res.json()
-          console.error(`Failed ${bill.invoiceId}:`, json.error)
-          failed++
-        }
-      } catch {
-        failed++
-      }
-      done++
-      setExtractProgress(done)
-      setExtractMsg(`Processing ${done}/${pending.length}${failed ? ` (${failed} failed)` : ''}`)
-      // Delay to avoid Xero API rate limits (60 req/min, each extraction = 2 calls)
-      await new Promise(r => setTimeout(r, 2000))
-    }
-    setExtractMsg(`Done! Processed ${done} invoice${done !== 1 ? 's' : ''}${failed ? `, ${failed} failed` : ''}.`)
-    setExtracting(false)
-    await loadExtractionStatus()
   }
 
   if (loading) {
@@ -392,15 +347,8 @@ export default function AdminPage() {
                                 value={detail.user.role}
                                 onChange={(e) => updateUserRole(detail.user.id, e.target.value as 'admin' | 'guest' | 'kitchen')}
                                 disabled={busy}
-                                style={{
-                                  padding: '4px 8px',
-                                  borderRadius: 4,
-                                  border: '1px solid #333',
-                                  background: '#111',
-                                  color: '#ccc',
-                                  fontSize: 12,
-                                  cursor: busy ? 'not-allowed' : 'pointer',
-                                }}
+                                className="bp-input"
+                                style={{ padding: '6px 10px', fontSize: 12, width: 'auto', cursor: busy ? 'not-allowed' : 'pointer' }}
                               >
                                 <option value="admin">admin (full access)</option>
                                 <option value="guest">guest (read-only Ask AI)</option>
@@ -465,33 +413,6 @@ export default function AdminPage() {
           <div style={{ fontSize: 12, opacity: 0.5, marginBottom: 12 }}>
             Auto-extraction runs every 2 minutes via Supabase cron.
           </div>
-
-          {extracting && (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{
-                height: 6,
-                borderRadius: 3,
-                background: '#222',
-                overflow: 'hidden',
-                marginBottom: 8,
-              }}>
-                <div style={{
-                  height: '100%',
-                  width: `${extractPending.length > 0 ? (extractProgress / extractPending.length) * 100 : 0}%`,
-                  background: '#4cc77d',
-                  borderRadius: 3,
-                  transition: 'width 0.3s ease',
-                }} />
-              </div>
-              <button
-                onClick={() => { extractAbortRef.current = true }}
-                className="bp-btn"
-                style={{ fontSize: 12 }}
-              >
-                Stop
-              </button>
-            </div>
-          )}
 
           {extractMsg && (
             <div style={{ fontSize: 12, opacity: 0.7 }}>{extractMsg}</div>

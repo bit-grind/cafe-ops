@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import BpHeader from '@/components/BpHeader'
+import Chip from '@/components/Chip'
 import { supabase } from '@/lib/supabaseClient'
+import { money as fmtMoney, fmtDate as fmtDateIso } from '@/app/lib/fmt'
 
 type Bill = {
   invoiceID: string
@@ -67,14 +69,8 @@ function matchSupplierLabel(contactName: string): string | null {
   return null
 }
 
-function money(n: number, ccy = 'AUD') {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: ccy, maximumFractionDigits: 2 }).format(n || 0)
-}
-function fmtDate(s: string | null) {
-  if (!s) return '—'
-  const [y, m, d] = s.split('-')
-  return `${d}/${m}/${y.slice(2)}`
-}
+const money = (n: number, ccy = 'AUD') => fmtMoney(n, ccy, 2)
+const fmtDate = (s: string | null) => fmtDateIso(s)
 
 export default function BillsPage() {
   const [loading, setLoading] = useState(true)
@@ -420,27 +416,12 @@ export default function BillsPage() {
               </div>
 
               <div ref={dateRef} style={{ position: 'relative' }}>
-                <button
-                  onClick={() => setDateOpen(o => !o)}
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: 20,
-                    border: `1px solid ${(dateFrom || dateTo) ? '#555' : '#333'}`,
-                    background: (dateFrom || dateTo) ? '#1a1a1a' : 'transparent',
-                    color: (dateFrom || dateTo) ? '#fff' : '#999',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
+                <Chip active={!!(dateFrom || dateTo)} onClick={() => setDateOpen(o => !o)}>
                   {dateFrom || dateTo
                     ? `${dateFrom ? fmtDate(dateFrom) : '…'} – ${dateTo ? fmtDate(dateTo) : '…'}`
                     : 'Date range'}
                   <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
-                </button>
+                </Chip>
 
                 {dateOpen && (
                   <div style={{
@@ -496,127 +477,69 @@ export default function BillsPage() {
             {/* Search bar */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
               <input
+                className="bp-input"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') runSearch() }}
                 placeholder="Search invoice line items (e.g. milk, salmon, cheddar)…"
-                style={{
-                  flex: 1,
-                  padding: '10px 14px',
-                  borderRadius: 10,
-                  border: '1px solid #333',
-                  background: '#111',
-                  color: '#e0e0e0',
-                  fontSize: 13,
-                  outline: 'none',
-                }}
+                aria-label="Search line items"
               />
               <button
                 onClick={() => runSearch()}
                 disabled={searchBusy || !searchQuery.trim()}
-                style={{
-                  padding: '10px 18px',
-                  borderRadius: 10,
-                  border: 'none',
-                  background: searchBusy || !searchQuery.trim() ? '#222' : '#fff',
-                  color: searchBusy || !searchQuery.trim() ? '#444' : '#000',
-                  fontWeight: 600,
-                  fontSize: 13,
-                  cursor: searchBusy || !searchQuery.trim() ? 'not-allowed' : 'pointer',
-                }}
+                className="bp-btn bp-btn--primary"
+                style={{ whiteSpace: 'nowrap' }}
               >
                 {searchBusy ? '…' : 'Search'}
               </button>
               {searchActive && (
-                <button
-                  onClick={clearSearch}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: '1px solid #333',
-                    background: 'transparent',
-                    color: '#999',
-                    fontSize: 13,
-                    cursor: 'pointer',
-                  }}
-                >
+                <button onClick={clearSearch} className="bp-btn" style={{ whiteSpace: 'nowrap' }}>
                   Clear
                 </button>
               )}
             </div>
 
             {/* Supplier tabs */}
-            {!searchActive && <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 6,
-              marginBottom: 14,
-              paddingBottom: 10,
-              borderBottom: '1px solid #1e1e1e',
-            }}>
-              {(() => {
-                const allCount = Array.from(bySupplier.values()).reduce((n, list) => n + list.length, 0)
-                const isAllActive = activeSupplier === 'All'
-                return (
-                  <button
-                    key="All"
-                    onClick={() => setActiveSupplier('All')}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: 18,
-                      border: `1px solid ${isAllActive ? '#555' : '#262626'}`,
-                      background: isAllActive ? '#1a1a1a' : 'transparent',
-                      color: isAllActive ? '#fff' : '#999',
-                      fontSize: 12,
-                      fontWeight: isAllActive ? 600 : 400,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    All
-                    <span style={{ fontSize: 10, opacity: isAllActive ? 0.7 : 0.5, fontWeight: 500 }}>
-                      {allCount}
-                    </span>
-                  </button>
-                )
-              })()}
-              {SUPPLIERS.map(s => {
-                const count = bySupplier.get(s.label)?.length ?? 0
-                const isActive = s.label === activeSupplier
-                return (
-                  <button
-                    key={s.label}
-                    onClick={() => setActiveSupplier(s.label)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: 18,
-                      border: `1px solid ${isActive ? '#555' : '#262626'}`,
-                      background: isActive ? '#1a1a1a' : 'transparent',
-                      color: isActive ? '#fff' : (count === 0 ? '#444' : '#999'),
-                      fontSize: 12,
-                      fontWeight: isActive ? 600 : 400,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    {s.label}
-                    <span style={{
-                      fontSize: 10,
-                      opacity: isActive ? 0.7 : 0.5,
-                      fontWeight: 500,
-                    }}>
-                      {count}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>}
+            {!searchActive && (
+              <div
+                role="tablist"
+                aria-label="Filter by supplier"
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 6,
+                  marginBottom: 14,
+                  paddingBottom: 10,
+                  borderBottom: '1px solid var(--border)',
+                }}
+              >
+                {(() => {
+                  const allCount = Array.from(bySupplier.values()).reduce((n, list) => n + list.length, 0)
+                  return (
+                    <Chip
+                      active={activeSupplier === 'All'}
+                      onClick={() => setActiveSupplier('All')}
+                      count={allCount}
+                    >
+                      All
+                    </Chip>
+                  )
+                })()}
+                {SUPPLIERS.map(s => {
+                  const count = bySupplier.get(s.label)?.length ?? 0
+                  return (
+                    <Chip
+                      key={s.label}
+                      active={s.label === activeSupplier}
+                      onClick={() => setActiveSupplier(s.label)}
+                      count={count}
+                    >
+                      {s.label}
+                    </Chip>
+                  )
+                })}
+              </div>
+            )}
 
             {flash && <div style={{ color: '#4cc77d', fontSize: 12, marginBottom: 10 }}>{flash}</div>}
             {error && <div style={{ color: '#c77070', fontSize: 12, marginBottom: 10 }}>{error}</div>}
@@ -624,45 +547,43 @@ export default function BillsPage() {
             {/* Search results */}
             {searchActive && (
               <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid #1e1e1e', fontSize: 12, color: '#888' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--muted-strong)' }}>
                   {searchBusy ? 'Searching…' : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${searchQuery}"`}
                 </div>
                 {searchResults.length > 0 && (
                   <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <table className="bp-table">
                       <thead>
-                        <tr style={{ background: '#141414', color: '#888', textAlign: 'left' }}>
-                          <Th>Item</Th>
-                          <Th right>Qty</Th>
-                          <Th right>Unit Price</Th>
-                          <Th right>Total</Th>
-                          <Th>Supplier</Th>
-                          <Th>Date</Th>
+                        <tr>
+                          <th>Item</th>
+                          <th className="is-right">Qty</th>
+                          <th className="is-right">Unit Price</th>
+                          <th className="is-right">Total</th>
+                          <th>Supplier</th>
+                          <th>Date</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {searchResults.map(r => (
-                          <tr
-                            key={r.id}
-                            onClick={() => {
-                              const bill = bills.find(b => b.invoiceID === r.invoiceId)
-                              if (bill) openBill(bill)
-                            }}
-                            style={{
-                              borderTop: '1px solid #1e1e1e',
-                              cursor: bills.find(b => b.invoiceID === r.invoiceId) ? 'pointer' : 'default',
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#141414')}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                          >
-                            <Td>{r.description}</Td>
-                            <Td right>{r.quantity != null ? `${r.quantity}${r.unit ? ` ${r.unit}` : ''}` : '—'}</Td>
-                            <Td right>{r.unit_price != null ? money(r.unit_price) : '—'}</Td>
-                            <Td right>{r.total != null ? money(r.total) : '—'}</Td>
-                            <Td>{r.supplier ?? '—'}</Td>
-                            <Td>{fmtDate(r.invoiceDate)}</Td>
-                          </tr>
-                        ))}
+                        {searchResults.map(r => {
+                          const hasBill = !!bills.find(b => b.invoiceID === r.invoiceId)
+                          return (
+                            <tr
+                              key={r.id}
+                              onClick={() => {
+                                const bill = bills.find(b => b.invoiceID === r.invoiceId)
+                                if (bill) openBill(bill)
+                              }}
+                              className={hasBill ? 'is-clickable' : undefined}
+                            >
+                              <td>{r.description}</td>
+                              <td className="is-right">{r.quantity != null ? `${r.quantity}${r.unit ? ` ${r.unit}` : ''}` : '—'}</td>
+                              <td className="is-right">{r.unit_price != null ? money(r.unit_price) : '—'}</td>
+                              <td className="is-right">{r.total != null ? money(r.total) : '—'}</td>
+                              <td>{r.supplier ?? '—'}</td>
+                              <td>{fmtDate(r.invoiceDate)}</td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -674,19 +595,19 @@ export default function BillsPage() {
             {!searchActive && (
               <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <table className="bp-table">
                     <thead>
-                      <tr style={{ background: '#141414', color: '#888', textAlign: 'left' }}>
-                        <Th>Date</Th>
-                        <Th>Supplier</Th>
-                        <Th>Invoice #</Th>
-                        <Th right>Total</Th>
+                      <tr>
+                        <th>Date</th>
+                        <th>Supplier</th>
+                        <th>Invoice #</th>
+                        <th className="is-right">Total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {visibleBills.length === 0 && !busy ? (
                         <tr>
-                          <td colSpan={4} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
+                          <td colSpan={4} style={{ padding: 24, textAlign: 'center', color: 'var(--muted-strong)' }}>
                             {bills.length === 0 && totalScanned > 0
                               ? `Scanned ${totalScanned} bills — none have an attached invoice file in Xero.`
                               : bills.length === 0
@@ -701,14 +622,12 @@ export default function BillsPage() {
                           <tr
                             key={b.invoiceID}
                             onClick={() => openBill(b)}
-                            style={{ borderTop: '1px solid #1e1e1e', cursor: 'pointer' }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#141414')}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                            className="is-clickable"
                           >
-                            <Td>{fmtDate(b.date)}</Td>
-                            <Td>{b.contactName}</Td>
-                            <Td mono>{b.invoiceNumber ?? '—'}</Td>
-                            <Td right>{money(b.total, b.currencyCode)}</Td>
+                            <td>{fmtDate(b.date)}</td>
+                            <td>{b.contactName}</td>
+                            <td className="is-mono">{b.invoiceNumber ?? '—'}</td>
+                            <td className="is-right">{money(b.total, b.currencyCode)}</td>
                           </tr>
                         ))
                       )}
@@ -720,36 +639,29 @@ export default function BillsPage() {
 
             {/* Pagination controls */}
             {!searchActive && allVisibleBills.length > PAGE_SIZE && (
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginTop: 12,
-                fontSize: 12,
-                color: '#888',
-              }}>
+              <nav
+                aria-label="Pagination"
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: 12,
+                  fontSize: 12,
+                  color: 'var(--muted-strong)',
+                }}
+              >
                 <div>
                   Showing {(currentPage - 1) * PAGE_SIZE + 1}–
                   {Math.min(currentPage * PAGE_SIZE, allVisibleBills.length)} of {allVisibleBills.length}
                 </div>
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                  <button
+                  <Chip
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 6,
-                      border: '1px solid #262626',
-                      background: 'transparent',
-                      color: currentPage === 1 ? '#444' : '#999',
-                      fontSize: 12,
-                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                    }}
                   >
                     ‹ Prev
-                  </button>
+                  </Chip>
                   {(() => {
-                    // Build a compact page list: first, last, current, and neighbours
                     const pages: (number | '…')[] = []
                     const add = (n: number) => { if (!pages.includes(n) && n >= 1 && n <= totalPages) pages.push(n) }
                     add(1)
@@ -759,45 +671,26 @@ export default function BillsPage() {
                     add(totalPages)
                     return pages.map((p, i) =>
                       p === '…' ? (
-                        <span key={`e${i}`} style={{ padding: '4px 6px', color: '#555' }}>…</span>
+                        <span key={`e${i}`} style={{ padding: '4px 6px', color: 'var(--muted-strong)' }}>…</span>
                       ) : (
-                        <button
+                        <Chip
                           key={p}
+                          active={p === currentPage}
                           onClick={() => setCurrentPage(p)}
-                          style={{
-                            minWidth: 28,
-                            padding: '4px 8px',
-                            borderRadius: 6,
-                            border: `1px solid ${p === currentPage ? '#555' : '#262626'}`,
-                            background: p === currentPage ? '#1a1a1a' : 'transparent',
-                            color: p === currentPage ? '#fff' : '#999',
-                            fontSize: 12,
-                            fontWeight: p === currentPage ? 600 : 400,
-                            cursor: 'pointer',
-                          }}
                         >
                           {p}
-                        </button>
+                        </Chip>
                       )
                     )
                   })()}
-                  <button
+                  <Chip
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 6,
-                      border: '1px solid #262626',
-                      background: 'transparent',
-                      color: currentPage === totalPages ? '#444' : '#999',
-                      fontSize: 12,
-                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                    }}
                   >
                     Next ›
-                  </button>
+                  </Chip>
                 </div>
-              </div>
+              </nav>
             )}
 
             {isAdmin && (
@@ -1058,27 +951,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
-  return (
-    <th style={{
-      padding: '10px 14px',
-      fontWeight: 600,
-      fontSize: 11,
-      textTransform: 'uppercase',
-      letterSpacing: '0.06em',
-      textAlign: right ? 'right' : 'left',
-    }}>{children}</th>
-  )
-}
-
-function Td({ children, right, mono }: { children?: React.ReactNode; right?: boolean; mono?: boolean }) {
-  return (
-    <td style={{
-      padding: '10px 14px',
-      color: '#ccc',
-      textAlign: right ? 'right' : 'left',
-      fontFamily: mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : undefined,
-      fontSize: mono ? 12 : 13,
-    }}>{children}</td>
-  )
-}

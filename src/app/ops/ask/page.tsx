@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import BpHeader from '@/components/BpHeader'
+import Chip from '@/components/Chip'
 
 type Msg = { role: 'user' | 'ai', text: string, display?: string }
 
@@ -75,26 +76,10 @@ function HolidayDropdown({ onSelect, disabled }: { onSelect: (q: string, display
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        onClick={() => !disabled && setOpen(o => !o)}
-        disabled={disabled}
-        style={{
-          padding: '6px 12px',
-          borderRadius: 20,
-          border: `1px solid ${open ? '#555' : '#333'}`,
-          background: '#1a1a1a',
-          color: open ? '#fff' : '#ccc',
-          fontSize: 12,
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          whiteSpace: 'nowrap',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 5,
-        }}
-      >
+      <Chip active={open} disabled={disabled} onClick={() => !disabled && setOpen(o => !o)}>
         {nextHoliday ? `Next: ${nextHoliday.name}` : 'Holidays'}
         <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
-      </button>
+      </Chip>
 
       {open && (
         <div style={{
@@ -216,7 +201,7 @@ export default function AskPage() {
   if (loading) return <div style={{ padding: 40, color: '#fff' }}>Loading…</div>
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
       <BpHeader email={email} onSignOut={signOut} activeTab="ask" allowedTabs={allowedTabs} />
 
       <div style={{
@@ -234,26 +219,9 @@ export default function AskPage() {
       {/* Quick prompts */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
         {QUICK_PROMPTS.map(p => (
-          <button
-            key={p.label}
-            onClick={() => ask(p.q, p.label)}
-            disabled={busy}
-            style={{
-              padding: '6px 12px',
-              borderRadius: 20,
-              border: '1px solid #333',
-              background: '#1a1a1a',
-              color: '#ccc',
-              fontSize: 12,
-              cursor: busy ? 'not-allowed' : 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'border-color 0.15s, color 0.15s',
-            }}
-            onMouseEnter={e => { if (!busy) { (e.target as HTMLElement).style.borderColor = '#555'; (e.target as HTMLElement).style.color = '#fff' } }}
-            onMouseLeave={e => { (e.target as HTMLElement).style.borderColor = '#333'; (e.target as HTMLElement).style.color = '#ccc' }}
-          >
+          <Chip key={p.label} disabled={busy} onClick={() => ask(p.q, p.label)}>
             {p.label}
-          </button>
+          </Chip>
         ))}
         <HolidayDropdown onSelect={(q, display) => ask(q, display)} disabled={busy} />
       </div>
@@ -338,36 +306,19 @@ export default function AskPage() {
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           ref={inputRef}
+          className="bp-input"
           value={question}
           onChange={e => setQuestion(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) ask() }}
           placeholder="Ask about sales, products, trends, weather…"
           disabled={busy}
-          style={{
-            flex: 1,
-            padding: '11px 16px',
-            borderRadius: 10,
-            border: '1px solid #333',
-            background: '#111',
-            color: '#e0e0e0',
-            fontSize: 14,
-            outline: 'none',
-          }}
+          aria-label="Ask a question"
         />
         <button
           onClick={() => ask()}
           disabled={busy || !question.trim()}
-          style={{
-            padding: '11px 20px',
-            borderRadius: 10,
-            border: 'none',
-            background: busy || !question.trim() ? '#222' : '#fff',
-            color: busy || !question.trim() ? '#444' : '#000',
-            fontWeight: 600,
-            fontSize: 14,
-            cursor: busy || !question.trim() ? 'not-allowed' : 'pointer',
-            transition: 'background 0.15s',
-          }}
+          className="bp-btn bp-btn--primary"
+          style={{ whiteSpace: 'nowrap' }}
         >
           {busy ? '…' : 'Ask'}
         </button>

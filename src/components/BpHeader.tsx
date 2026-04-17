@@ -19,14 +19,12 @@ export default function BpHeader({
   activeTab?: 'dashboard' | 'ask' | 'bills' | 'admin'
   allowedTabs?: string[]
 }) {
-  // Filter header tabs to those the user is allowed to see. If no
-  // allowedTabs prop is given, default to the non-admin set.
   const visible = allowedTabs
     ? ALL_TABS.filter(t => allowedTabs.includes(t.tab))
     : ALL_TABS.filter(t => t.tab !== 'admin')
 
   return (
-    <header style={{ borderBottom: "1px solid rgba(255,255,255,0.10)" }}>
+    <header style={{ borderBottom: "1px solid var(--border)" }}>
       <div
         className="bp-container"
         style={{
@@ -41,17 +39,17 @@ export default function BpHeader({
         <Link href="/ops" style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <Image src="/brand/logo.png" alt="The Cafe" width={52} height={52} priority />
           <div>
-            <div style={{ fontWeight: 700, letterSpacing: 1.2, fontSize: 14 }}>
+            <div style={{ fontWeight: 700, letterSpacing: "0.1em", fontSize: 14 }}>
               The Cafe
             </div>
-            <div style={{ fontSize: 11, letterSpacing: 1, opacity: 0.6, marginTop: 2 }}>
+            <div style={{ fontSize: 11, letterSpacing: "0.1em", color: "var(--muted-strong)", marginTop: 2 }}>
               OPS DASHBOARD
             </div>
           </div>
         </Link>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {email ? <div style={{ fontSize: 13, opacity: 0.65 }}>{email}</div> : null}
+          {email ? <div style={{ fontSize: 13, color: "var(--muted-strong)" }}>{email}</div> : null}
           {onSignOut ? (
             <button onClick={onSignOut} className="bp-btn" style={{ fontSize: 13 }}>
               Sign out
@@ -61,24 +59,32 @@ export default function BpHeader({
       </div>
 
       {activeTab && (
-        <div className="bp-container" style={{ paddingTop: 0, paddingBottom: 0, display: 'flex', gap: 4 }}>
-          {visible.map(({ label, tab, href }) => (
-            <Link
-              key={tab}
-              href={href}
-              style={{
-                padding: '10px 16px',
-                fontSize: 13,
-                fontWeight: activeTab === tab ? 600 : 400,
-                color: activeTab === tab ? '#fff' : '#555',
-                borderBottom: `2px solid ${activeTab === tab ? '#fff' : 'transparent'}`,
-                textDecoration: 'none',
-              }}
-            >
-              {label}
-            </Link>
-          ))}
-        </div>
+        <nav
+          className="bp-container"
+          aria-label="Primary"
+          style={{ paddingTop: 0, paddingBottom: 0, display: 'flex', gap: 4 }}
+        >
+          {visible.map(({ label, tab, href }) => {
+            const active = activeTab === tab
+            return (
+              <Link
+                key={tab}
+                href={href}
+                aria-current={active ? 'page' : undefined}
+                style={{
+                  padding: '10px 16px',
+                  fontSize: 13,
+                  fontWeight: active ? 600 : 500,
+                  color: active ? '#fff' : 'var(--muted-strong)',
+                  borderBottom: `2px solid ${active ? '#fff' : 'transparent'}`,
+                  textDecoration: 'none',
+                }}
+              >
+                {label}
+              </Link>
+            )
+          })}
+        </nav>
       )}
     </header>
   )

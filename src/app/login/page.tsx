@@ -21,30 +21,87 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ maxWidth: 420, margin: '48px auto', fontFamily: 'system-ui' }}>
-      <h1>Cafe Ops</h1>
-      <p>Sign in</p>
+    <main
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px 20px',
+      }}
+    >
+      <div className="bp-card" style={{ width: '100%', maxWidth: 380, padding: 28 }}>
+        <div
+          style={{
+            fontWeight: 700,
+            letterSpacing: '0.1em',
+            fontSize: 13,
+            textAlign: 'center',
+          }}
+        >
+          The Cafe
+        </div>
+        <div
+          style={{
+            fontSize: 11,
+            letterSpacing: '0.1em',
+            color: 'var(--muted-strong)',
+            textAlign: 'center',
+            marginTop: 4,
+          }}
+        >
+          OPS DASHBOARD
+        </div>
 
-      <form onSubmit={signIn}>
-        <input
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ width: '100%', padding: 10, marginBottom: 10 }}
-        />
-        <input
-          placeholder="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ width: '100%', padding: 10, marginBottom: 10 }}
-        />
-        <button disabled={busy} style={{ width: '100%', padding: 10 }}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
+        <h1
+          style={{
+            fontSize: 18,
+            fontWeight: 600,
+            margin: '24px 0 16px',
+            textAlign: 'center',
+          }}
+        >
+          Sign in
+        </h1>
 
-      {msg && <p style={{ color: 'crimson' }}>{msg}</p>}
-    </div>
+        <form onSubmit={signIn} style={{ display: 'grid', gap: 10 }}>
+          <label className="sr-only" htmlFor="login-email">Email</label>
+          <input
+            id="login-email"
+            className="bp-input"
+            placeholder="Email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <label className="sr-only" htmlFor="login-password">Password</label>
+          <input
+            id="login-password"
+            className="bp-input"
+            placeholder="Password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button
+            disabled={busy}
+            className="bp-btn"
+            style={{ marginTop: 4, fontWeight: 600 }}
+          >
+            {busy ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+
+        {msg && (
+          <p
+            role="alert"
+            style={{ color: '#e58080', fontSize: 13, marginTop: 14, textAlign: 'center' }}
+          >
+            {msg}
+          </p>
+        )}
+      </div>
+    </main>
   )
 }
