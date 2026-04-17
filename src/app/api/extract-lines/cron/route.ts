@@ -74,16 +74,30 @@ async function handleCron(req: Request) {
     }
 
     // Find candidates from CACHE (zero Xero calls)
-    const { data: candidates } = await supabase
+    // First get the set of already-processed invoice IDs
+    const { data: runs } = await supabase
+      .from('extraction_runs')
+      .select('xero_invoice_id, status')
+
+    const doneSet = new Set(
+      (runs ?? [])
+        .filter((r) => r.status === 'completed' || r.status === 'processing')
+        .map((r) => r.xero_invoice_id)
+    )
+
+    // Get candidates from cache — fetch a bigger pool and filter in JS
+    // (Supabase .not('col', 'in', subquery) doesn't support subqueries)
+    const { data: cached } = await supabase
       .from('xero_bill_cache')
       .select('xero_invoice_id, contact_name, invoice_number, invoice_date')
       .eq('has_attachments', true)
-      .not('xero_invoice_id', 'in',
-        `(SELECT xero_invoice_id FROM extraction_runs WHERE status IN ('completed','processing'))`
-      )
-      .limit(MAX_PER_RUN)
+      .limit(500)
 
-    if (!candidates || candidates.length === 0) {
+    const candidates = (cached ?? [])
+      .filter((c) => !doneSet.has(c.xero_invoice_id))
+      .slice(0, MAX_PER_RUN)
+
+    if (candidates.length === 0) {
       return NextResponse.json({ processed: 0, message: 'All done' })
     }
 
