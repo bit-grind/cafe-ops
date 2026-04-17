@@ -92,7 +92,7 @@ export default function BillsPage() {
   // Filters
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
-  const [activeSupplier, setActiveSupplier] = useState<string>(SUPPLIERS[0].label)
+  const [activeSupplier, setActiveSupplier] = useState<string>('All')
   const [dateOpen, setDateOpen] = useState(false)
   const dateRef = useRef<HTMLDivElement>(null)
 
@@ -357,10 +357,15 @@ export default function BillsPage() {
     return map
   }, [bills])
 
-  const visibleBills = useMemo(
-    () => bySupplier.get(activeSupplier) ?? [],
-    [bySupplier, activeSupplier]
-  )
+  const visibleBills = useMemo(() => {
+    if (activeSupplier === 'All') {
+      // Flatten all matched bills, sorted by date desc
+      const all: Bill[] = []
+      for (const [, list] of bySupplier) all.push(...list)
+      return all.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    }
+    return bySupplier.get(activeSupplier) ?? []
+  }, [bySupplier, activeSupplier])
 
   if (loading) return <div style={{ padding: 40, color: '#fff' }}>Loading…</div>
 
@@ -394,7 +399,9 @@ export default function BillsPage() {
               gap: 12,
               marginBottom: 14,
             }}>
-              <div style={{ fontWeight: 700, fontSize: 22 }}>{activeSupplier}</div>
+              <div style={{ fontWeight: 700, fontSize: 22 }}>
+                {activeSupplier === 'All' ? 'All suppliers' : activeSupplier}
+              </div>
 
               <div ref={dateRef} style={{ position: 'relative' }}>
                 <button
@@ -531,6 +538,35 @@ export default function BillsPage() {
               paddingBottom: 10,
               borderBottom: '1px solid #1e1e1e',
             }}>
+              {(() => {
+                const allCount = Array.from(bySupplier.values()).reduce((n, list) => n + list.length, 0)
+                const isAllActive = activeSupplier === 'All'
+                return (
+                  <button
+                    key="All"
+                    onClick={() => setActiveSupplier('All')}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 18,
+                      border: `1px solid ${isAllActive ? '#555' : '#262626'}`,
+                      background: isAllActive ? '#1a1a1a' : 'transparent',
+                      color: isAllActive ? '#fff' : '#999',
+                      fontSize: 12,
+                      fontWeight: isAllActive ? 600 : 400,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    All
+                    <span style={{ fontSize: 10, opacity: isAllActive ? 0.7 : 0.5, fontWeight: 500 }}>
+                      {allCount}
+                    </span>
+                  </button>
+                )
+              })()}
               {SUPPLIERS.map(s => {
                 const count = bySupplier.get(s.label)?.length ?? 0
                 const isActive = s.label === activeSupplier
@@ -639,6 +675,8 @@ export default function BillsPage() {
                               ? `Scanned ${totalScanned} bills — none have an attached invoice file in Xero.`
                               : bills.length === 0
                               ? 'No bills match those filters.'
+                              : activeSupplier === 'All'
+                              ? `No supplier bills with attachments in the scanned ${totalScanned} bills.`
                               : `No ${activeSupplier} bills with attachments in the scanned ${totalScanned} bills.`}
                           </td>
                         </tr>
