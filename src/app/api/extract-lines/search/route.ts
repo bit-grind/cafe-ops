@@ -48,8 +48,8 @@ export async function GET(req: Request) {
       )
     `)
     .ilike('description', pattern)
-    .order('created_at', { ascending: false })
-    .limit(100)
+    .order('invoice_date', { ascending: false, foreignTable: 'extraction_runs' })
+    .limit(500)
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
