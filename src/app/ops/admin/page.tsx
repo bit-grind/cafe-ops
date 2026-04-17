@@ -38,8 +38,7 @@ export default function AdminPage() {
   const [detail, setDetail] = useState<UserDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
-  // Batch extraction status (read-only — actual extraction runs via Supabase cron)
-  const [extractMsg, setExtractMsg] = useState<string | null>(null)
+  const [invoiceCount, setInvoiceCount] = useState<number | null>(null)
 
   async function toggleDetail(id: string) {
     if (expandedId === id) {
@@ -108,7 +107,7 @@ export default function AdminPage() {
         return
       }
       await loadUsers()
-      loadExtractionStatus()
+      loadInvoiceCount()
       setLoading(false)
     }
     init()
@@ -183,17 +182,11 @@ export default function AdminPage() {
     await loadUsers()
   }
 
-  async function loadExtractionStatus() {
+  async function loadInvoiceCount() {
     try {
       const res = await fetch('/api/extract-lines/batch', { headers: await authHeaders() })
       const json = await res.json()
-      if (res.ok) {
-        setExtractMsg(
-          json.failed > 0
-            ? `${json.completed} completed, ${json.failed} failed • ${json.itemCount ?? 0} line items extracted`
-            : `${json.completed} invoices processed • ${json.itemCount ?? 0} line items extracted`
-        )
-      }
+      if (res.ok) setInvoiceCount(Number(json.completed ?? 0))
     } catch { /* non-fatal */ }
   }
 
@@ -399,32 +392,21 @@ export default function AdminPage() {
           </div>
         </section>
 
-        <section className="bp-card" style={{ padding: 20 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
-            Invoice line extraction
-          </h2>
-          <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 12 }}>
-            Use AI to read line items from supplier invoice PDFs and make them searchable.
-          </div>
-          <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 16 }}>
-            {extractMsg ?? 'Loading extraction status…'}
-          </div>
-
-          <div style={{ fontSize: 12, opacity: 0.5, marginBottom: 12 }}>
-            Auto-extraction runs every 2 minutes via Supabase cron.
-          </div>
-
-          {extractMsg && (
-            <div style={{ fontSize: 12, opacity: 0.7 }}>{extractMsg}</div>
-          )}
-
-          <button
-            onClick={loadExtractionStatus}
-            className="bp-btn"
-            style={{ fontSize: 12 }}
+        <section className="bp-card" style={{ padding: 20, marginTop: 24 }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: 'var(--muted-strong)',
+            }}
           >
-            Refresh status
-          </button>
+            Invoices imported
+          </div>
+          <div style={{ fontSize: 30, fontWeight: 600, marginTop: 8 }}>
+            {invoiceCount === null ? '—' : invoiceCount.toLocaleString()}
+          </div>
         </section>
       </main>
     </>
