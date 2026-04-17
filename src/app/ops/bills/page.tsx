@@ -322,7 +322,9 @@ export default function BillsPage() {
       })
       const out = await res.json()
       if (res.ok) {
-        setSearchResults(out.results ?? [])
+        const results = (out.results ?? []) as Array<{ invoiceDate: string | null }>
+        results.sort((a, b) => (b.invoiceDate ?? '').localeCompare(a.invoiceDate ?? ''))
+        setSearchResults(results as typeof searchResults)
       } else {
         setError(out.error ?? 'Search failed')
       }
