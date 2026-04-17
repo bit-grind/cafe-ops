@@ -15,7 +15,7 @@ const TIME_BUDGET_MS = 45_000
 const MAX_PER_RUN = 4
 
 // When cache is stale (older than this), refresh it from Xero.
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
+const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 
 export async function GET(req: Request) {
   return handleCron(req)
