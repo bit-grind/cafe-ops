@@ -69,7 +69,6 @@ export default function WeeklyCostChart({ weeks, height }: Props) {
   const fsY = isNarrow ? 13 : 11
   const fsX = isNarrow ? 12 : 10
   const fsAvg = isNarrow ? 12 : 10
-  const fsVal = 11
   const padL = isNarrow ? 58 : 56
   const padR = isNarrow ? 14 : 16
   const padT = isNarrow ? 26 : 14
@@ -95,12 +94,6 @@ export default function WeeklyCostChart({ weeks, height }: Props) {
   // if too tight). On desktop, stride down to ~8 labels max.
   const maxLabels = isNarrow ? n : 8
   const labelStride = Math.max(1, Math.ceil(n / maxLabels))
-
-  // Compact currency used for per-bar value labels on mobile.
-  const shortMoney = (v: number) => {
-    if (v >= 1000) return `$${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`
-    return `$${Math.round(v)}`
-  }
 
   const hovered = hoverIdx !== null ? weeks[hoverIdx] : null
 
@@ -188,18 +181,6 @@ export default function WeeklyCostChart({ weeks, height }: Props) {
                   rx={2}
                   pointerEvents="none"
                 />
-                {isNarrow && (
-                  <text
-                    x={cx}
-                    y={y - 6}
-                    textAnchor="middle"
-                    fontSize={fsVal}
-                    fill="var(--muted-strong)"
-                    pointerEvents="none"
-                  >
-                    {shortMoney(w.total)}
-                  </text>
-                )}
                 {i % labelStride === 0 && (
                   <text
                     x={cx}
@@ -215,31 +196,53 @@ export default function WeeklyCostChart({ weeks, height }: Props) {
               </g>
             )
           })}
+
+          {hovered && hoverIdx !== null && (() => {
+            // Tooltip rendered inside the SVG so it scrolls with the bars.
+            const cx = padL + slot * (hoverIdx + 0.5)
+            const dateLabel = `${fmtDate(hovered.week_start)} – ${fmtDate(hovered.week_end)}`
+            const valueLabel = money(hovered.total)
+            // Rough width estimate — dateLabel is always longer.
+            const tipW = Math.max(dateLabel.length * 6.5, valueLabel.length * 8) + 16
+            const tipH = 40
+            let tipX = cx - tipW / 2
+            tipX = Math.max(padL, Math.min(tipX, contentW - padR - tipW))
+            const tipY = Math.max(0, yFor(hovered.total) - tipH - 8)
+            return (
+              <g pointerEvents="none">
+                <rect
+                  x={tipX}
+                  y={tipY}
+                  width={tipW}
+                  height={tipH}
+                  rx={6}
+                  fill="rgba(20,20,20,0.95)"
+                  stroke="var(--border)"
+                />
+                <text
+                  x={tipX + tipW / 2}
+                  y={tipY + 15}
+                  textAnchor="middle"
+                  fontSize={11}
+                  fill="var(--muted-strong)"
+                >
+                  {dateLabel}
+                </text>
+                <text
+                  x={tipX + tipW / 2}
+                  y={tipY + 31}
+                  textAnchor="middle"
+                  fontSize={13}
+                  fontWeight={600}
+                  fill="#fff"
+                >
+                  {valueLabel}
+                </text>
+              </g>
+            )
+          })()}
         </svg>
       </div>
-
-      {!isNarrow && hovered && hoverIdx !== null && (
-        <div
-          style={{
-            position: 'absolute',
-            left: `${(padL + slot * (hoverIdx + 0.5)) / contentW * 100}%`,
-            top: 4,
-            transform: 'translateX(-50%)',
-            background: 'rgba(20,20,20,0.95)',
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            padding: '6px 10px',
-            fontSize: 12,
-            whiteSpace: 'nowrap',
-            pointerEvents: 'none',
-          }}
-        >
-          <div style={{ color: 'var(--muted-strong)' }}>
-            {fmtDate(hovered.week_start)} – {fmtDate(hovered.week_end)}
-          </div>
-          <div style={{ fontWeight: 600, marginTop: 2 }}>{money(hovered.total)}</div>
-        </div>
-      )}
 
       {scrolls && (
         <div
