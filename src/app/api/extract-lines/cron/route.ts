@@ -86,12 +86,15 @@ async function handleCron(req: Request) {
     )
 
     // Get candidates from cache — fetch a bigger pool and filter in JS
-    // (Supabase .not('col', 'in', subquery) doesn't support subqueries)
+    // (Supabase .not('col', 'in', subquery) doesn't support subqueries).
+    // Order by invoice_date ASC so oldest unprocessed bills come first —
+    // this drains historical backfills (e.g. 2025) before newer bills.
     const { data: cached } = await supabase
       .from('xero_bill_cache')
       .select('xero_invoice_id, contact_name, invoice_number, invoice_date')
       .eq('has_attachments', true)
-      .limit(500)
+      .order('invoice_date', { ascending: true })
+      .limit(2000)
 
     const candidates = (cached ?? [])
       .filter((c) => !doneSet.has(c.xero_invoice_id))
