@@ -3,29 +3,12 @@ import { createClient } from '@supabase/supabase-js'
 import { adminClient } from '@/lib/adminAuth'
 
 /**
- * Weekly food cost from supplier bills (Xero).
+ * Weekly supplier cost from `xero_bill_cache`.
  *
- * Joins `extracted_line_items` against `xero_bill_cache` to get per-line
- * costs with invoice dates, filters to food/COGS categories (excludes
- * cleaning/packaging/equipment/other), then buckets by Mon–Sun week.
- *
- * Both tables have RLS enabled without read policies, so this runs with
- * the service-role client. We still require an authenticated session.
+ * Sums bill totals by invoice_date, bucketed into Mon–Sun weeks. Uses
+ * the service-role client because xero_bill_cache has RLS enabled
+ * without a read policy. Session auth is still required.
  */
-
-// Categories counted as food cost / COGS. Kept as a set for O(1) lookup.
-const FOOD_CATEGORIES = new Set<string>([
-  'produce',
-  'bakery',
-  'dairy',
-  'dry-goods',
-  'meat',
-  'seafood',
-  'beverages',
-  'frozen food',
-  'frozen-food',
-  'frozen',
-])
 
 function mondayOf(d: Date): Date {
   const x = new Date(d)
@@ -50,7 +33,7 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const url = new URL(req.url)
-  const weeks = Math.min(Math.max(parseInt(url.searchParams.get('weeks') || '12', 10) || 12, 1), 52)
+  const weeks = Math.min(Math.max(parseInt(url.searchParams.get('weeks') || '12', 10) || 12, 1), 104)
 
   const today = new Date()
   const currentMon = mondayOf(today)
@@ -60,49 +43,22 @@ export async function GET(req: Request) {
 
   const db = adminClient()
 
-  // Pull bills in the window so we can map invoice_id -> invoice_date.
-  const { data: bills, error: billsErr } = await db
+  // Pull bills in window. 500 cap aligns with the Bills page; bump if needed.
+  const { data: bills, error } = await db
     .from('xero_bill_cache')
-    .select('xero_invoice_id, invoice_date')
+    .select('invoice_date, total')
     .gte('invoice_date', fromIso)
-  if (billsErr) return NextResponse.json({ error: billsErr.message }, { status: 500 })
+    .order('invoice_date', { ascending: true })
+    .limit(5000)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const invoiceDate = new Map<string, string>()
-  for (const b of bills ?? []) {
-    if (b.xero_invoice_id && b.invoice_date) invoiceDate.set(b.xero_invoice_id, b.invoice_date)
-  }
-  if (invoiceDate.size === 0) {
-    return NextResponse.json({ weeks: [] })
-  }
-
-  // Pull line items for those invoices. Chunk the `in` filter to keep URLs
-  // under the practical query-string length.
-  const invoiceIds = [...invoiceDate.keys()]
-  const CHUNK = 200
-  type LineRow = { xero_invoice_id: string; total: number | null; category: string | null }
-  const allLines: LineRow[] = []
-  for (let i = 0; i < invoiceIds.length; i += CHUNK) {
-    const chunk = invoiceIds.slice(i, i + CHUNK)
-    const { data, error } = await db
-      .from('extracted_line_items')
-      .select('xero_invoice_id, total, category')
-      .in('xero_invoice_id', chunk)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (data) allLines.push(...(data as LineRow[]))
-  }
-
-  // Bucket by Mon–Sun week.
   const weekTotals = new Map<string, number>()
-  for (const line of allLines) {
-    const cat = (line.category ?? '').toLowerCase()
-    if (!FOOD_CATEGORIES.has(cat)) continue
-    const date = invoiceDate.get(line.xero_invoice_id)
-    if (!date) continue
-    const mon = iso(mondayOf(new Date(date + 'T00:00:00')))
-    weekTotals.set(mon, (weekTotals.get(mon) ?? 0) + Number(line.total ?? 0))
+  for (const b of bills ?? []) {
+    if (!b.invoice_date) continue
+    const mon = iso(mondayOf(new Date(b.invoice_date + 'T00:00:00')))
+    weekTotals.set(mon, (weekTotals.get(mon) ?? 0) + Number(b.total ?? 0))
   }
 
-  // Emit one row per week in the window, even if empty.
   const out: { week_start: string; week_end: string; total: number }[] = []
   for (let i = 0; i < weeks; i++) {
     const start = new Date(currentMon)
@@ -110,7 +66,11 @@ export async function GET(req: Request) {
     const end = new Date(start)
     end.setDate(end.getDate() + 6)
     const key = iso(start)
-    out.push({ week_start: key, week_end: iso(end), total: Math.round((weekTotals.get(key) ?? 0) * 100) / 100 })
+    out.push({
+      week_start: key,
+      week_end: iso(end),
+      total: Math.round((weekTotals.get(key) ?? 0) * 100) / 100,
+    })
   }
 
   return NextResponse.json({ weeks: out })
