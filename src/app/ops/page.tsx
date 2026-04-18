@@ -56,6 +56,11 @@ export default function OpsHome() {
       if (meRes?.ok) {
         try {
           const me = await meRes.json()
+          // Kitchen users land on their own dashboard, not the sales one.
+          if (me.isKitchen) {
+            window.location.replace('/ops/kitchen')
+            return
+          }
           setAllowedTabs(me.allowedTabs ?? [])
         } catch { /* non-fatal */ }
       }
