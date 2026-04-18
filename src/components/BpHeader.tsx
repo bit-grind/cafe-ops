@@ -3,6 +3,7 @@ import Link from "next/link"
 
 const ALL_TABS = [
   { label: 'Dashboard', tab: 'dashboard' as const, href: '/ops' },
+  { label: 'Kitchen', tab: 'kitchen' as const, href: '/ops/kitchen' },
   { label: 'Ask AI', tab: 'ask' as const, href: '/ops/ask' },
   { label: 'Suppliers', tab: 'bills' as const, href: '/ops/bills' },
   { label: 'Admin', tab: 'admin' as const, href: '/ops/admin' },
@@ -16,7 +17,7 @@ export default function BpHeader({
 }: {
   email?: string | null
   onSignOut?: () => void
-  activeTab?: 'dashboard' | 'ask' | 'bills' | 'admin'
+  activeTab?: 'dashboard' | 'kitchen' | 'ask' | 'bills' | 'admin'
   allowedTabs?: string[]
 }) {
   const visible = allowedTabs

@@ -29,12 +29,12 @@ export async function GET(req: Request) {
   // Determine which header tabs the user may see.
   let allowedTabs: string[]
   if (isKitchen) {
-    allowedTabs = ['bills']
+    allowedTabs = ['kitchen', 'bills']
   } else if (isAdmin) {
-    allowedTabs = ['dashboard', 'ask', 'bills', 'admin']
+    allowedTabs = ['dashboard', 'kitchen', 'ask', 'bills', 'admin']
   } else {
     // Regular users and guests see everything except admin.
-    allowedTabs = ['dashboard', 'ask', 'bills']
+    allowedTabs = ['dashboard', 'kitchen', 'ask', 'bills']
   }
 
   return NextResponse.json({
