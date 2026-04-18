@@ -50,11 +50,16 @@ export default function BpHeader({
             <div style={{ fontSize: 11, letterSpacing: "0.1em", color: "var(--muted-strong)", marginTop: 2 }}>
               OPS DASHBOARD
             </div>
+            {email ? <div className="bp-hdr-email--mobile">{email}</div> : null}
           </div>
         </Link>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {email ? <div style={{ fontSize: 13, color: "var(--muted-strong)" }}>{email}</div> : null}
+          {email ? (
+            <div className="bp-hdr-email--desktop" style={{ fontSize: 13, color: "var(--muted-strong)" }}>
+              {email}
+            </div>
+          ) : null}
           {onSignOut ? (
             <button onClick={onSignOut} className="bp-btn" style={{ fontSize: 13 }}>
               Sign out

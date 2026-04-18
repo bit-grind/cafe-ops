@@ -256,3 +256,18 @@ button.bp-metric:hover {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
 }
+
+/* Header brand/right split. Email appears in the brand-title stack on
+   mobile (under OPS DASHBOARD) and on the right next to sign-out on
+   desktop — two copies, one hidden via media query. */
+.bp-hdr-email--mobile { display: none; }
+@media (max-width: 640px) {
+  .bp-hdr-email--desktop { display: none; }
+  .bp-hdr-email--mobile {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--muted-strong);
+    word-break: break-all;
+  }
+}
