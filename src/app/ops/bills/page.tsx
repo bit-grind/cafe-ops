@@ -27,6 +27,18 @@ type Attachment = {
   contentLength: number
 }
 
+type LineItem = {
+  id: number
+  description: string
+  quantity: number | null
+  unit: string | null
+  unit_price: number | null
+  total: number | null
+  category: string | null
+}
+
+const LINE_ITEMS_CACHE_MAX = 50
+
 // Suppliers to show on the Bills dashboard. Each entry has a short display
 // label and a list of lowercase keywords used to match Xero contact names.
 // Matching is substring-based after stripping apostrophes, so "big michael"
@@ -146,19 +158,11 @@ export default function BillsPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'lines' | 'pdf'>('lines')
-  type LineItem = {
-    id: number
-    description: string
-    quantity: number | null
-    unit: string | null
-    unit_price: number | null
-    total: number | null
-    category: string | null
-  }
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [lineItemsLoading, setLineItemsLoading] = useState(false)
   const [lineItemsStatus, setLineItemsStatus] = useState<string | null>(null)
-  // Session-scoped cache so reopening the same bill is instant
+  // Session-scoped LRU cache so reopening the same bill is instant.
+  // Capped to keep memory bounded for long browsing sessions.
   const lineItemsCache = useRef(new Map<string, { items: LineItem[]; status: string | null }>())
 
   useEffect(() => {
@@ -231,6 +235,9 @@ export default function BillsPage() {
   }
 
   async function openBill(bill: Bill) {
+    // Revoke any blob URLs from a previously-open bill before dropping refs,
+    // otherwise switching bills without closing leaks multi-MB PDF blobs.
+    attachmentBlobs.forEach(b => b && URL.revokeObjectURL(b.url))
     setSelectedBill(bill)
     setViewMode('lines')
     setAttachments([])
@@ -261,7 +268,13 @@ export default function BillsPage() {
         const status = (out.status ?? null) as string | null
         setLineItems(items)
         setLineItemsStatus(status)
-        lineItemsCache.current.set(bill.invoiceID, { items, status })
+        const cache = lineItemsCache.current
+        cache.delete(bill.invoiceID)
+        cache.set(bill.invoiceID, { items, status })
+        if (cache.size > LINE_ITEMS_CACHE_MAX) {
+          const oldest = cache.keys().next().value
+          if (oldest) cache.delete(oldest)
+        }
       }
     } catch { /* non-fatal — show empty state */ }
     finally {
@@ -819,16 +832,6 @@ export default function BillsPage() {
   )
 }
 
-type ModalLineItem = {
-  id: number
-  description: string
-  quantity: number | null
-  unit: string | null
-  unit_price: number | null
-  total: number | null
-  category: string | null
-}
-
 function BillDetailModal({
   bill,
   viewMode,
@@ -847,7 +850,7 @@ function BillDetailModal({
   viewMode: 'lines' | 'pdf'
   onShowPdf: () => void
   onShowLines: () => void
-  lineItems: ModalLineItem[]
+  lineItems: LineItem[]
   lineItemsLoading: boolean
   lineItemsStatus: string | null
   attachments: Attachment[]

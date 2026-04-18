@@ -4,21 +4,9 @@ import { adminClient } from '@/lib/adminAuth'
 import { getXeroConnection } from '@/lib/xero'
 
 /**
- * Lists supplier bills from the `xero_bill_cache` table, which the cron
- * refreshes from Xero at most once an hour. Reading from cache avoids
- * 1–3s of live-Xero latency on every Bills-page load.
- *
- * Auth: any logged-in user (guests included — bills are read-only data).
- *
- * Query params:
- *   dateFrom             - YYYY-MM-DD (invoice date)
- *   dateTo               - YYYY-MM-DD
- *   contactName          - substring filter (case-insensitive)
- *   withAttachmentsOnly  - 'false' to include bills without attachments
- *                          (default 'true' — matches the UI's needs)
- *
- * Returns { connected, bills, totalScanned } or
- * { connected: false } when no one has connected Xero yet.
+ * Lists supplier bills from `xero_bill_cache` (refreshed by the cron at
+ * most once an hour). Reading from cache avoids 1–3s of live-Xero latency
+ * on every Bills-page load.
  */
 export async function GET(req: Request) {
   try {
