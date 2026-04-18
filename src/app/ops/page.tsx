@@ -42,23 +42,25 @@ export default function OpsHome() {
 
       setEmail(sessionData.session.user.email ?? null)
 
-      try {
-        const meRes = await fetch('/api/me', {
-          headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
-        })
-        if (meRes.ok) {
+      // Fire /api/me and the sales query in parallel — they're independent.
+      const accessToken = sessionData.session.access_token
+      const [meRes, daysRes] = await Promise.all([
+        fetch('/api/me', { headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => null),
+        supabase
+          .from('sales_business_day')
+          .select('business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov')
+          .order('business_date', { ascending: false })
+          .limit(90),
+      ])
+
+      if (meRes?.ok) {
+        try {
           const me = await meRes.json()
           setAllowedTabs(me.allowedTabs ?? [])
-        }
-      } catch { /* non-fatal */ }
+        } catch { /* non-fatal */ }
+      }
 
-      const { data } = await supabase
-        .from('sales_business_day')
-        .select('business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov')
-        .order('business_date', { ascending: false })
-        .limit(90)
-
-      setDays((data as Day[] | null) ?? [])
+      setDays((daysRes.data as Day[] | null) ?? [])
       setLoading(false)
     }
 

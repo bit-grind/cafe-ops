@@ -191,10 +191,7 @@ async function handleCron(req: Request) {
 
 async function refreshCache(supabase: ReturnType<typeof adminClient>) {
   // Fetch up to 5 pages (500 bills). Each page = 1 Xero API call.
-  const allBills: Array<{
-    invoiceID: string; contactName: string;
-    invoiceNumber: string | null; date: string; hasAttachments: boolean
-  }> = []
+  const allBills: Awaited<ReturnType<typeof listBills>> = []
 
   for (let page = 1; page <= 5; page++) {
     const bills = await listBills({ page })
@@ -205,7 +202,10 @@ async function refreshCache(supabase: ReturnType<typeof adminClient>) {
 
   if (allBills.length === 0) return
 
-  // Upsert all into cache
+  const now = new Date().toISOString()
+
+  // Upsert all into cache. We store every field the Bills UI needs so it
+  // can render without hitting Xero on page load.
   await supabase.from('xero_bill_cache').upsert(
     allBills.map((b) => ({
       xero_invoice_id: b.invoiceID,
@@ -213,7 +213,14 @@ async function refreshCache(supabase: ReturnType<typeof adminClient>) {
       invoice_number: b.invoiceNumber,
       invoice_date: b.date,
       has_attachments: b.hasAttachments,
-      last_synced_at: new Date().toISOString(),
+      total: b.total,
+      amount_due: b.amountDue,
+      amount_paid: b.amountPaid,
+      currency_code: b.currencyCode,
+      status: b.status,
+      due_date: b.dueDate,
+      reference: b.reference,
+      last_synced_at: now,
     }))
   )
 }

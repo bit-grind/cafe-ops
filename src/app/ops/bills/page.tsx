@@ -158,6 +158,8 @@ export default function BillsPage() {
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [lineItemsLoading, setLineItemsLoading] = useState(false)
   const [lineItemsStatus, setLineItemsStatus] = useState<string | null>(null)
+  // Session-scoped cache so reopening the same bill is instant
+  const lineItemsCache = useRef(new Map<string, { items: LineItem[]; status: string | null }>())
 
   useEffect(() => {
     async function init() {
@@ -166,18 +168,21 @@ export default function BillsPage() {
       const u = data.session.user
       setEmail(u.email ?? null)
 
-      // Ask the server whether we're admin — admin email lives in a
-      // server-only env var and is never sent to the browser.
-      try {
-        const meRes = await fetch('/api/me', {
-          headers: { Authorization: `Bearer ${data.session.access_token}` },
-        })
-        if (meRes.ok) {
-          const me = await meRes.json()
-          setIsAdmin(!!me.isAdmin)
-          setAllowedTabs(me.allowedTabs ?? [])
+      // /api/me and the bills list are independent — fire in parallel.
+      const mePromise = fetch('/api/me', {
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      }).catch(() => null)
+      const billsPromise = loadBills()
+
+      mePromise.then(async (meRes) => {
+        if (meRes?.ok) {
+          try {
+            const me = await meRes.json()
+            setIsAdmin(!!me.isAdmin)
+            setAllowedTabs(me.allowedTabs ?? [])
+          } catch { /* non-fatal */ }
         }
-      } catch { /* non-fatal */ }
+      })
 
       setLoading(false)
 
@@ -191,7 +196,7 @@ export default function BillsPage() {
         window.history.replaceState({}, '', '/ops/bills')
       }
 
-      await loadBills()
+      await billsPromise
     }
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -231,6 +236,16 @@ export default function BillsPage() {
     setAttachments([])
     setAttachmentBlobs([])
     setDetailError(null)
+
+    // Warm from cache immediately if we've seen this bill this session
+    const cached = lineItemsCache.current.get(bill.invoiceID)
+    if (cached) {
+      setLineItems(cached.items)
+      setLineItemsStatus(cached.status)
+      setLineItemsLoading(false)
+      return
+    }
+
     setLineItems([])
     setLineItemsStatus(null)
     setLineItemsLoading(true)
@@ -242,8 +257,11 @@ export default function BillsPage() {
       )
       const out = await res.json()
       if (res.ok) {
-        setLineItems(out.items ?? [])
-        setLineItemsStatus(out.status ?? null)
+        const items = (out.items ?? []) as LineItem[]
+        const status = (out.status ?? null) as string | null
+        setLineItems(items)
+        setLineItemsStatus(status)
+        lineItemsCache.current.set(bill.invoiceID, { items, status })
       }
     } catch { /* non-fatal — show empty state */ }
     finally {

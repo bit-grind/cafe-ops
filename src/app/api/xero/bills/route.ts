@@ -1,28 +1,27 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { listAllBills, getXeroConnection } from '@/lib/xero'
+import { adminClient } from '@/lib/adminAuth'
+import { getXeroConnection } from '@/lib/xero'
 
 /**
- * Lists supplier bills (ACCPAY invoices) from the connected Xero tenant.
+ * Lists supplier bills from the `xero_bill_cache` table, which the cron
+ * refreshes from Xero at most once an hour. Reading from cache avoids
+ * 1–3s of live-Xero latency on every Bills-page load.
  *
  * Auth: any logged-in user (guests included — bills are read-only data).
  *
  * Query params:
- *   status               - AUTHORISED | PAID | DRAFT | SUBMITTED | VOIDED
- *   dateFrom             - YYYY-MM-DD
+ *   dateFrom             - YYYY-MM-DD (invoice date)
  *   dateTo               - YYYY-MM-DD
  *   contactName          - substring filter (case-insensitive)
- *   maxPages             - cap on how many 100-result Xero pages to walk
- *                          (default 5 = up to 500 bills scanned)
  *   withAttachmentsOnly  - 'false' to include bills without attachments
- *                          (default 'true' — only attachment-bearing bills)
+ *                          (default 'true' — matches the UI's needs)
  *
- * Returns { connected, tenantName, bills, totalScanned } or
- * { connected: false } when the admin hasn't connected Xero yet.
+ * Returns { connected, bills, totalScanned } or
+ * { connected: false } when no one has connected Xero yet.
  */
 export async function GET(req: Request) {
   try {
-    // Auth — match the /api/ask pattern
     const anonClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -37,31 +36,48 @@ export async function GET(req: Request) {
     }
 
     const url = new URL(req.url)
-    const maxPagesRaw = url.searchParams.get('maxPages')
-    const maxPages = maxPagesRaw ? Math.min(Math.max(parseInt(maxPagesRaw, 10) || 5, 1), 50) : 5
-    const allBills = await listAllBills(
-      {
-        status: url.searchParams.get('status') ?? undefined,
-        dateFrom: url.searchParams.get('dateFrom') ?? undefined,
-        dateTo: url.searchParams.get('dateTo') ?? undefined,
-        contactName: url.searchParams.get('contactName') ?? undefined,
-      },
-      { maxPages }
-    )
-
-    // Only show bills that actually have an attached invoice file in Xero —
-    // those are the ones the modal can render. Pass ?withAttachmentsOnly=false
-    // to disable this filter (e.g. for Ask AI).
+    const dateFrom = url.searchParams.get('dateFrom')?.trim() || null
+    const dateTo = url.searchParams.get('dateTo')?.trim() || null
+    const contactName = url.searchParams.get('contactName')?.trim() || null
     const withAttachmentsOnly = url.searchParams.get('withAttachmentsOnly') !== 'false'
-    const bills = withAttachmentsOnly
-      ? allBills.filter((b) => b.hasAttachments)
-      : allBills
+
+    const supabase = adminClient()
+    let query = supabase
+      .from('xero_bill_cache')
+      .select('xero_invoice_id, contact_name, invoice_number, reference, invoice_date, due_date, status, total, amount_due, amount_paid, currency_code, has_attachments')
+      .order('invoice_date', { ascending: false })
+      .limit(500)
+
+    if (dateFrom) query = query.gte('invoice_date', dateFrom)
+    if (dateTo) query = query.lte('invoice_date', dateTo)
+    if (contactName) query = query.ilike('contact_name', `%${contactName}%`)
+    if (withAttachmentsOnly) query = query.eq('has_attachments', true)
+
+    const { data, error } = await query
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    const bills = (data ?? []).map((r) => ({
+      invoiceID: r.xero_invoice_id,
+      invoiceNumber: r.invoice_number,
+      reference: r.reference,
+      contactName: r.contact_name,
+      date: r.invoice_date,
+      dueDate: r.due_date,
+      status: r.status ?? '',
+      total: Number(r.total ?? 0),
+      amountDue: Number(r.amount_due ?? 0),
+      amountPaid: Number(r.amount_paid ?? 0),
+      currencyCode: r.currency_code ?? 'AUD',
+      hasAttachments: !!r.has_attachments,
+    }))
 
     return NextResponse.json({
       connected: true,
       tenantName: conn.tenant_name,
       bills,
-      totalScanned: allBills.length,
+      totalScanned: bills.length,
     })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error'
