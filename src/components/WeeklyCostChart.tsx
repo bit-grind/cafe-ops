@@ -7,6 +7,7 @@ export type WeekRow = { week_start: string; week_end: string; total: number }
 
 type Props = {
   weeks: WeekRow[]
+  /** Override height. Defaults to 280 on mobile (<500px) and 240 on desktop. */
   height?: number
 }
 
@@ -15,7 +16,7 @@ type Props = {
  * have to pull in a chart library. Hovering (or tapping) a bar shows a
  * tooltip with the week range and amount.
  */
-export default function WeeklyCostChart({ weeks, height = 240 }: Props) {
+export default function WeeklyCostChart({ weeks, height }: Props) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   // Match the SVG's logical width to the container's rendered width so
@@ -61,12 +62,15 @@ export default function WeeklyCostChart({ weeks, height = 240 }: Props) {
 
   // Layout in SVG user-space units. W tracks the container width so one
   // user-space unit ≈ one CSS pixel; font sizes stay legible on mobile.
-  const H = height
   const isNarrow = W < 500
-  const padL = isNarrow ? 44 : 56
-  const padR = isNarrow ? 8 : 16
+  const H = height ?? (isNarrow ? 280 : 240)
+  const fsY = isNarrow ? 13 : 11
+  const fsX = isNarrow ? 12 : 10
+  const fsAvg = isNarrow ? 12 : 10
+  const padL = isNarrow ? 58 : 56
+  const padR = isNarrow ? 10 : 16
   const padT = 14
-  const padB = 28
+  const padB = isNarrow ? 34 : 28
   const innerW = W - padL - padR
   const innerH = H - padT - padB
   const n = weeks.length
@@ -108,7 +112,7 @@ export default function WeeklyCostChart({ weeks, height = 240 }: Props) {
               y={t.y}
               textAnchor="end"
               dominantBaseline="middle"
-              fontSize={11}
+              fontSize={fsY}
               fill="var(--muted-strong)"
             >
               {money(t.v)}
@@ -129,7 +133,7 @@ export default function WeeklyCostChart({ weeks, height = 240 }: Props) {
           x={W - padR}
           y={avgY - 4}
           textAnchor="end"
-          fontSize={10}
+          fontSize={fsAvg}
           fill="var(--muted-strong)"
         >
           avg {money(avg)}
@@ -162,9 +166,9 @@ export default function WeeklyCostChart({ weeks, height = 240 }: Props) {
               {i % labelStride === 0 && (
                 <text
                   x={cx}
-                  y={H - 8}
+                  y={H - 10}
                   textAnchor="middle"
-                  fontSize={10}
+                  fontSize={fsX}
                   fill="var(--muted-strong)"
                 >
                   {fmtDate(w.week_start).slice(0, 5)}
