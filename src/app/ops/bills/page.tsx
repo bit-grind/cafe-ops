@@ -953,6 +953,9 @@ const inputStyle: React.CSSProperties = {
   color: '#e0e0e0',
   fontSize: 13,
   outline: 'none',
+  // Tells the browser to render native date-picker UI (calendar icon,
+  // popup) in dark mode so the icon is visible on our dark inputs.
+  colorScheme: 'dark',
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
