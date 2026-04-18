@@ -25,12 +25,14 @@ export async function GET(req: Request) {
   if (!q) {
     return NextResponse.json({ error: 'q parameter is required' }, { status: 400 })
   }
+  const dateFrom = url.searchParams.get('dateFrom')?.trim() || null
+  const dateTo = url.searchParams.get('dateTo')?.trim() || null
 
   const supabase = adminClient()
 
   // Search using ILIKE with trigram index for fuzzy matching
   const pattern = `%${q}%`
-  const { data, error } = await supabase
+  let query = supabase
     .from('extracted_line_items')
     .select(`
       id,
@@ -48,6 +50,11 @@ export async function GET(req: Request) {
       )
     `)
     .ilike('description', pattern)
+
+  if (dateFrom) query = query.gte('extraction_runs.invoice_date', dateFrom)
+  if (dateTo) query = query.lte('extraction_runs.invoice_date', dateTo)
+
+  const { data, error } = await query
     .order('invoice_date', { ascending: false, foreignTable: 'extraction_runs' })
     .limit(500)
 

@@ -61,6 +61,28 @@ function normalise(s: string) {
   return s.toLowerCase().replace(/['']/g, '').replace(/\s+/g, ' ').trim()
 }
 
+// When a product description already carries its own weight (e.g. "Boulot 1kg
+// SLICED", "Baguette 500g"), the extractor sometimes reports the quantity in
+// kg — but that's really a *count* of pre-weighed units. Convert those back to
+// a unit count so "3 kg" of a 1kg loaf reads as "3 loaves".
+const BREAD_HINT = /(bread|loaf|loaves|boulot|baguette|sourdough|ciabatta|focaccia|roll|bun)/i
+function fmtQty(quantity: number | null, unit: string | null, description: string): string {
+  if (quantity == null) return '—'
+  const weightMatch = description.match(/(\d+(?:\.\d+)?)\s?(kg|g)\b/i)
+  const unitIsKg = unit?.toLowerCase() === 'kg'
+  if (weightMatch && unitIsKg) {
+    const weight = parseFloat(weightMatch[1])
+    const inKg = weightMatch[2].toLowerCase() === 'g' ? weight / 1000 : weight
+    if (inKg > 0) {
+      const count = Math.round((quantity / inKg) * 10) / 10
+      const isBread = BREAD_HINT.test(description)
+      const label = isBread ? (count === 1 ? 'loaf' : 'loaves') : (count === 1 ? 'unit' : 'units')
+      return `${count} ${label}`
+    }
+  }
+  return `${quantity}${unit ? ` ${unit}` : ''}`
+}
+
 function matchSupplierLabel(contactName: string): string | null {
   const norm = normalise(contactName)
   for (const s of SUPPLIERS) {
@@ -307,7 +329,10 @@ export default function BillsPage() {
     setSearchActive(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(`/api/extract-lines/search?q=${encodeURIComponent(query)}`, {
+      const qs = new URLSearchParams({ q: query })
+      if (dateFrom) qs.set('dateFrom', dateFrom)
+      if (dateTo) qs.set('dateTo', dateTo)
+      const res = await fetch(`/api/extract-lines/search?${qs.toString()}`, {
         headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
       })
       const out = await res.json()
@@ -439,7 +464,11 @@ export default function BillsPage() {
                     </Field>
                     <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                       <button
-                        onClick={() => { loadBills(); setDateOpen(false) }}
+                        onClick={() => {
+                          loadBills()
+                          if (searchActive) runSearch()
+                          setDateOpen(false)
+                        }}
                         disabled={busy}
                         className="bp-btn"
                         style={{ fontSize: 13, padding: '8px 18px', flex: 1, opacity: busy ? 0.5 : 1 }}
@@ -450,7 +479,11 @@ export default function BillsPage() {
                         <button
                           onClick={() => {
                             setDateFrom(''); setDateTo('')
-                            setTimeout(() => { loadBills(); setDateOpen(false) }, 0)
+                            setTimeout(() => {
+                              loadBills()
+                              if (searchActive) runSearch()
+                              setDateOpen(false)
+                            }, 0)
                           }}
                           style={{
                             fontSize: 12, background: 'none', border: '1px solid #333', color: '#888',
@@ -568,7 +601,7 @@ export default function BillsPage() {
                               className={hasBill ? 'is-clickable' : undefined}
                             >
                               <td>{r.description}</td>
-                              <td className="is-right">{r.quantity != null ? `${r.quantity}${r.unit ? ` ${r.unit}` : ''}` : '—'}</td>
+                              <td className="is-right">{fmtQty(r.quantity, r.unit, r.description)}</td>
                               <td className="is-right">{r.unit_price != null ? money(r.unit_price) : '—'}</td>
                               <td className="is-right">{r.total != null ? money(r.total) : '—'}</td>
                               <td>{r.supplier ?? '—'}</td>
