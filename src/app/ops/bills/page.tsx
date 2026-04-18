@@ -61,26 +61,29 @@ function normalise(s: string) {
   return s.toLowerCase().replace(/['']/g, '').replace(/\s+/g, ' ').trim()
 }
 
-// When a product description already carries its own weight (e.g. "Boulot 1kg
-// SLICED", "Baguette 500g"), the extractor sometimes reports the quantity in
-// kg — but that's really a *count* of pre-weighed units. Convert those back to
-// a unit count so "3 kg" of a 1kg loaf reads as "3 loaves".
-const BREAD_HINT = /(bread|loaf|loaves|boulot|baguette|sourdough|ciabatta|focaccia|roll|bun)/i
+// Display qty with a unit only when it's actually weight-based (kg/g). When
+// a product description already carries its own weight (e.g. "Boulot 1kg"),
+// the extractor sometimes reports the quantity in kg — that's really a count
+// of pre-weighed units, so divide it back out and display just the number.
 function fmtQty(quantity: number | null, unit: string | null, description: string): string {
   if (quantity == null) return '—'
+  const normUnit = unit?.toLowerCase().trim() ?? ''
+  const unitIsKg = normUnit === 'kg'
+  const unitIsG = normUnit === 'g'
+
   const weightMatch = description.match(/(\d+(?:\.\d+)?)\s?(kg|g)\b/i)
-  const unitIsKg = unit?.toLowerCase() === 'kg'
   if (weightMatch && unitIsKg) {
     const weight = parseFloat(weightMatch[1])
     const inKg = weightMatch[2].toLowerCase() === 'g' ? weight / 1000 : weight
     if (inKg > 0) {
       const count = Math.round((quantity / inKg) * 10) / 10
-      const isBread = BREAD_HINT.test(description)
-      const label = isBread ? (count === 1 ? 'loaf' : 'loaves') : (count === 1 ? 'unit' : 'units')
-      return `${count} ${label}`
+      return String(count)
     }
   }
-  return `${quantity}${unit ? ` ${unit}` : ''}`
+
+  if (unitIsKg) return `${quantity} kg`
+  if (unitIsG) return `${quantity} g`
+  return String(quantity)
 }
 
 function matchSupplierLabel(contactName: string): string | null {
