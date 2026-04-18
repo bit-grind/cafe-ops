@@ -117,9 +117,7 @@ export default function BillsPage() {
   // Detail modal
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
-  const [activeAttachmentIdx, setActiveAttachmentIdx] = useState(0)
-  const [attachmentBlobUrl, setAttachmentBlobUrl] = useState<string | null>(null)
-  const [attachmentMime, setAttachmentMime] = useState<string | null>(null)
+  const [attachmentBlobs, setAttachmentBlobs] = useState<Array<{ url: string; mime: string } | null>>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
 
@@ -192,9 +190,7 @@ export default function BillsPage() {
   async function openBill(bill: Bill) {
     setSelectedBill(bill)
     setAttachments([])
-    setActiveAttachmentIdx(0)
-    setAttachmentBlobUrl(null)
-    setAttachmentMime(null)
+    setAttachmentBlobs([])
     setDetailError(null)
     setDetailLoading(true)
     try {
@@ -217,12 +213,10 @@ export default function BillsPage() {
   }
 
   function closeBill() {
-    if (attachmentBlobUrl) URL.revokeObjectURL(attachmentBlobUrl)
+    attachmentBlobs.forEach(b => b && URL.revokeObjectURL(b.url))
     setSelectedBill(null)
     setAttachments([])
-    setActiveAttachmentIdx(0)
-    setAttachmentBlobUrl(null)
-    setAttachmentMime(null)
+    setAttachmentBlobs([])
     setDetailError(null)
   }
 
@@ -249,48 +243,44 @@ export default function BillsPage() {
     return () => document.removeEventListener('mousedown', onClick)
   }, [dateOpen])
 
-  // Whenever the active attachment changes, fetch its bytes as a blob URL so
-  // an <iframe>/<img> can render it without needing to send auth headers.
+  // Fetch every attachment's bytes as a blob URL in parallel so the viewer
+  // can render each one stacked (like pages of a single invoice).
   useEffect(() => {
     if (!selectedBill || attachments.length === 0) return
-    const att = attachments[activeAttachmentIdx]
-    if (!att) return
     let cancelled = false
-    let createdUrl: string | null = null
+    const created: string[] = []
     ;(async () => {
-      // Clean up the previous blob URL
-      if (attachmentBlobUrl) URL.revokeObjectURL(attachmentBlobUrl)
-      setAttachmentBlobUrl(null)
-      setAttachmentMime(null)
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        const url = `/api/xero/bills/${encodeURIComponent(selectedBill.invoiceID)}/attachments/${encodeURIComponent(att.fileName)}`
-        const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
-        })
-        if (!res.ok) {
-          if (!cancelled) setDetailError(`Failed to load attachment (${res.status})`)
-          return
-        }
-        const blob = await res.blob()
-        const mime = res.headers.get('content-type') ?? blob.type ?? att.mimeType
-        createdUrl = URL.createObjectURL(blob)
+        const results = await Promise.all(
+          attachments.map(async (att) => {
+            const url = `/api/xero/bills/${encodeURIComponent(selectedBill.invoiceID)}/attachments/${encodeURIComponent(att.fileName)}`
+            const res = await fetch(url, {
+              headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+            })
+            if (!res.ok) return null
+            const blob = await res.blob()
+            const mime = res.headers.get('content-type') ?? blob.type ?? att.mimeType
+            const blobUrl = URL.createObjectURL(blob)
+            created.push(blobUrl)
+            return { url: blobUrl, mime }
+          })
+        )
         if (cancelled) {
-          URL.revokeObjectURL(createdUrl)
+          created.forEach(URL.revokeObjectURL)
           return
         }
-        setAttachmentBlobUrl(createdUrl)
-        setAttachmentMime(mime)
+        setAttachmentBlobs(results)
       } catch (e: unknown) {
         if (!cancelled) setDetailError(e instanceof Error ? e.message : 'Attachment load failed')
       }
     })()
     return () => {
       cancelled = true
-      if (createdUrl) URL.revokeObjectURL(createdUrl)
+      created.forEach(URL.revokeObjectURL)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBill, attachments, activeAttachmentIdx])
+  }, [selectedBill, attachments])
 
   async function connectXero() {
     const { data: { session } } = await supabase.auth.getSession()
@@ -713,10 +703,7 @@ export default function BillsPage() {
         <BillDetailModal
           bill={selectedBill}
           attachments={attachments}
-          activeIdx={activeAttachmentIdx}
-          onSelectAttachment={setActiveAttachmentIdx}
-          blobUrl={attachmentBlobUrl}
-          mime={attachmentMime}
+          blobs={attachmentBlobs}
           loading={detailLoading}
           error={detailError}
           onClose={closeBill}
@@ -729,27 +716,19 @@ export default function BillsPage() {
 function BillDetailModal({
   bill,
   attachments,
-  activeIdx,
-  onSelectAttachment,
-  blobUrl,
-  mime,
+  blobs,
   loading,
   error,
   onClose,
 }: {
   bill: Bill
   attachments: Attachment[]
-  activeIdx: number
-  onSelectAttachment: (idx: number) => void
-  blobUrl: string | null
-  mime: string | null
+  blobs: Array<{ url: string; mime: string } | null>
   loading: boolean
   error: string | null
   onClose: () => void
 }) {
-  const active = attachments[activeIdx] ?? null
-  const isImage = mime?.startsWith('image/')
-  const isPdf = mime === 'application/pdf' || active?.fileName.toLowerCase().endsWith('.pdf')
+  const totalKb = attachments.reduce((s, a) => s + a.contentLength, 0) / 1024
 
   return (
     <div
@@ -769,7 +748,7 @@ function BillDetailModal({
         onClick={e => e.stopPropagation()}
         style={{
           background: '#0d0d0d',
-          border: '1px solid #222',
+          border: '1px solid var(--border)',
           borderRadius: 14,
           width: '100%',
           maxWidth: 1000,
@@ -783,7 +762,7 @@ function BillDetailModal({
         {/* Header */}
         <div style={{
           padding: '16px 22px',
-          borderBottom: '1px solid #1e1e1e',
+          borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'flex-start',
           justifyContent: 'space-between',
@@ -791,142 +770,138 @@ function BillDetailModal({
           flexShrink: 0,
         }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <div style={{ fontSize: 11, color: 'var(--muted-strong)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Supplier bill
+              {attachments.length > 1 && ` · ${attachments.length} pages`}
             </div>
             <div style={{ fontSize: 17, fontWeight: 700, marginTop: 4 }}>{bill.contactName}</div>
-            <div style={{ fontSize: 12, opacity: 0.55, marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: 'var(--muted-strong)', marginTop: 4 }}>
               {bill.invoiceNumber ? `#${bill.invoiceNumber} · ` : ''}
               {fmtDate(bill.date)}
               {' · '}{money(bill.total, bill.currencyCode)}
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              style={{
-                background: 'none',
-                border: '1px solid #333',
-                color: '#888',
-                borderRadius: 8,
-                width: 30,
-                height: 30,
-                cursor: 'pointer',
-                fontSize: 16,
-                lineHeight: 1,
-              }}
-            >
-              ×
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="bp-btn"
+            style={{ width: 36, height: 36, padding: 0, fontSize: 18, lineHeight: 1 }}
+          >
+            ×
+          </button>
         </div>
 
-        {/* Attachment tabs (only if more than one) */}
-        {attachments.length > 1 && (
-          <div style={{
-            display: 'flex',
-            gap: 4,
-            padding: '8px 22px',
-            borderBottom: '1px solid #1e1e1e',
-            overflowX: 'auto',
-            flexShrink: 0,
-          }}>
-            {attachments.map((a, i) => (
-              <button
-                key={a.attachmentID}
-                onClick={() => onSelectAttachment(i)}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 6,
-                  border: `1px solid ${i === activeIdx ? '#555' : '#222'}`,
-                  background: i === activeIdx ? '#1a1a1a' : 'transparent',
-                  color: i === activeIdx ? '#fff' : '#888',
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {a.fileName}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Viewer */}
+        {/* Stacked viewer */}
         <div style={{
           flex: 1,
           minHeight: 0,
           background: '#000',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          overflowY: 'auto',
           position: 'relative',
         }}>
           {loading ? (
-            <div style={{ color: '#555', fontSize: 13 }}>Loading attachments…</div>
+            <div style={{ color: 'var(--muted-strong)', fontSize: 13, padding: 40, textAlign: 'center' }}>
+              Loading attachments…
+            </div>
           ) : error ? (
             <div style={{ color: '#c77070', fontSize: 13, padding: 20 }}>{error}</div>
           ) : attachments.length === 0 ? (
-            <div style={{ color: '#555', fontSize: 13, padding: 20, textAlign: 'center' }}>
+            <div style={{ color: 'var(--muted-strong)', fontSize: 13, padding: 40, textAlign: 'center' }}>
               <div style={{ marginBottom: 8 }}>No attachment on this bill in Xero.</div>
               <div style={{ fontSize: 11, opacity: 0.7 }}>
                 Attach the original supplier invoice in Xero to see it here.
               </div>
             </div>
-          ) : !blobUrl ? (
-            <div style={{ color: '#555', fontSize: 13 }}>Loading {active?.fileName}…</div>
-          ) : isPdf ? (
-            <iframe
-              src={blobUrl}
-              title={active?.fileName ?? 'attachment'}
-              style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }}
-            />
-          ) : isImage ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={blobUrl}
-              alt={active?.fileName ?? 'attachment'}
-              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-            />
           ) : (
-            <div style={{ color: '#888', fontSize: 13, padding: 20, textAlign: 'center' }}>
-              <div style={{ marginBottom: 12 }}>
-                Can&apos;t preview this file type ({mime ?? 'unknown'}).
-              </div>
-              <a
-                href={blobUrl}
-                download={active?.fileName}
-                style={{ color: '#5ab0ff', fontSize: 13, textDecoration: 'underline' }}
-              >
-                Download {active?.fileName}
-              </a>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {attachments.map((att, i) => {
+                const blob = blobs[i] ?? null
+                const isPdf = blob?.mime === 'application/pdf' || att.fileName.toLowerCase().endsWith('.pdf')
+                const isImage = blob?.mime?.startsWith('image/')
+                return (
+                  <div
+                    key={att.attachmentID}
+                    style={{
+                      borderBottom: i < attachments.length - 1 ? '1px solid var(--border)' : undefined,
+                    }}
+                  >
+                    {attachments.length > 1 && (
+                      <div style={{
+                        padding: '8px 22px',
+                        fontSize: 11,
+                        color: 'var(--muted-strong)',
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        background: 'rgba(255,255,255,0.02)',
+                      }}>
+                        Page {i + 1} of {attachments.length} · {att.fileName}
+                      </div>
+                    )}
+                    {!blob ? (
+                      <div style={{ color: 'var(--muted-strong)', fontSize: 13, padding: 40, textAlign: 'center' }}>
+                        Loading {att.fileName}…
+                      </div>
+                    ) : isPdf ? (
+                      <iframe
+                        src={blob.url}
+                        title={att.fileName}
+                        style={{ width: '100%', height: '85vh', border: 'none', background: '#fff', display: 'block' }}
+                      />
+                    ) : isImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={blob.url}
+                        alt={att.fileName}
+                        style={{ width: '100%', display: 'block' }}
+                      />
+                    ) : (
+                      <div style={{ color: '#888', fontSize: 13, padding: 20, textAlign: 'center' }}>
+                        <div style={{ marginBottom: 12 }}>
+                          Can&apos;t preview {att.fileName} ({blob.mime || 'unknown'}).
+                        </div>
+                        <a
+                          href={blob.url}
+                          download={att.fileName}
+                          style={{ color: '#5ab0ff', fontSize: 13, textDecoration: 'underline' }}
+                        >
+                          Download {att.fileName}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
 
-        {/* Footer with download link */}
-        {blobUrl && active && (
+        {/* Footer */}
+        {attachments.length > 0 && (
           <div style={{
             padding: '10px 22px',
-            borderTop: '1px solid #1e1e1e',
+            borderTop: '1px solid var(--border)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             fontSize: 11,
-            color: '#666',
+            color: 'var(--muted-strong)',
             flexShrink: 0,
           }}>
             <span>
-              {active.fileName} · {(active.contentLength / 1024).toFixed(0)} KB
+              {attachments.length} file{attachments.length === 1 ? '' : 's'} · {totalKb.toFixed(0)} KB total
             </span>
-            <a
-              href={blobUrl}
-              download={active.fileName}
-              style={{ color: '#5ab0ff', textDecoration: 'none' }}
-            >
-              Download ↓
-            </a>
+            <div style={{ display: 'flex', gap: 12 }}>
+              {attachments.map((att, i) => blobs[i] && (
+                <a
+                  key={att.attachmentID}
+                  href={blobs[i]!.url}
+                  download={att.fileName}
+                  style={{ color: '#5ab0ff', textDecoration: 'none' }}
+                >
+                  ↓ {att.fileName}
+                </a>
+              ))}
+            </div>
           </div>
         )}
       </div>
