@@ -150,10 +150,21 @@ export default function KitchenHome() {
       <div className="bp-container">
         <div
           style={{
+            fontSize: 12,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'var(--muted-strong)',
+            marginTop: 22,
+            marginBottom: 10,
+          }}
+        >
+          Kitchen costs
+        </div>
+        <div
+          style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
             gap: 14,
-            marginTop: 18,
           }}
         >
           {loading || !computed ? (
