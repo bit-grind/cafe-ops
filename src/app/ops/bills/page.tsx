@@ -879,7 +879,7 @@ function BillDetailModal({
                       </div>
                     ) : isPdf ? (
                       <iframe
-                        src={blob.url}
+                        src={`${blob.url}#pagemode=none&navpanes=0`}
                         title={att.fileName}
                         style={{ width: '100%', height: '85vh', border: 'none', background: '#fff', display: 'block' }}
                       />
