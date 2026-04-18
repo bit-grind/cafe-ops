@@ -145,6 +145,19 @@ export default function BillsPage() {
   const [attachmentBlobs, setAttachmentBlobs] = useState<Array<{ url: string; mime: string } | null>>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'lines' | 'pdf'>('lines')
+  type LineItem = {
+    id: number
+    description: string
+    quantity: number | null
+    unit: string | null
+    unit_price: number | null
+    total: number | null
+    category: string | null
+  }
+  const [lineItems, setLineItems] = useState<LineItem[]>([])
+  const [lineItemsLoading, setLineItemsLoading] = useState(false)
+  const [lineItemsStatus, setLineItemsStatus] = useState<string | null>(null)
 
   useEffect(() => {
     async function init() {
@@ -214,15 +227,40 @@ export default function BillsPage() {
 
   async function openBill(bill: Bill) {
     setSelectedBill(bill)
+    setViewMode('lines')
     setAttachments([])
     setAttachmentBlobs([])
+    setDetailError(null)
+    setLineItems([])
+    setLineItemsStatus(null)
+    setLineItemsLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(
+        `/api/extract-lines/by-invoice?invoiceId=${encodeURIComponent(bill.invoiceID)}`,
+        { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` } },
+      )
+      const out = await res.json()
+      if (res.ok) {
+        setLineItems(out.items ?? [])
+        setLineItemsStatus(out.status ?? null)
+      }
+    } catch { /* non-fatal — show empty state */ }
+    finally {
+      setLineItemsLoading(false)
+    }
+  }
+
+  async function loadAttachments() {
+    if (!selectedBill || attachments.length > 0) return
     setDetailError(null)
     setDetailLoading(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(`/api/xero/bills/${encodeURIComponent(bill.invoiceID)}/attachments`, {
-        headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
-      })
+      const res = await fetch(
+        `/api/xero/bills/${encodeURIComponent(selectedBill.invoiceID)}/attachments`,
+        { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` } },
+      )
       const out = await res.json()
       if (!res.ok) {
         setDetailError(out.error ?? 'Failed to load attachments')
@@ -237,12 +275,20 @@ export default function BillsPage() {
     }
   }
 
+  async function showPdf() {
+    setViewMode('pdf')
+    await loadAttachments()
+  }
+
   function closeBill() {
     attachmentBlobs.forEach(b => b && URL.revokeObjectURL(b.url))
     setSelectedBill(null)
     setAttachments([])
     setAttachmentBlobs([])
     setDetailError(null)
+    setLineItems([])
+    setLineItemsStatus(null)
+    setViewMode('lines')
   }
 
   // Close modal on Escape
@@ -738,6 +784,12 @@ export default function BillsPage() {
       {selectedBill && (
         <BillDetailModal
           bill={selectedBill}
+          viewMode={viewMode}
+          onShowPdf={showPdf}
+          onShowLines={() => setViewMode('lines')}
+          lineItems={lineItems}
+          lineItemsLoading={lineItemsLoading}
+          lineItemsStatus={lineItemsStatus}
           attachments={attachments}
           blobs={attachmentBlobs}
           loading={detailLoading}
@@ -749,8 +801,24 @@ export default function BillsPage() {
   )
 }
 
+type ModalLineItem = {
+  id: number
+  description: string
+  quantity: number | null
+  unit: string | null
+  unit_price: number | null
+  total: number | null
+  category: string | null
+}
+
 function BillDetailModal({
   bill,
+  viewMode,
+  onShowPdf,
+  onShowLines,
+  lineItems,
+  lineItemsLoading,
+  lineItemsStatus,
   attachments,
   blobs,
   loading,
@@ -758,6 +826,12 @@ function BillDetailModal({
   onClose,
 }: {
   bill: Bill
+  viewMode: 'lines' | 'pdf'
+  onShowPdf: () => void
+  onShowLines: () => void
+  lineItems: ModalLineItem[]
+  lineItemsLoading: boolean
+  lineItemsStatus: string | null
   attachments: Attachment[]
   blobs: Array<{ url: string; mime: string } | null>
   loading: boolean
@@ -817,18 +891,77 @@ function BillDetailModal({
               {' · '}{money(bill.total, bill.currencyCode)}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="bp-btn"
-            style={{ width: 36, height: 36, padding: 0, fontSize: 18, lineHeight: 1 }}
-          >
-            ×
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            {viewMode === 'lines' ? (
+              <button onClick={onShowPdf} className="bp-btn" style={{ fontSize: 13 }}>
+                View invoice
+              </button>
+            ) : (
+              <button onClick={onShowLines} className="bp-btn" style={{ fontSize: 13 }}>
+                ← Line items
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="bp-btn"
+              style={{ width: 36, height: 36, padding: 0, fontSize: 18, lineHeight: 1 }}
+            >
+              ×
+            </button>
+          </div>
         </div>
 
-        {/* Stacked viewer */}
-        <div style={{
+        {/* Line items view */}
+        {viewMode === 'lines' && (
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0' }}>
+            {lineItemsLoading ? (
+              <div style={{ color: 'var(--muted-strong)', fontSize: 13, padding: 40, textAlign: 'center' }}>
+                Loading line items…
+              </div>
+            ) : lineItemsStatus === null ? (
+              <div style={{ color: 'var(--muted-strong)', fontSize: 13, padding: 40, textAlign: 'center' }}>
+                <div style={{ marginBottom: 8 }}>Not yet processed.</div>
+                <div style={{ fontSize: 11, opacity: 0.7 }}>
+                  The line-item extractor hasn&apos;t run on this invoice yet. It picks up a
+                  couple of bills per cron tick — check back in a few minutes.
+                </div>
+              </div>
+            ) : lineItemsStatus === 'failed' ? (
+              <div style={{ color: '#c77070', fontSize: 13, padding: 40, textAlign: 'center' }}>
+                Extraction failed for this invoice.
+              </div>
+            ) : lineItems.length === 0 ? (
+              <div style={{ color: 'var(--muted-strong)', fontSize: 13, padding: 40, textAlign: 'center' }}>
+                No line items were extracted from this invoice.
+              </div>
+            ) : (
+              <table className="bp-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th className="is-right">Qty</th>
+                    <th className="is-right">Unit Price</th>
+                    <th className="is-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lineItems.map(item => (
+                    <tr key={item.id}>
+                      <td>{item.description}</td>
+                      <td className="is-right">{fmtQty(item.quantity, item.unit, item.description)}</td>
+                      <td className="is-right">{item.unit_price != null ? money(item.unit_price, bill.currencyCode) : '—'}</td>
+                      <td className="is-right">{item.total != null ? money(item.total, bill.currencyCode) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* Stacked PDF viewer */}
+        {viewMode === 'pdf' && <div style={{
           flex: 1,
           minHeight: 0,
           background: '#000',
@@ -909,10 +1042,10 @@ function BillDetailModal({
               })}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Footer */}
-        {attachments.length > 0 && (
+        {viewMode === 'pdf' && attachments.length > 0 && (
           <div style={{
             padding: '10px 22px',
             borderTop: '1px solid var(--border)',
