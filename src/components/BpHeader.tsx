@@ -24,6 +24,10 @@ export default function BpHeader({
     ? ALL_TABS.filter(t => allowedTabs.includes(t.tab))
     : ALL_TABS.filter(t => t.tab !== 'admin')
 
+  // Logo links to the user's landing page — kitchen users don't see the
+  // dashboard, so send them to their first visible tab instead.
+  const homeHref = visible[0]?.href ?? '/ops'
+
   return (
     <header style={{ borderBottom: "1px solid var(--border)" }}>
       <div
@@ -37,7 +41,7 @@ export default function BpHeader({
           gap: 14,
         }}
       >
-        <Link href="/ops" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <Link href={homeHref} style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <Image src="/brand/logo.png" alt="The Cafe" width={52} height={52} priority />
           <div>
             <div style={{ fontWeight: 700, letterSpacing: "0.1em", fontSize: 14 }}>
