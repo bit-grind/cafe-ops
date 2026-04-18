@@ -85,20 +85,39 @@ async function handleCron(req: Request) {
         .map((r) => r.xero_invoice_id)
     )
 
-    // Get candidates from cache — fetch a bigger pool and filter in JS
-    // (Supabase .not('col', 'in', subquery) doesn't support subqueries).
-    // Order by invoice_date ASC so oldest unprocessed bills come first —
-    // this drains historical backfills (e.g. 2025) before newer bills.
-    const { data: cached } = await supabase
+    // Priority 1: any invoice from the last 14 days — fresh bills get
+    // processed on the next cron tick so they show up in Ask AI / search
+    // quickly even while a historical backfill is running.
+    const recentCutoff = new Date()
+    recentCutoff.setDate(recentCutoff.getDate() - 14)
+    const recentCutoffIso = recentCutoff.toISOString().slice(0, 10)
+
+    const { data: recentCached } = await supabase
       .from('xero_bill_cache')
       .select('xero_invoice_id, contact_name, invoice_number, invoice_date')
       .eq('has_attachments', true)
-      .order('invoice_date', { ascending: true })
-      .limit(2000)
+      .gte('invoice_date', recentCutoffIso)
+      .order('invoice_date', { ascending: false })
+      .limit(200)
 
-    const candidates = (cached ?? [])
+    let candidates = (recentCached ?? [])
       .filter((c) => !doneSet.has(c.xero_invoice_id))
       .slice(0, MAX_PER_RUN)
+
+    // Priority 2: historical backfill — oldest unprocessed bills first.
+    // Only kicks in once there's nothing fresh to process.
+    if (candidates.length === 0) {
+      const { data: cached } = await supabase
+        .from('xero_bill_cache')
+        .select('xero_invoice_id, contact_name, invoice_number, invoice_date')
+        .eq('has_attachments', true)
+        .order('invoice_date', { ascending: true })
+        .limit(2000)
+
+      candidates = (cached ?? [])
+        .filter((c) => !doneSet.has(c.xero_invoice_id))
+        .slice(0, MAX_PER_RUN)
+    }
 
     if (candidates.length === 0) {
       return NextResponse.json({ processed: 0, message: 'All done' })
