@@ -169,7 +169,7 @@ export default function WeeklyCostChart({ weeks, height }: Props) {
                   height={innerH}
                   fill="transparent"
                   onMouseEnter={() => setHoverIdx(i)}
-                  onClick={() => setHoverIdx(prev => (prev === i ? null : i))}
+                  onClick={() => setHoverIdx(i)}
                   style={{ cursor: 'pointer' }}
                 />
                 <rect
