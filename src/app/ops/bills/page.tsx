@@ -5,6 +5,7 @@ import BpHeader from '@/components/BpHeader'
 import Chip from '@/components/Chip'
 import { supabase } from '@/lib/supabaseClient'
 import { money as fmtMoney, fmtDate as fmtDateIso } from '@/app/lib/fmt'
+import { SUPPLIERS, normalise, matchSupplierLabel } from '@/lib/suppliers'
 
 type Bill = {
   invoiceID: string
@@ -39,39 +40,8 @@ type LineItem = {
 
 const LINE_ITEMS_CACHE_MAX = 50
 
-// Suppliers to show on the Bills dashboard. Each entry has a short display
-// label and a list of lowercase keywords used to match Xero contact names.
-// Matching is substring-based after stripping apostrophes, so "big michael"
-// will match "Big Michael's Fruit & Vegetables" etc.
-//
-// `excludeInvoicePrefixes` is an optional case-insensitive list of invoice
-// number prefixes to hide from that supplier's tab (e.g. Southside Milk's
-// "RB…" invoices aren't supplier bills we care about here).
-type SupplierDef = {
-  label: string
-  keywords: string[]
-  excludeInvoicePrefixes?: string[]
-}
-
-const SUPPLIERS: SupplierDef[] = [
-  { label: 'Brasserie',        keywords: ['brasserie'] },
-  { label: 'Superior',         keywords: ['superior'] },
-  { label: "Big Michael's",    keywords: ['big michael'] },
-  { label: "Michael's Meats",  keywords: ['michaels meats', 'michael meats'] },
-  { label: 'A La Carte',       keywords: ['a la carte'] },
-  { label: 'Breadtop',         keywords: ['breadtop', 'quality factory'] },
-  { label: 'Filla',            keywords: ['filla'] },
-  { label: 'Southside Milk',   keywords: ['southside milk', 'southside'], excludeInvoicePrefixes: ['RB'] },
-  { label: 'APAK',             keywords: ['apak'] },
-  { label: 'Bagel Boys',       keywords: ['bagel boys', 'bagel boy'] },
-  { label: 'Cravve Chocolate', keywords: ['cravve'] },
-  { label: 'Providore',        keywords: ['providore'] },
-  { label: 'Bask & Co',        keywords: ['bask'] },
-]
-
-function normalise(s: string) {
-  return s.toLowerCase().replace(/['']/g, '').replace(/\s+/g, ' ').trim()
-}
+// Supplier list and matching logic live in `src/lib/suppliers.ts` so the
+// kitchen dashboard and this page agree on what counts as a supplier bill.
 
 // Display qty with a unit only when it's actually weight-based (kg/g). When
 // a product description already carries its own weight (e.g. "Boulot 1kg"),
@@ -96,14 +66,6 @@ function fmtQty(quantity: number | null, unit: string | null, description: strin
   if (unitIsKg) return `${quantity} kg`
   if (unitIsG) return `${quantity} g`
   return String(quantity)
-}
-
-function matchSupplierLabel(contactName: string): string | null {
-  const norm = normalise(contactName)
-  for (const s of SUPPLIERS) {
-    if (s.keywords.some(k => norm.includes(normalise(k)))) return s.label
-  }
-  return null
 }
 
 const money = (n: number, ccy = 'AUD') => fmtMoney(n, ccy, 2)

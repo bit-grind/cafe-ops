@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { adminClient } from '@/lib/adminAuth'
+import { isKitchenSupplierBill } from '@/lib/suppliers'
 
 /**
  * Supplier bills for a single Mon–Sun week. Used by the kitchen
@@ -36,7 +37,9 @@ export async function GET(req: Request) {
     .limit(500)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const bills = (data ?? []).map(r => ({
+  const bills = (data ?? [])
+    .filter(r => isKitchenSupplierBill(r.contact_name, r.invoice_number))
+    .map(r => ({
     invoiceID: r.xero_invoice_id,
     invoiceNumber: r.invoice_number,
     reference: r.reference,

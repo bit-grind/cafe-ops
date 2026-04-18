@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { adminClient } from '@/lib/adminAuth'
+import { isKitchenSupplierBill } from '@/lib/suppliers'
 
 /**
  * Weekly supplier cost from `xero_bill_cache`.
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
   // Pull bills in window. 500 cap aligns with the Bills page; bump if needed.
   const { data: bills, error } = await db
     .from('xero_bill_cache')
-    .select('invoice_date, total')
+    .select('invoice_date, total, contact_name, invoice_number')
     .gte('invoice_date', fromIso)
     .order('invoice_date', { ascending: true })
     .limit(5000)
@@ -55,6 +56,7 @@ export async function GET(req: Request) {
   const weekTotals = new Map<string, number>()
   for (const b of bills ?? []) {
     if (!b.invoice_date) continue
+    if (!isKitchenSupplierBill(b.contact_name, b.invoice_number)) continue
     const mon = iso(mondayOf(new Date(b.invoice_date + 'T00:00:00')))
     weekTotals.set(mon, (weekTotals.get(mon) ?? 0) + Number(b.total ?? 0))
   }
