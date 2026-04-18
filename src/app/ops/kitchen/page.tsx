@@ -16,6 +16,17 @@ const RANGES = [
 
 type RangeKey = typeof RANGES[number]['label']
 
+type Bill = {
+  invoiceID: string
+  invoiceNumber: string | null
+  reference: string | null
+  contactName: string | null
+  date: string
+  total: number
+  status: string
+  hasAttachments: boolean
+}
+
 export default function KitchenHome() {
   const [loading, setLoading] = useState(true)
   const [chartLoading, setChartLoading] = useState(false)
@@ -24,6 +35,8 @@ export default function KitchenHome() {
   const [weeks, setWeeks] = useState<WeekRow[]>([])
   const [range, setRange] = useState<RangeKey>('12w')
   const [token, setToken] = useState<string | null>(null)
+  const [expandedWeek, setExpandedWeek] = useState<string | null>(null)
+  const [weekBills, setWeekBills] = useState<Record<string, Bill[] | 'loading'>>({})
 
   const selectedWeeks = RANGES.find(r => r.label === range)!.weeks
 
@@ -108,6 +121,26 @@ export default function KitchenHome() {
     if (p === null) return 'var(--muted-strong)'
     // Lower cost trending is good.
     return p <= 0 ? '#5bd38b' : '#e58080'
+  }
+
+  async function toggleWeek(weekStart: string) {
+    if (expandedWeek === weekStart) {
+      setExpandedWeek(null)
+      return
+    }
+    setExpandedWeek(weekStart)
+    if (weekBills[weekStart] || !token) return
+    setWeekBills(prev => ({ ...prev, [weekStart]: 'loading' }))
+    try {
+      const res = await fetch(`/api/food-cost/week?start=${weekStart}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('load failed')
+      const body = await res.json()
+      setWeekBills(prev => ({ ...prev, [weekStart]: (body.bills as Bill[]) ?? [] }))
+    } catch {
+      setWeekBills(prev => ({ ...prev, [weekStart]: [] }))
+    }
   }
 
   return (
@@ -238,6 +271,113 @@ export default function KitchenHome() {
           >
             <WeeklyCostChart weeks={weeks} />
           </div>
+
+          {!loading && weeks.length > 0 && (
+            <div
+              style={{
+                marginTop: 18,
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                overflow: 'hidden',
+              }}
+            >
+              {weeks.slice().reverse().map((w, i) => {
+                const expanded = expandedWeek === w.week_start
+                const bills = weekBills[w.week_start]
+                return (
+                  <div key={w.week_start}>
+                    <button
+                      onClick={() => toggleWeek(w.week_start)}
+                      aria-expanded={expanded}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '12px 16px',
+                        borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                        borderLeft: 'none',
+                        borderRight: 'none',
+                        borderBottom: 'none',
+                        background: expanded ? 'rgba(255,255,255,0.04)' : 'transparent',
+                        color: 'inherit',
+                        font: 'inherit',
+                        fontSize: 14,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span
+                          aria-hidden
+                          style={{
+                            display: 'inline-block',
+                            transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                            transition: 'transform 120ms',
+                            color: 'var(--muted-strong)',
+                            fontSize: 11,
+                          }}
+                        >
+                          ▶
+                        </span>
+                        {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
+                      </span>
+                      <span style={{ fontWeight: 600 }}>{money(w.total)}</span>
+                    </button>
+
+                    {expanded && (
+                      <div
+                        style={{
+                          padding: '4px 16px 14px 40px',
+                          borderTop: '1px solid var(--border)',
+                          background: 'rgba(255,255,255,0.02)',
+                        }}
+                      >
+                        {bills === 'loading' || bills === undefined ? (
+                          <div style={{ fontSize: 13, color: 'var(--muted-strong)', padding: '10px 0' }}>
+                            Loading…
+                          </div>
+                        ) : bills.length === 0 ? (
+                          <div style={{ fontSize: 13, color: 'var(--muted-strong)', padding: '10px 0' }}>
+                            No invoices in this week.
+                          </div>
+                        ) : (
+                          <div>
+                            {bills.map(b => (
+                              <div
+                                key={b.invoiceID}
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  padding: '8px 0',
+                                  borderTop: '1px solid var(--border)',
+                                  fontSize: 13,
+                                  gap: 12,
+                                }}
+                              >
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {b.contactName || '—'}
+                                  </div>
+                                  <div style={{ color: 'var(--muted-strong)', fontSize: 12, marginTop: 2 }}>
+                                    {fmtDate(b.date)}
+                                    {b.invoiceNumber ? ` · ${b.invoiceNumber}` : ''}
+                                    {b.reference ? ` · ${b.reference}` : ''}
+                                  </div>
+                                </div>
+                                <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{money(b.total)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
