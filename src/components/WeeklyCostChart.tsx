@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { fmtDate, money } from '@/app/lib/fmt'
 
 export type WeekRow = { week_start: string; week_end: string; total: number }
@@ -17,6 +17,20 @@ type Props = {
  */
 export default function WeeklyCostChart({ weeks, height = 240 }: Props) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  // Match the SVG's logical width to the container's rendered width so
+  // text and stroke sizes don't distort when the chart is narrow (mobile).
+  const [W, setW] = useState(1000)
+
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const update = () => setW(Math.max(280, el.clientWidth))
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const { max, avg } = useMemo(() => {
     if (weeks.length === 0) return { max: 0, avg: 0 }
@@ -45,11 +59,12 @@ export default function WeeklyCostChart({ weeks, height = 240 }: Props) {
     )
   }
 
-  // Layout in SVG user-space units. The SVG itself scales responsively.
-  const W = 1000
+  // Layout in SVG user-space units. W tracks the container width so one
+  // user-space unit ≈ one CSS pixel; font sizes stay legible on mobile.
   const H = height
-  const padL = 56
-  const padR = 16
+  const isNarrow = W < 500
+  const padL = isNarrow ? 44 : 56
+  const padR = isNarrow ? 8 : 16
   const padT = 14
   const padB = 28
   const innerW = W - padL - padR
@@ -63,16 +78,16 @@ export default function WeeklyCostChart({ weeks, height = 240 }: Props) {
   // Y-axis ticks at 0, 25, 50, 75, 100% of max — keeps labels readable.
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => ({ v: max * t, y: yFor(max * t) }))
 
-  // X-axis labels: show at most ~8 labels to avoid crowding.
-  const labelStride = Math.max(1, Math.ceil(n / 8))
+  // X-axis labels: show at most ~8 labels on desktop, ~4 on mobile.
+  const maxLabels = isNarrow ? 4 : 8
+  const labelStride = Math.max(1, Math.ceil(n / maxLabels))
 
   const hovered = hoverIdx !== null ? weeks[hoverIdx] : null
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={wrapRef} style={{ position: 'relative' }}>
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
         width="100%"
         height={H}
         style={{ display: 'block' }}

@@ -307,20 +307,24 @@ export default function KitchenHome() {
                         textAlign: 'left',
                       }}
                     >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        <svg
                           aria-hidden
+                          width="10"
+                          height="10"
+                          viewBox="0 0 10 10"
                           style={{
-                            display: 'inline-block',
+                            flexShrink: 0,
                             transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
                             transition: 'transform 120ms',
                             color: 'var(--muted-strong)',
-                            fontSize: 11,
                           }}
                         >
-                          ▶
+                          <path d="M3 1 L7 5 L3 9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
                         </span>
-                        {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
                       </span>
                       <span style={{ fontWeight: 600 }}>{money(w.total)}</span>
                     </button>
