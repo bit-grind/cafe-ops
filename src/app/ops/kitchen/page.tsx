@@ -24,10 +24,28 @@ function startOfWeekMon(d: Date) {
 
 type TopItem = { product: string; quantity: number }
 
+// Kitchen doesn't prepare drinks or size modifiers — baristas handle those.
+// Filter them out so the stats focus on food items.
+const EXCLUDED_PRODUCTS = new Set<string>([
+  // Coffee size modifiers (Lightspeed tracks the size as its own line)
+  'Small', 'Medium', 'Large', 'Small OL', 'Medium OL', 'Large OL', 'Shorty', '8oz',
+  // Hot coffee
+  'Cappuccino', 'Flat White', 'Latte', 'Long Black', 'Mocha', 'Piccolo Latté',
+  // Hot non-coffee drinks
+  'Hot Chocolate', 'Tea', 'Matcha',
+  // Iced drinks
+  'Iced Chocolate', 'Iced Latté', 'Iced Long Black', 'Iced Matcha', 'Iced Tea',
+  // Juices / shakes
+  'E&T Juice (Small)', 'E&T Juice (Large)', 'Cold Press', 'Milkshake', 'Thickshake', 'Kids Milkshake',
+  // Other drinks
+  'Coke', 'Diet Coke', 'Lemonade', 'Sparkling Water', 'Bottled Water', 'Kombucha',
+])
+
 function aggregate(rows: ProductRow[]): { total: number; top: TopItem[] } {
   const byProduct = new Map<string, number>()
   let total = 0
   for (const r of rows) {
+    if (EXCLUDED_PRODUCTS.has(r.product)) continue
     const q = Number(r.quantity || 0)
     total += q
     byProduct.set(r.product, (byProduct.get(r.product) ?? 0) + q)
