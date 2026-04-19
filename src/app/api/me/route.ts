@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { isAdminEmail } from '@/lib/adminAuth'
+import { getSessionUser } from '@/lib/adminAuth'
 
 /**
  * GET /api/me — returns the current user's identity, role, and permission
@@ -12,28 +11,21 @@ import { isAdminEmail } from '@/lib/adminAuth'
  * `allowedTabs` lists the tab keys the user should see in the header.
  */
 export async function GET(req: Request) {
-  const anonClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } }
-  )
-  const { data: { user } } = await anonClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await getSessionUser(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const email = user.email ?? null
-  const role = (user.user_metadata?.role as string) ?? null
-  const isAdmin = isAdminEmail(email)
-  const isGuest = role === 'guest' || email === 'guest@example.com'
-  const isKitchen = role === 'kitchen'
+  const { email, role, isAdmin, isGuest, isKitchen } = session
 
-  // Determine which header tabs the user may see.
+  // Determine which header tabs the user may see. Guests don't see
+  // supplier-cost surfaces (kitchen dashboard, bills totals drill-down).
   let allowedTabs: string[]
   if (isKitchen) {
     allowedTabs = ['kitchen', 'bills']
   } else if (isAdmin) {
     allowedTabs = ['dashboard', 'kitchen', 'ask', 'bills', 'admin']
+  } else if (isGuest) {
+    allowedTabs = ['dashboard', 'ask', 'bills']
   } else {
-    // Regular users and guests see everything except admin.
     allowedTabs = ['dashboard', 'kitchen', 'ask', 'bills']
   }
 

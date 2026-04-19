@@ -111,8 +111,15 @@ export default function WeeklyCostChart({ weeks, height }: Props) {
           width={contentW}
           height={H}
           style={{ display: 'block' }}
+          role="img"
+          aria-label={`Weekly supplier cost for the last ${n} week${n === 1 ? '' : 's'}`}
           onMouseLeave={() => setHoverIdx(null)}
         >
+          <title>Weekly supplier cost</title>
+          <desc>
+            Bar chart of supplier bill totals for the last {n} week{n === 1 ? '' : 's'}.
+            Average cost {money(avg)}.
+          </desc>
           {ticks.map((t, i) => (
             <g key={i}>
               <line
@@ -168,9 +175,25 @@ export default function WeeklyCostChart({ weeks, height }: Props) {
                   width={slot}
                   height={innerH}
                   fill="transparent"
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`${fmtDate(w.week_start)} – ${fmtDate(w.week_end)}: ${money(w.total)}`}
                   onMouseEnter={() => setHoverIdx(i)}
+                  onFocus={() => setHoverIdx(i)}
                   onClick={() => setHoverIdx(i)}
-                  style={{ cursor: 'pointer' }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setHoverIdx(i)
+                    } else if (e.key === 'ArrowRight' && i < n - 1) {
+                      setHoverIdx(i + 1)
+                    } else if (e.key === 'ArrowLeft' && i > 0) {
+                      setHoverIdx(i - 1)
+                    } else if (e.key === 'Escape') {
+                      setHoverIdx(null)
+                    }
+                  }}
+                  style={{ cursor: 'pointer', outline: 'none' }}
                 />
                 <rect
                   x={cx - barW / 2}

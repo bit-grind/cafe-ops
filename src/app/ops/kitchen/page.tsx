@@ -61,6 +61,11 @@ export default function KitchenHome() {
       if (meRes?.ok) {
         try {
           const me = await meRes.json()
+          // Guests don't see supplier costs — bounce them to the sales dashboard.
+          if (me.isGuest) {
+            window.location.replace('/ops')
+            return
+          }
           setAllowedTabs(me.allowedTabs ?? [])
         } catch { /* non-fatal */ }
       }
@@ -300,6 +305,7 @@ export default function KitchenHome() {
                     <button
                       onClick={() => toggleWeek(w.week_start)}
                       aria-expanded={expanded}
+                      aria-controls={`week-${w.week_start}`}
                       style={{
                         width: '100%',
                         display: 'flex',
@@ -342,6 +348,8 @@ export default function KitchenHome() {
 
                     {expanded && (
                       <div
+                        id={`week-${w.week_start}`}
+                        role="region"
                         style={{
                           padding: '4px 16px 14px 40px',
                           borderTop: '1px solid var(--border)',

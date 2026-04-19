@@ -44,3 +44,37 @@ export function adminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 }
+
+/**
+ * Resolve the caller's identity and permission flags from the incoming
+ * Authorization header. Returns null when the session is missing or
+ * invalid. Route handlers that need more than an authenticated user
+ * (e.g. "deny guests") should check the flags on the returned object.
+ */
+export async function getSessionUser(req: Request): Promise<
+  | null
+  | {
+      email: string | null
+      role: string | null
+      isAdmin: boolean
+      isGuest: boolean
+      isKitchen: boolean
+    }
+> {
+  const anonClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } }
+  )
+  const { data: { user } } = await anonClient.auth.getUser()
+  if (!user) return null
+  const email = user.email ?? null
+  const role = (user.user_metadata?.role as string) ?? null
+  return {
+    email,
+    role,
+    isAdmin: isAdminEmail(email),
+    isGuest: role === 'guest' || email === 'guest@example.com',
+    isKitchen: role === 'kitchen',
+  }
+}

@@ -31,13 +31,17 @@ export function normalise(s: string): string {
   return s.toLowerCase().replace(/['']/g, '').replace(/\s+/g, ' ').trim()
 }
 
-export function matchSupplierLabel(contactName: string | null | undefined): string | null {
+function matchSupplier(contactName: string | null | undefined): SupplierDef | null {
   if (!contactName) return null
   const norm = normalise(contactName)
   for (const s of SUPPLIERS) {
-    if (s.keywords.some(k => norm.includes(normalise(k)))) return s.label
+    if (s.keywords.some(k => norm.includes(normalise(k)))) return s
   }
   return null
+}
+
+export function matchSupplierLabel(contactName: string | null | undefined): string | null {
+  return matchSupplier(contactName)?.label ?? null
 }
 
 /**
@@ -48,10 +52,9 @@ export function isKitchenSupplierBill(
   contactName: string | null | undefined,
   invoiceNumber: string | null | undefined,
 ): boolean {
-  const label = matchSupplierLabel(contactName)
-  if (!label) return false
-  const def = SUPPLIERS.find(s => s.label === label)
-  if (!def?.excludeInvoicePrefixes?.length) return true
+  const def = matchSupplier(contactName)
+  if (!def) return false
+  if (!def.excludeInvoicePrefixes?.length) return true
   const num = (invoiceNumber ?? '').toUpperCase()
   return !def.excludeInvoicePrefixes.some(p => num.startsWith(p.toUpperCase()))
 }

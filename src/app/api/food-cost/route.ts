@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { adminClient } from '@/lib/adminAuth'
+import { adminClient, getSessionUser } from '@/lib/adminAuth'
+import { mondayOf, isoDate } from '@/lib/dates'
 import { isKitchenSupplierBill } from '@/lib/suppliers'
 
 /**
@@ -8,56 +8,43 @@ import { isKitchenSupplierBill } from '@/lib/suppliers'
  *
  * Sums bill totals by invoice_date, bucketed into Mon–Sun weeks. Uses
  * the service-role client because xero_bill_cache has RLS enabled
- * without a read policy. Session auth is still required.
+ * without a read policy — authz is enforced here. Guests are denied
+ * because supplier-cost totals are sensitive.
+ *
+ * Week boundaries are in the server's local timezone (Sydney on Vercel,
+ * see vercel.json).
  */
-
-function mondayOf(d: Date): Date {
-  const x = new Date(d)
-  const day = x.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  x.setDate(x.getDate() + diff)
-  x.setHours(0, 0, 0, 0)
-  return x
-}
-
-function iso(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 export async function GET(req: Request) {
-  const anonClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } }
-  )
-  const { data: { user } } = await anonClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await getSessionUser(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.isGuest) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const url = new URL(req.url)
-  const weeks = Math.min(Math.max(parseInt(url.searchParams.get('weeks') || '12', 10) || 12, 1), 104)
+  const weeksRaw = Number.parseInt(url.searchParams.get('weeks') ?? '', 10)
+  const weeks = Number.isFinite(weeksRaw) ? Math.min(Math.max(weeksRaw, 1), 104) : 12
 
-  const today = new Date()
-  const currentMon = mondayOf(today)
+  const currentMon = mondayOf(new Date())
   const fromDate = new Date(currentMon)
   fromDate.setDate(fromDate.getDate() - 7 * (weeks - 1))
-  const fromIso = iso(fromDate)
+  const fromIso = isoDate(fromDate)
 
+  // 104 weeks × ~50 supplier bills/week ≈ 5,200 rows worst case; pick a
+  // generous cap so the 52w range on a busy quarter doesn't silently
+  // truncate.
   const db = adminClient()
-
-  // Pull bills in window. 500 cap aligns with the Bills page; bump if needed.
   const { data: bills, error } = await db
     .from('xero_bill_cache')
     .select('invoice_date, total, contact_name, invoice_number')
     .gte('invoice_date', fromIso)
     .order('invoice_date', { ascending: true })
-    .limit(5000)
+    .limit(10000)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const weekTotals = new Map<string, number>()
   for (const b of bills ?? []) {
     if (!b.invoice_date) continue
     if (!isKitchenSupplierBill(b.contact_name, b.invoice_number)) continue
-    const mon = iso(mondayOf(new Date(b.invoice_date + 'T00:00:00')))
+    const mon = isoDate(mondayOf(new Date(b.invoice_date + 'T00:00:00')))
     weekTotals.set(mon, (weekTotals.get(mon) ?? 0) + Number(b.total ?? 0))
   }
 
@@ -67,10 +54,10 @@ export async function GET(req: Request) {
     start.setDate(start.getDate() - 7 * (weeks - 1 - i))
     const end = new Date(start)
     end.setDate(end.getDate() + 6)
-    const key = iso(start)
+    const key = isoDate(start)
     out.push({
       week_start: key,
-      week_end: iso(end),
+      week_end: isoDate(end),
       total: Math.round((weekTotals.get(key) ?? 0) * 100) / 100,
     })
   }
