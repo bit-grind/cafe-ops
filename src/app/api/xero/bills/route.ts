@@ -34,7 +34,7 @@ export async function GET(req: Request) {
       .from('xero_bill_cache')
       .select('xero_invoice_id, contact_name, invoice_number, reference, invoice_date, due_date, status, total, amount_due, amount_paid, currency_code, has_attachments')
       .order('invoice_date', { ascending: false })
-      .limit(500)
+      .limit(2000)
 
     if (dateFrom) query = query.gte('invoice_date', dateFrom)
     if (dateTo) query = query.lte('invoice_date', dateTo)
