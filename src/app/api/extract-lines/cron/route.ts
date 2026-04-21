@@ -139,14 +139,15 @@ async function pickCandidates(
 }
 
 async function getDoneInvoiceIds(supabase: SupabaseClient): Promise<Set<string>> {
+  // Supabase defaults to 1,000 rows per query — filter server-side and
+  // explicitly raise the limit so we never silently miss rows as the
+  // extraction_runs table grows past 1k.
   const { data } = await supabase
     .from('extraction_runs')
-    .select('xero_invoice_id, status')
-  return new Set(
-    (data ?? [])
-      .filter((r) => r.status === 'completed' || r.status === 'processing')
-      .map((r) => r.xero_invoice_id)
-  )
+    .select('xero_invoice_id')
+    .in('status', ['completed', 'processing'])
+    .limit(50_000)
+  return new Set((data ?? []).map((r) => r.xero_invoice_id))
 }
 
 // ── Processing a single invoice ───────────────────────────────────────────────
