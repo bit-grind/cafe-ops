@@ -26,37 +26,34 @@ export async function POST(req: Request) {
 
   const supabase = adminClient()
 
-  // Check if already processed
-  if (body.attachmentName) {
-    const { data: existing } = await supabase
-      .from('extraction_runs')
-      .select('id, status')
-      .eq('xero_invoice_id', invoiceId)
-      .eq('attachment_name', body.attachmentName)
-      .maybeSingle()
+  // Skip if already completed for this invoice
+  const { data: existing } = await supabase
+    .from('extraction_runs')
+    .select('id, status')
+    .eq('xero_invoice_id', invoiceId)
+    .maybeSingle()
 
-    if (existing?.status === 'completed') {
-      return NextResponse.json({ skipped: true, message: 'Already extracted' })
-    }
+  if (existing?.status === 'completed') {
+    return NextResponse.json({ skipped: true, message: 'Already extracted' })
   }
 
   // Fetch bill metadata from Xero for context
   const bill = await getBill(invoiceId)
 
-  // Create or update extraction_runs row
+  // Create or update extraction_runs row (unique on xero_invoice_id)
   const { data: run, error: runErr } = await supabase
     .from('extraction_runs')
     .upsert(
       {
         xero_invoice_id: invoiceId,
-        attachment_name: body.attachmentName ?? '_pending',
+        attachment_name: body.attachmentName ?? null,
         supplier_name: bill?.contactName ?? null,
         invoice_number: bill?.invoiceNumber ?? null,
         invoice_date: bill?.date ?? null,
         status: 'processing',
         created_at: new Date().toISOString(),
       },
-      { onConflict: 'xero_invoice_id,attachment_name' }
+      { onConflict: 'xero_invoice_id' }
     )
     .select('id')
     .single()
