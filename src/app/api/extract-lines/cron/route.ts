@@ -126,12 +126,13 @@ async function pickCandidates(
     .slice(0, limit)
   if (fromRecent.length > 0) return fromRecent
 
+  // Use .range() not .limit() — PostgREST caps .limit() at 1000 server-side.
   const { data: historical } = await supabase
     .from('xero_bill_cache')
     .select('xero_invoice_id, contact_name, invoice_number, invoice_date')
     .eq('has_attachments', true)
     .order('invoice_date', { ascending: true })
-    .limit(2000)
+    .range(0, 4999)
 
   return (historical ?? [])
     .filter((c) => !doneSet.has(c.xero_invoice_id))
@@ -139,15 +140,23 @@ async function pickCandidates(
 }
 
 async function getDoneInvoiceIds(supabase: SupabaseClient): Promise<Set<string>> {
-  // Supabase defaults to 1,000 rows per query — filter server-side and
-  // explicitly raise the limit so we never silently miss rows as the
-  // extraction_runs table grows past 1k.
-  const { data } = await supabase
-    .from('extraction_runs')
-    .select('xero_invoice_id')
-    .in('status', ['completed', 'processing'])
-    .limit(50_000)
-  return new Set((data ?? []).map((r) => r.xero_invoice_id))
+  // Supabase PostgREST caps every query at 1,000 rows server-side regardless
+  // of .limit(). Paginate with .range() until we've drained every
+  // completed/processing row — otherwise the cron re-extracts invoices
+  // beyond the 1k mark.
+  const ids = new Set<string>()
+  const PAGE = 1000
+  for (let from = 0; from < 200_000; from += PAGE) {
+    const { data, error } = await supabase
+      .from('extraction_runs')
+      .select('xero_invoice_id')
+      .in('status', ['completed', 'processing'])
+      .range(from, from + PAGE - 1)
+    if (error || !data || data.length === 0) break
+    for (const r of data) ids.add(r.xero_invoice_id)
+    if (data.length < PAGE) break
+  }
+  return ids
 }
 
 // ── Processing a single invoice ───────────────────────────────────────────────
