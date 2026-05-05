@@ -5,7 +5,7 @@ import BpHeader from '@/components/BpHeader'
 import MetricCard, { MetricSkeleton } from '@/components/MetricCard'
 import WeeklyCostChart, { type WeekRow } from '@/components/WeeklyCostChart'
 import { supabase } from '@/lib/supabaseClient'
-import { fmtDate, money } from '@/app/lib/fmt'
+import { fmtDate, money } from '@/lib/fmt'
 import type { AppTab } from '@/lib/permissions'
 
 const RANGES = [

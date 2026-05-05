@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import BpHeader from '@/components/BpHeader'
 import Chip from '@/components/Chip'
 import { supabase } from '@/lib/supabaseClient'
-import { money as fmtMoney, fmtDate as fmtDateIso } from '@/app/lib/fmt'
+import { money as fmtMoney, fmtDate as fmtDateIso } from '@/lib/fmt'
 import { SUPPLIERS, matchSupplierLabel } from '@/lib/suppliers'
 import type { AppTab } from '@/lib/permissions'
 

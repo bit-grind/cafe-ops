@@ -2,6 +2,24 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { adminClient } from '@/lib/adminAuth'
 
+type ExtractionRunRelation =
+  | {
+      supplier_name: string | null
+      invoice_number: string | null
+      invoice_date: string | null
+    }
+  | Array<{
+      supplier_name: string | null
+      invoice_number: string | null
+      invoice_date: string | null
+    }>
+  | null
+
+function pickExtractionRun(run: ExtractionRunRelation) {
+  if (!run) return null
+  return Array.isArray(run) ? (run[0] ?? null) : run
+}
+
 /**
  * GET /api/extract-lines/search?q=keyword
  *
@@ -64,7 +82,7 @@ export async function GET(req: Request) {
 
   // Flatten the join for a cleaner response
   const results = (data ?? []).map((row: Record<string, unknown>) => {
-    const run = row.extraction_runs as Record<string, unknown> | null
+    const run = pickExtractionRun(row.extraction_runs as ExtractionRunRelation)
     return {
       id: row.id,
       description: row.description,

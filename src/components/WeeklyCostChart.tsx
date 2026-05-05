@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { fmtDate, money } from '@/app/lib/fmt'
+import { fmtDate, money } from '@/lib/fmt'
 
 export type WeekRow = { week_start: string; week_end: string; total: number }
 

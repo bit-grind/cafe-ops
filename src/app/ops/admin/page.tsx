@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useEffectEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import BpHeader from '@/components/BpHeader'
 import { supabase } from '@/lib/supabaseClient'
@@ -89,39 +89,39 @@ export default function AdminPage() {
     } catch { /* non-fatal */ }
   }
 
-  const init = useEffectEvent(async () => {
-    const { data: sessionData } = await supabase.auth.getSession()
-    if (!sessionData.session) {
-      router.replace('/login')
-      return
-    }
-    const userEmail = sessionData.session.user.email ?? null
-    setEmail(userEmail)
-    setCurrentUserId(sessionData.session.user.id)
-
-    let isAdmin = false
-    try {
-      const meRes = await fetch('/api/me', {
-        headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
-      })
-      if (meRes.ok) {
-        const me = await meRes.json()
-        isAdmin = !!me.isAdmin
-      }
-    } catch { /* treat as non-admin */ }
-
-    if (!isAdmin) {
-      router.replace('/ops')
-      return
-    }
-    await loadUsers()
-    await loadInvoiceCount()
-    setLoading(false)
-  })
-
   useEffect(() => {
+    async function init() {
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session) {
+        router.replace('/login')
+        return
+      }
+      const userEmail = sessionData.session.user.email ?? null
+      setEmail(userEmail)
+      setCurrentUserId(sessionData.session.user.id)
+
+      let isAdmin = false
+      try {
+        const meRes = await fetch('/api/me', {
+          headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+        })
+        if (meRes.ok) {
+          const me = await meRes.json()
+          isAdmin = !!me.isAdmin
+        }
+      } catch { /* treat as non-admin */ }
+
+      if (!isAdmin) {
+        router.replace('/ops')
+        return
+      }
+      await loadUsers()
+      await loadInvoiceCount()
+      setLoading(false)
+    }
     void init()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router])
 
   async function signOut() {
     await supabase.auth.signOut()

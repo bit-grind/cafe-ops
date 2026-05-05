@@ -4,10 +4,12 @@ import { listBills, getXeroConnection, type BillSummary } from '@/lib/xero'
 import {
   extractDateFromQuestion,
   extractDateRangeFromQuestion,
-  fmtDate,
   resolveHolidayDate,
 } from '@/lib/ask/dateParsing'
-import { fetchBrisbaneWeather, needsWeather } from '@/lib/ask/weather'
+import { fetchBrisbaneWeather } from '@/lib/ask/weather'
+import { needsBills, needsWeather } from '@/lib/ask/triggers'
+import { isoDate, mondayOf } from '@/lib/dates'
+import { fmtDate } from '@/lib/fmt'
 
 type AskBody = { question: string }
 type Day = {
@@ -46,10 +48,21 @@ type ExtractedLineItemRow = {
   quantity: number | null
   unit_price: number | null
   total: number | null
-  extraction_runs: Array<{
-    supplier_name: string | null
-    invoice_date: string | null
-  }> | null
+  extraction_runs:
+    | {
+        supplier_name: string | null
+        invoice_date: string | null
+      }
+    | Array<{
+        supplier_name: string | null
+        invoice_date: string | null
+      }>
+    | null
+}
+
+type ExtractionRunRelation = {
+  supplier_name: string | null
+  invoice_date: string | null
 }
 
 type OpenAIResponse = {
@@ -60,22 +73,9 @@ type OpenAIResponse = {
   }>
 }
 
-// Triggers Xero bills lookup in the Ask AI prompt.
-function needsBills(q: string): boolean {
-  return /\b(bill|bills|invoice|invoices|supplier|suppliers|owing|unpaid|payable|payables|xero|vendor|vendors)\b/i.test(q)
-}
-
-function startOfWeekMon(d: Date) {
-  const x = new Date(d)
-  const day = x.getDay() // 0 Sun .. 6 Sat
-  const diff = (day === 0 ? -6 : 1 - day)
-  x.setDate(x.getDate() + diff)
-  x.setHours(0, 0, 0, 0)
-  return x
-}
-
-function iso(d: Date) {
-  return d.toISOString().slice(0, 10)
+function pickExtractionRun(run: ExtractedLineItemRow['extraction_runs']): ExtractionRunRelation | null {
+  if (!run) return null
+  return Array.isArray(run) ? (run[0] ?? null) : run
 }
 
 export async function POST(req: Request) {
@@ -138,8 +138,8 @@ export async function POST(req: Request) {
           // still get recent history without blowing up the prompt.
           const today = new Date()
           const yearAgo = new Date(today); yearAgo.setFullYear(today.getFullYear() - 1)
-          const from = dateRange?.from ?? iso(yearAgo)
-          const to = dateRange?.to ?? iso(today)
+          const from = dateRange?.from ?? isoDate(yearAgo)
+          const to = dateRange?.to ?? isoDate(today)
           // Fetch with line items so the AI can answer detail questions
           // ("what was on the Bunnings bill from March?", "how much did we
           // spend on milk last month?", etc.).
@@ -188,7 +188,7 @@ export async function POST(req: Request) {
       })
       products = agg ?? null
       productsAggregated = true
-    } else if (parsed.date && parsed.date <= iso(new Date())) {
+    } else if (parsed.date && parsed.date <= isoDate(new Date())) {
       // Single specific date → raw rows
       const { data: pd } = await supabase
         .from('sales_by_product')
@@ -235,10 +235,10 @@ export async function POST(req: Request) {
     let wtdSales = 0, lastWeekSales = 0, wowPct = null
     if (today) {
       const t = new Date(today.business_date + 'T00:00:00')
-      const mon = startOfWeekMon(t)
+      const mon = mondayOf(t)
       const prevMon = new Date(mon); prevMon.setDate(prevMon.getDate() - 7)
       const prevSun = new Date(mon); prevSun.setDate(prevSun.getDate() - 1)
-      const monIso = iso(mon), prevMonIso = iso(prevMon), prevSunIso = iso(prevSun)
+      const monIso = isoDate(mon), prevMonIso = isoDate(prevMon), prevSunIso = isoDate(prevSun)
       const wtd = (days ?? []).filter(d => d.business_date >= monIso && d.business_date <= today.business_date)
       const lastWeek = (days ?? []).filter(d => d.business_date >= prevMonIso && d.business_date <= prevSunIso)
       wtdSales = total(wtd)
@@ -318,7 +318,7 @@ export async function POST(req: Request) {
           const { data: eiData } = await query
           if (eiData && eiData.length > 0) {
             extractedItems = (eiData as ExtractedLineItemRow[]).map((r) => {
-              const run = r.extraction_runs?.[0] ?? null
+              const run = pickExtractionRun(r.extraction_runs)
               return {
                 description: r.description,
                 quantity: r.quantity,
@@ -333,7 +333,7 @@ export async function POST(req: Request) {
       } catch { /* non-fatal — extracted items are a bonus, not required */ }
     }
 
-    const actualToday = iso(new Date())
+    const actualToday = isoDate(new Date())
 
     const guestClause = isGuest
       ? `\nIMPORTANT: This user is a guest with READ-ONLY access. You may answer questions about sales data, products, trends, general business metrics, and supplier bills (including specific line items, amounts, and suppliers). If the user asks you to modify, delete, update, or change any data, settings, or configurations, politely decline and explain that guests have read-only access.`

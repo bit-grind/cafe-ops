@@ -1,3 +1,5 @@
+import { isoDate, mondayOf } from '@/lib/dates'
+
 type ParsedQuestionDate = {
   date?: string
   yearMonth?: { year: string; month: string }
@@ -15,19 +17,10 @@ const MONTH_MAP: Record<string, number> = {
 
 const MON_PAT = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
 
-function iso(d: Date) {
-  return d.toISOString().slice(0, 10)
-}
-
-export function fmtDate(isoStr: string) {
-  const [y, m, d] = isoStr.split('-')
-  return `${d}/${m}/${y.slice(2)}`
-}
-
 export function extractDateRangeFromQuestion(q: string): { from: string; to: string } | null {
   const s = q.toLowerCase()
   const now = new Date()
-  const todayIso = iso(now)
+  const todayIso = isoDate(now)
 
   const addDays = (d: Date, n: number) => {
     const r = new Date(d)
@@ -57,24 +50,21 @@ export function extractDateRangeFromQuestion(q: string): { from: string; to: str
   const nWeeks = s.match(/\b(?:last|past)\s+(\d+)[\s\-–]+(?:\d+\s+)?weeks?\b/)
   if (nWeeks) {
     const n = parseInt(nWeeks[1], 10)
-    return { from: iso(addDays(now, -n * 7)), to: todayIso }
+    return { from: isoDate(addDays(now, -n * 7)), to: todayIso }
   }
   if (/\b(last|past)\s+week\b/.test(s)) {
-    return { from: iso(addDays(now, -7)), to: todayIso }
+    return { from: isoDate(addDays(now, -7)), to: todayIso }
   }
   if (/\bthis\s+week\b/.test(s)) {
-    const mon = new Date(now)
-    const day = mon.getDay()
-    mon.setDate(mon.getDate() - (day === 0 ? 6 : day - 1))
-    return { from: iso(mon), to: todayIso }
+    return { from: isoDate(mondayOf(now)), to: todayIso }
   }
 
   const nMonths = s.match(/\b(?:last|past)\s+(\d+)\s+months?\b/)
   if (nMonths) {
-    return { from: iso(addDays(now, -parseInt(nMonths[1], 10) * 30)), to: todayIso }
+    return { from: isoDate(addDays(now, -parseInt(nMonths[1], 10) * 30)), to: todayIso }
   }
   if (/\b(last|past)\s+month\b/.test(s)) {
-    return { from: iso(addDays(now, -30)), to: todayIso }
+    return { from: isoDate(addDays(now, -30)), to: todayIso }
   }
   if (/\bthis\s+month\b/.test(s)) {
     return { from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, to: todayIso }
@@ -82,11 +72,11 @@ export function extractDateRangeFromQuestion(q: string): { from: string; to: str
 
   const nDays = s.match(/\b(?:last|past)\s+(\d+)\s+days?\b/)
   if (nDays) {
-    return { from: iso(addDays(now, -parseInt(nDays[1], 10))), to: todayIso }
+    return { from: isoDate(addDays(now, -parseInt(nDays[1], 10))), to: todayIso }
   }
   const nBizDays = s.match(/\b(?:last|past)\s+(\d+)\s+business\s+days?\b/)
   if (nBizDays) {
-    return { from: iso(addDays(now, -parseInt(nBizDays[1], 10) * 1.5)), to: todayIso }
+    return { from: isoDate(addDays(now, -parseInt(nBizDays[1], 10) * 1.5)), to: todayIso }
   }
 
   return null
@@ -161,17 +151,17 @@ export function resolveHolidayDate(q: string): HolidayInfo | null {
   const wantsLast = /\blast\b/.test(s)
 
   function pickYear(holidayFn: (y: number) => Date): HolidayInfo {
-    if (explicitYear) return { date: iso(holidayFn(parseInt(explicitYear[1], 10))) }
+    if (explicitYear) return { date: isoDate(holidayFn(parseInt(explicitYear[1], 10))) }
     const thisYearDate = holidayFn(today.getFullYear())
     thisYearDate.setHours(0, 0, 0, 0)
     if (thisYearDate > today || wantsLast) {
       const pastDate = thisYearDate <= today ? thisYearDate : holidayFn(today.getFullYear() - 1)
       return {
-        date: iso(pastDate),
-        upcoming: thisYearDate > today ? iso(thisYearDate) : undefined,
+        date: isoDate(pastDate),
+        upcoming: thisYearDate > today ? isoDate(thisYearDate) : undefined,
       }
     }
-    return { date: iso(thisYearDate) }
+    return { date: isoDate(thisYearDate) }
   }
 
   if (/mother'?s?\s*day/.test(s)) return pickYear(y => nthWeekday(y, 5, 0, 2))

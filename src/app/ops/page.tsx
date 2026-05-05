@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import BpHeader from '@/components/BpHeader'
 import MetricCard, { MetricSkeleton } from '@/components/MetricCard'
 import { supabase } from '@/lib/supabaseClient'
-import { fmtDate, fmtNum, iso, money } from '@/app/lib/fmt'
+import { fmtDate, fmtNum, iso, money } from '@/lib/fmt'
 import type { AppTab } from '@/lib/permissions'
 
 type Day = {

@@ -15,10 +15,6 @@ const WMO_CODES: Record<number, string> = {
   95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Heavy thunderstorm with hail',
 }
 
-export function needsWeather(q: string): boolean {
-  return /\b(weather|temperature|temp|hot|cold|warm|rain|sunny|cloudy|forecast|humid|wind)\b/i.test(q)
-}
-
 export async function fetchBrisbaneWeather(date: string): Promise<BrisbaneWeather | null> {
   try {
     const url = `https://archive-api.open-meteo.com/v1/archive?latitude=-27.47&longitude=153.02&start_date=${date}&end_date=${date}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&timezone=Australia%2FBrisbane`
