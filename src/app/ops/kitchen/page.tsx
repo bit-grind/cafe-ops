@@ -6,6 +6,7 @@ import MetricCard, { MetricSkeleton } from '@/components/MetricCard'
 import WeeklyCostChart, { type WeekRow } from '@/components/WeeklyCostChart'
 import { supabase } from '@/lib/supabaseClient'
 import { fmtDate, money } from '@/app/lib/fmt'
+import type { AppTab } from '@/lib/permissions'
 
 const RANGES = [
   { label: '4w', weeks: 4 },
@@ -31,7 +32,7 @@ export default function KitchenHome() {
   const [loading, setLoading] = useState(true)
   const [chartLoading, setChartLoading] = useState(false)
   const [email, setEmail] = useState<string | null>(null)
-  const [allowedTabs, setAllowedTabs] = useState<string[]>([])
+  const [allowedTabs, setAllowedTabs] = useState<AppTab[]>([])
   const [weeks, setWeeks] = useState<WeekRow[]>([])
   const [range, setRange] = useState<RangeKey>('12w')
   const [token, setToken] = useState<string | null>(null)

@@ -5,6 +5,7 @@ import BpHeader from '@/components/BpHeader'
 import MetricCard, { MetricSkeleton } from '@/components/MetricCard'
 import { supabase } from '@/lib/supabaseClient'
 import { fmtDate, fmtNum, iso, money } from '@/app/lib/fmt'
+import type { AppTab } from '@/lib/permissions'
 
 type Day = {
   business_date: string
@@ -29,7 +30,7 @@ function startOfWeekMon(d: Date) {
 export default function OpsHome() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
-  const [allowedTabs, setAllowedTabs] = useState<string[]>([])
+  const [allowedTabs, setAllowedTabs] = useState<AppTab[]>([])
   const [days, setDays] = useState<Day[]>([])
 
   useEffect(() => {

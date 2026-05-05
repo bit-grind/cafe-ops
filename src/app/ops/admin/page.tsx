@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useEffectEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import BpHeader from '@/components/BpHeader'
 import { supabase } from '@/lib/supabaseClient'
+import { getAllowedTabs } from '@/lib/permissions'
 
 type User = {
   id: string
@@ -23,6 +25,7 @@ type UserDetail = {
 }
 
 export default function AdminPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -78,39 +81,46 @@ export default function AdminPage() {
     setUsers(json.users)
   }
 
-  useEffect(() => {
-    async function init() {
-      const { data: sessionData } = await supabase.auth.getSession()
-      if (!sessionData.session) {
-        window.location.href = '/login'
-        return
-      }
-      const userEmail = sessionData.session.user.email ?? null
-      setEmail(userEmail)
-      setCurrentUserId(sessionData.session.user.id)
+  async function loadInvoiceCount() {
+    try {
+      const res = await fetch('/api/extract-lines/batch', { headers: await authHeaders() })
+      const json = await res.json()
+      if (res.ok) setInvoiceCount(Number(json.completed ?? 0))
+    } catch { /* non-fatal */ }
+  }
 
-      // Ask the server whether this user is the admin — admin email lives
-      // in a server-only env var.
-      let isAdmin = false
-      try {
-        const meRes = await fetch('/api/me', {
-          headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
-        })
-        if (meRes.ok) {
-          const me = await meRes.json()
-          isAdmin = !!me.isAdmin
-        }
-      } catch { /* treat as non-admin */ }
-
-      if (!isAdmin) {
-        window.location.href = '/ops'
-        return
-      }
-      await loadUsers()
-      loadInvoiceCount()
-      setLoading(false)
+  const init = useEffectEvent(async () => {
+    const { data: sessionData } = await supabase.auth.getSession()
+    if (!sessionData.session) {
+      router.replace('/login')
+      return
     }
-    init()
+    const userEmail = sessionData.session.user.email ?? null
+    setEmail(userEmail)
+    setCurrentUserId(sessionData.session.user.id)
+
+    let isAdmin = false
+    try {
+      const meRes = await fetch('/api/me', {
+        headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+      })
+      if (meRes.ok) {
+        const me = await meRes.json()
+        isAdmin = !!me.isAdmin
+      }
+    } catch { /* treat as non-admin */ }
+
+    if (!isAdmin) {
+      router.replace('/ops')
+      return
+    }
+    await loadUsers()
+    await loadInvoiceCount()
+    setLoading(false)
+  })
+
+  useEffect(() => {
+    void init()
   }, [])
 
   async function signOut() {
@@ -182,18 +192,10 @@ export default function AdminPage() {
     await loadUsers()
   }
 
-  async function loadInvoiceCount() {
-    try {
-      const res = await fetch('/api/extract-lines/batch', { headers: await authHeaders() })
-      const json = await res.json()
-      if (res.ok) setInvoiceCount(Number(json.completed ?? 0))
-    } catch { /* non-fatal */ }
-  }
-
   if (loading) {
     return (
       <>
-        <BpHeader email={email} onSignOut={signOut} activeTab="admin" allowedTabs={['dashboard', 'ask', 'bills', 'admin']} />
+        <BpHeader email={email} onSignOut={signOut} activeTab="admin" allowedTabs={getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: false })} />
         <main className="bp-container" style={{ padding: 24 }}>
           <div style={{ opacity: 0.6 }}>Loading…</div>
         </main>
@@ -203,7 +205,7 @@ export default function AdminPage() {
 
   return (
     <>
-      <BpHeader email={email} onSignOut={signOut} activeTab="admin" allowedTabs={['dashboard', 'ask', 'bills', 'admin']} />
+      <BpHeader email={email} onSignOut={signOut} activeTab="admin" allowedTabs={getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: false })} />
       <main className="bp-container" style={{ padding: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 20 }}>User management</h1>
 

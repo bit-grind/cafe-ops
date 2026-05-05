@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import BpHeader from '@/components/BpHeader'
 import Chip from '@/components/Chip'
+import type { AppTab } from '@/lib/permissions'
 
 type Msg = { role: 'user' | 'ai', text: string, display?: string }
 
@@ -139,9 +140,8 @@ function HolidayDropdown({ onSelect, disabled }: { onSelect: (q: string, display
 }
 
 export default function AskPage() {
-  const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
-  const [allowedTabs, setAllowedTabs] = useState<string[]>([])
+  const [allowedTabs, setAllowedTabs] = useState<AppTab[]>([])
   const [question, setQuestion] = useState('')
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [busy, setBusy] = useState(false)
@@ -162,7 +162,6 @@ export default function AskPage() {
           setAllowedTabs(me.allowedTabs ?? [])
         }
       } catch { /* non-fatal */ }
-      setLoading(false)
     }
     check()
   }, [])

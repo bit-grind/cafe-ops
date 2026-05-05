@@ -5,7 +5,8 @@ import BpHeader from '@/components/BpHeader'
 import Chip from '@/components/Chip'
 import { supabase } from '@/lib/supabaseClient'
 import { money as fmtMoney, fmtDate as fmtDateIso } from '@/app/lib/fmt'
-import { SUPPLIERS, normalise, matchSupplierLabel } from '@/lib/suppliers'
+import { SUPPLIERS, matchSupplierLabel } from '@/lib/suppliers'
+import type { AppTab } from '@/lib/permissions'
 
 type Bill = {
   invoiceID: string
@@ -75,7 +76,7 @@ export default function BillsPage() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [allowedTabs, setAllowedTabs] = useState<string[]>([])
+  const [allowedTabs, setAllowedTabs] = useState<AppTab[]>([])
 
   const [connected, setConnected] = useState<boolean | null>(null)
   const [bills, setBills] = useState<Bill[]>([])
@@ -343,7 +344,6 @@ export default function BillsPage() {
       cancelled = true
       created.forEach(URL.revokeObjectURL)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBill, attachments])
 
   async function connectXero() {
@@ -1082,4 +1082,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </label>
   )
 }
-

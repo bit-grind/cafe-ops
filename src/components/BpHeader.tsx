@@ -1,13 +1,6 @@
 import Image from "next/image"
 import Link from "next/link"
-
-const ALL_TABS = [
-  { label: 'Dashboard', tab: 'dashboard' as const, href: '/ops' },
-  { label: 'Kitchen', tab: 'kitchen' as const, href: '/ops/kitchen' },
-  { label: 'Ask AI', tab: 'ask' as const, href: '/ops/ask' },
-  { label: 'Suppliers', tab: 'bills' as const, href: '/ops/bills' },
-  { label: 'Admin', tab: 'admin' as const, href: '/ops/admin' },
-]
+import { ALL_TABS, type AppTab } from '@/lib/permissions'
 
 export default function BpHeader({
   email,
@@ -17,8 +10,8 @@ export default function BpHeader({
 }: {
   email?: string | null
   onSignOut?: () => void
-  activeTab?: 'dashboard' | 'kitchen' | 'ask' | 'bills' | 'admin'
-  allowedTabs?: string[]
+  activeTab?: AppTab
+  allowedTabs?: AppTab[]
 }) {
   const visible = allowedTabs
     ? ALL_TABS.filter(t => allowedTabs.includes(t.tab))

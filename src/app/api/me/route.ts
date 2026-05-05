@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser } from '@/lib/adminAuth'
+import { getAllowedTabs } from '@/lib/permissions'
 
 /**
  * GET /api/me — returns the current user's identity, role, and permission
@@ -16,18 +17,7 @@ export async function GET(req: Request) {
 
   const { email, role, isAdmin, isGuest, isKitchen } = session
 
-  // Determine which header tabs the user may see. Guests don't see
-  // supplier-cost surfaces (kitchen dashboard, bills totals drill-down).
-  let allowedTabs: string[]
-  if (isKitchen) {
-    allowedTabs = ['kitchen', 'bills']
-  } else if (isAdmin) {
-    allowedTabs = ['dashboard', 'kitchen', 'ask', 'bills', 'admin']
-  } else if (isGuest) {
-    allowedTabs = ['dashboard', 'ask', 'bills']
-  } else {
-    allowedTabs = ['dashboard', 'kitchen', 'ask', 'bills']
-  }
+  const allowedTabs = getAllowedTabs({ isAdmin, isGuest, isKitchen })
 
   return NextResponse.json({
     email,
