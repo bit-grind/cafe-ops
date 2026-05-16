@@ -140,17 +140,6 @@ async function pickCandidates(
     .limit(200)
   const recentPending = (recent ?? []).filter(eligible)
 
-  // Use .range() not .limit() — PostgREST caps .limit() at 1000 server-side.
-  // This query has no date floor so it also covers recent bills; the dedup
-  // below stops a bill being picked by both tiers.
-  const { data: historical } = await supabase
-    .from('xero_bill_cache')
-    .select('xero_invoice_id, contact_name, invoice_number, invoice_date')
-    .eq('has_attachments', true)
-    .order('invoice_date', { ascending: true })
-    .range(0, 4999)
-  const historicalPending = (historical ?? []).filter(eligible)
-
   // Recent tier keeps priority, but always leave one slot for history.
   const recentSlots = Math.max(1, limit - 1)
   const picked: Candidate[] = []
@@ -162,11 +151,46 @@ async function pickCandidates(
   }
 
   for (const c of recentPending.slice(0, recentSlots)) add(c)
-  for (const c of historicalPending) add(c)
+  for (const c of await fetchOldestPending(supabase, eligible, limit)) add(c)
   // Backfill any slot the historical tier left empty with leftover recent.
   for (const c of recentPending) add(c)
 
   return picked
+}
+
+/**
+ * Historical tier — page through xero_bill_cache oldest-first and return
+ * the first `need` bills that pass `eligible`.
+ *
+ * Pagination is mandatory: PostgREST caps every response at 1,000 rows
+ * server-side regardless of .limit()/.range(), so a single query only ever
+ * sees the oldest 1,000 bills. Once those are all extracted, every newer
+ * unprocessed bill is invisible — which is exactly how mid-2026 invoices
+ * sat stranded behind 1,000 older completed ones. The sort is
+ * (invoice_date, xero_invoice_id) so pages are stable and never overlap.
+ */
+async function fetchOldestPending(
+  supabase: SupabaseClient,
+  eligible: (c: Candidate) => boolean,
+  need: number
+): Promise<Candidate[]> {
+  const out: Candidate[] = []
+  const PAGE = 1000
+  for (let from = 0; from < 200_000 && out.length < need; from += PAGE) {
+    const { data, error } = await supabase
+      .from('xero_bill_cache')
+      .select('xero_invoice_id, contact_name, invoice_number, invoice_date')
+      .eq('has_attachments', true)
+      .order('invoice_date', { ascending: true })
+      .order('xero_invoice_id', { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (error || !data || data.length === 0) break
+    for (const c of data) {
+      if (eligible(c)) out.push(c)
+    }
+    if (data.length < PAGE) break
+  }
+  return out.slice(0, need)
 }
 
 async function getDoneInvoiceIds(supabase: SupabaseClient): Promise<Set<string>> {
