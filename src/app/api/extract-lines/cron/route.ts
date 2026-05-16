@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { adminClient } from '@/lib/adminAuth'
 import { extractLinesFromInvoice } from '@/lib/extractLines'
 import { listBills } from '@/lib/xero'
-import { isExcludedInvoiceNumber } from '@/lib/suppliers'
+import { isKitchenSupplierBill } from '@/lib/suppliers'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const maxDuration = 60
@@ -125,11 +125,13 @@ async function pickCandidates(
   recentCutoff.setDate(recentCutoff.getDate() - RECENT_DAYS)
   const cutoffIso = recentCutoff.toISOString().slice(0, 10)
 
-  // Skip already-done bills and excluded-prefix documents (e.g. Southside
-  // 'RB' rebate notes), which carry no line items and only waste a slot.
+  // Only extract bills from known kitchen suppliers. Non-supplier bills
+  // (utilities, ATO, trades like Kalbar Engineering) have no line items
+  // worth importing and would just waste a slot + API calls.
+  // isKitchenSupplierBill also drops Southside 'RB' rebate notes.
   const eligible = (c: Candidate) =>
     !doneSet.has(c.xero_invoice_id) &&
-    !isExcludedInvoiceNumber(c.contact_name, c.invoice_number)
+    isKitchenSupplierBill(c.contact_name, c.invoice_number)
 
   const { data: recent } = await supabase
     .from('xero_bill_cache')
