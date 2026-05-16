@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { adminClient } from '@/lib/adminAuth'
 import { extractLinesFromInvoice } from '@/lib/extractLines'
 import { listBills } from '@/lib/xero'
+import { isExcludedInvoiceNumber } from '@/lib/suppliers'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const maxDuration = 60
@@ -19,6 +20,11 @@ const MAX_PER_RUN = 2
 const CACHE_TTL_MS = 60 * 60 * 1000
 
 const RECENT_DAYS = 14
+
+// A run that dies mid-extraction (function timeout, crash) leaves its row
+// stuck in 'processing'. Since maxDuration is 60s, any 'processing' row
+// older than this is certainly dead and its invoice should be retried.
+const STALE_PROCESSING_MS = 15 * 60 * 1000
 
 type Candidate = {
   xero_invoice_id: string
@@ -99,9 +105,15 @@ function checkCronAuth(req: Request): NextResponse | null {
 // ── Candidate selection ───────────────────────────────────────────────────────
 
 /**
- * Two-tier queue:
- *   1. Any unprocessed bill within the last 14 days (newest first).
- *   2. Otherwise, the oldest unprocessed bill (drains historical backfills).
+ * Two-tier queue that drains both ends so neither starves:
+ *   • Recent: unprocessed bills within the last 14 days (newest first).
+ *   • Historical: the oldest unprocessed bills — drains backfills and any
+ *     bill that aged out of the recent window before being picked.
+ *
+ * Each run reserves at least one slot for the historical tier. Without
+ * that, a steady trickle of new bills keeps the recent tier non-empty
+ * forever and the historical tail never gets processed — which is how
+ * mid-2026 invoices ended up stranded for weeks.
  */
 async function pickCandidates(
   supabase: SupabaseClient,
@@ -113,6 +125,12 @@ async function pickCandidates(
   recentCutoff.setDate(recentCutoff.getDate() - RECENT_DAYS)
   const cutoffIso = recentCutoff.toISOString().slice(0, 10)
 
+  // Skip already-done bills and excluded-prefix documents (e.g. Southside
+  // 'RB' rebate notes), which carry no line items and only waste a slot.
+  const eligible = (c: Candidate) =>
+    !doneSet.has(c.xero_invoice_id) &&
+    !isExcludedInvoiceNumber(c.contact_name, c.invoice_number)
+
   const { data: recent } = await supabase
     .from('xero_bill_cache')
     .select('xero_invoice_id, contact_name, invoice_number, invoice_date')
@@ -120,23 +138,35 @@ async function pickCandidates(
     .gte('invoice_date', cutoffIso)
     .order('invoice_date', { ascending: false })
     .limit(200)
-
-  const fromRecent = (recent ?? [])
-    .filter((c) => !doneSet.has(c.xero_invoice_id))
-    .slice(0, limit)
-  if (fromRecent.length > 0) return fromRecent
+  const recentPending = (recent ?? []).filter(eligible)
 
   // Use .range() not .limit() — PostgREST caps .limit() at 1000 server-side.
+  // This query has no date floor so it also covers recent bills; the dedup
+  // below stops a bill being picked by both tiers.
   const { data: historical } = await supabase
     .from('xero_bill_cache')
     .select('xero_invoice_id, contact_name, invoice_number, invoice_date')
     .eq('has_attachments', true)
     .order('invoice_date', { ascending: true })
     .range(0, 4999)
+  const historicalPending = (historical ?? []).filter(eligible)
 
-  return (historical ?? [])
-    .filter((c) => !doneSet.has(c.xero_invoice_id))
-    .slice(0, limit)
+  // Recent tier keeps priority, but always leave one slot for history.
+  const recentSlots = Math.max(1, limit - 1)
+  const picked: Candidate[] = []
+  const seen = new Set<string>()
+  const add = (c: Candidate) => {
+    if (picked.length >= limit || seen.has(c.xero_invoice_id)) return
+    seen.add(c.xero_invoice_id)
+    picked.push(c)
+  }
+
+  for (const c of recentPending.slice(0, recentSlots)) add(c)
+  for (const c of historicalPending) add(c)
+  // Backfill any slot the historical tier left empty with leftover recent.
+  for (const c of recentPending) add(c)
+
+  return picked
 }
 
 async function getDoneInvoiceIds(supabase: SupabaseClient): Promise<Set<string>> {
@@ -144,16 +174,29 @@ async function getDoneInvoiceIds(supabase: SupabaseClient): Promise<Set<string>>
   // of .limit(). Paginate with .range() until we've drained every
   // completed/processing row — otherwise the cron re-extracts invoices
   // beyond the 1k mark.
+  //
+  // 'completed' rows are permanently done. A 'processing' row normally means
+  // a run is in flight, so we skip it — but a run that dies mid-extraction
+  // leaves its row stuck in 'processing' forever, which would orphan the
+  // invoice. So a 'processing' row only counts as done if it's recent;
+  // anything older is stale and the invoice becomes eligible again.
+  const staleCutoffMs = Date.now() - STALE_PROCESSING_MS
   const ids = new Set<string>()
   const PAGE = 1000
   for (let from = 0; from < 200_000; from += PAGE) {
     const { data, error } = await supabase
       .from('extraction_runs')
-      .select('xero_invoice_id')
+      .select('xero_invoice_id, status, created_at')
       .in('status', ['completed', 'processing'])
       .range(from, from + PAGE - 1)
     if (error || !data || data.length === 0) break
-    for (const r of data) ids.add(r.xero_invoice_id)
+    for (const r of data) {
+      if (
+        r.status === 'processing' &&
+        new Date(r.created_at).getTime() < staleCutoffMs
+      ) continue
+      ids.add(r.xero_invoice_id)
+    }
     if (data.length < PAGE) break
   }
   return ids

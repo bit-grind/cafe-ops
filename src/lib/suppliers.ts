@@ -58,3 +58,21 @@ export function isKitchenSupplierBill(
   const num = (invoiceNumber ?? '').toUpperCase()
   return !def.excludeInvoicePrefixes.some(p => num.startsWith(p.toUpperCase()))
 }
+
+/**
+ * True when a bill's invoice number matches a supplier's excluded prefix
+ * (e.g. Southside 'RB' rebate notes). Such documents carry no purchasable
+ * line items, so the line-item extractor should skip them entirely.
+ *
+ * Unlike isKitchenSupplierBill this never depends on the supplier being a
+ * kitchen supplier — it only answers "is this an excluded-prefix document".
+ */
+export function isExcludedInvoiceNumber(
+  contactName: string | null | undefined,
+  invoiceNumber: string | null | undefined,
+): boolean {
+  const def = matchSupplier(contactName)
+  if (!def?.excludeInvoicePrefixes?.length) return false
+  const num = (invoiceNumber ?? '').toUpperCase()
+  return def.excludeInvoicePrefixes.some(p => num.startsWith(p.toUpperCase()))
+}
