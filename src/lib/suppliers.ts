@@ -1,52 +1,43 @@
-// Canonical list of kitchen suppliers. Shared between the Bills page
-// (where users filter by supplier chip) and the Kitchen dashboard (where
-// we exclude non-supplier bills like ATO, utilities, software, etc. from
-// the weekly cost total).
+// Supplier matching shared by the Bills page, the Kitchen dashboard, and
+// the line-item extractor cron. The list of kitchen suppliers is admin-
+// managed and lives in the `kitchen_suppliers` table; these are the pure
+// matching helpers that operate on a list fetched from there (see
+// `getKitchenSuppliers` in suppliers-db.ts for the server-side fetch).
 
-export type SupplierDef = {
+export type KitchenSupplier = {
+  // Exact Xero contact name this supplier is matched on.
+  contactName: string
+  // Display name shown on the Bills page chips and Kitchen dashboard.
   label: string
-  keywords: string[]
-  // Optional case-insensitive invoice-number prefixes to drop even when
-  // the contact name matches — used for Southside 'RB' rebate notes.
-  excludeInvoicePrefixes?: string[]
+  // Case-insensitive invoice-number prefixes to drop even when the contact
+  // matches — used for Southside 'RB' rebate notes.
+  excludeInvoicePrefixes: string[] | null
 }
-
-export const SUPPLIERS: SupplierDef[] = [
-  { label: 'Brasserie',        keywords: ['brasserie'] },
-  { label: 'Superior',         keywords: ['superior'] },
-  { label: "Big Michael's",    keywords: ['big michael'] },
-  { label: "Michael's Meats",  keywords: ['michaels meats', 'michael meats'] },
-  { label: 'A La Carte',       keywords: ['a la carte'] },
-  { label: 'Breadtop',         keywords: ['breadtop', 'quality factory'] },
-  { label: 'Filla',            keywords: ['filla'] },
-  { label: 'Southside Milk',   keywords: ['southside milk', 'southside'], excludeInvoicePrefixes: ['RB'] },
-  { label: 'APAK',             keywords: ['apak'] },
-  { label: 'Bagel Boys',       keywords: ['bagel boys', 'bagel boy'] },
-  { label: 'Cravve Chocolate', keywords: ['cravve'] },
-  { label: 'Providore',        keywords: ['providore'] },
-  { label: 'Bask & Co',        keywords: ['bask'] },
-]
 
 export function normalise(s: string): string {
   return s.toLowerCase().replace(/['']/g, '').replace(/\s+/g, ' ').trim()
 }
 
-function matchSupplier(contactName: string | null | undefined): SupplierDef | null {
+/** The kitchen supplier whose Xero contact name matches `contactName`. */
+export function matchSupplier(
+  contactName: string | null | undefined,
+  suppliers: KitchenSupplier[],
+): KitchenSupplier | null {
   if (!contactName) return null
   const norm = normalise(contactName)
-  for (const s of SUPPLIERS) {
-    if (s.keywords.some(k => norm.includes(normalise(k)))) return s
-  }
-  return null
+  return suppliers.find(s => normalise(s.contactName) === norm) ?? null
 }
 
-export function matchSupplierLabel(contactName: string | null | undefined): string | null {
-  return matchSupplier(contactName)?.label ?? null
+export function matchSupplierLabel(
+  contactName: string | null | undefined,
+  suppliers: KitchenSupplier[],
+): string | null {
+  return matchSupplier(contactName, suppliers)?.label ?? null
 }
 
 /**
- * True when a bill belongs to one of the kitchen suppliers and isn't
- * excluded by invoice-number prefix (e.g. Southside 'RB' rebates).
+ * True when a bill belongs to a kitchen supplier and isn't excluded by
+ * invoice-number prefix (e.g. Southside 'RB' rebate notes).
  *
  * This is the canonical "should we care about this bill" predicate —
  * shared by the Bills page, the Kitchen dashboard, and the line-item
@@ -55,8 +46,9 @@ export function matchSupplierLabel(contactName: string | null | undefined): stri
 export function isKitchenSupplierBill(
   contactName: string | null | undefined,
   invoiceNumber: string | null | undefined,
+  suppliers: KitchenSupplier[],
 ): boolean {
-  const def = matchSupplier(contactName)
+  const def = matchSupplier(contactName, suppliers)
   if (!def) return false
   if (!def.excludeInvoicePrefixes?.length) return true
   const num = (invoiceNumber ?? '').toUpperCase()

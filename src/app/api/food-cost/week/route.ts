@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { adminClient, getSessionUser } from '@/lib/adminAuth'
 import { mondayOf, isoDate } from '@/lib/dates'
 import { isKitchenSupplierBill } from '@/lib/suppliers'
+import { getKitchenSuppliers } from '@/lib/suppliers-db'
 
 /**
  * Supplier bills for a single Mon–Sun week. Used by the kitchen
@@ -29,17 +30,20 @@ export async function GET(req: Request) {
   const endIso = isoDate(endDate)
 
   const db = adminClient()
-  const { data, error } = await db
-    .from('xero_bill_cache')
-    .select('xero_invoice_id, contact_name, invoice_number, reference, invoice_date, total, status, has_attachments')
-    .gte('invoice_date', start)
-    .lte('invoice_date', endIso)
-    .order('invoice_date', { ascending: true })
-    .limit(500)
+  const [{ data, error }, suppliers] = await Promise.all([
+    db
+      .from('xero_bill_cache')
+      .select('xero_invoice_id, contact_name, invoice_number, reference, invoice_date, total, status, has_attachments')
+      .gte('invoice_date', start)
+      .lte('invoice_date', endIso)
+      .order('invoice_date', { ascending: true })
+      .limit(500),
+    getKitchenSuppliers(),
+  ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const bills = (data ?? [])
-    .filter(r => isKitchenSupplierBill(r.contact_name, r.invoice_number))
+    .filter(r => isKitchenSupplierBill(r.contact_name, r.invoice_number, suppliers))
     .map(r => ({
       invoiceID: r.xero_invoice_id,
       invoiceNumber: r.invoice_number,

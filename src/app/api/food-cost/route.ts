@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { adminClient, getSessionUser } from '@/lib/adminAuth'
 import { mondayOf, isoDate } from '@/lib/dates'
 import { isKitchenSupplierBill } from '@/lib/suppliers'
+import { getKitchenSuppliers } from '@/lib/suppliers-db'
 
 /**
  * Weekly supplier cost from `xero_bill_cache`.
@@ -32,18 +33,21 @@ export async function GET(req: Request) {
   // generous cap so the 52w range on a busy quarter doesn't silently
   // truncate.
   const db = adminClient()
-  const { data: bills, error } = await db
-    .from('xero_bill_cache')
-    .select('invoice_date, total, contact_name, invoice_number')
-    .gte('invoice_date', fromIso)
-    .order('invoice_date', { ascending: true })
-    .limit(10000)
+  const [{ data: bills, error }, suppliers] = await Promise.all([
+    db
+      .from('xero_bill_cache')
+      .select('invoice_date, total, contact_name, invoice_number')
+      .gte('invoice_date', fromIso)
+      .order('invoice_date', { ascending: true })
+      .limit(10000),
+    getKitchenSuppliers(),
+  ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const weekTotals = new Map<string, number>()
   for (const b of bills ?? []) {
     if (!b.invoice_date) continue
-    if (!isKitchenSupplierBill(b.contact_name, b.invoice_number)) continue
+    if (!isKitchenSupplierBill(b.contact_name, b.invoice_number, suppliers)) continue
     const mon = isoDate(mondayOf(new Date(b.invoice_date + 'T00:00:00')))
     weekTotals.set(mon, (weekTotals.get(mon) ?? 0) + Number(b.total ?? 0))
   }

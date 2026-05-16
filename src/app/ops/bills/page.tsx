@@ -5,7 +5,7 @@ import BpHeader from '@/components/BpHeader'
 import Chip from '@/components/Chip'
 import { supabase } from '@/lib/supabaseClient'
 import { money as fmtMoney, fmtDate as fmtDateIso } from '@/lib/fmt'
-import { SUPPLIERS, matchSupplierLabel } from '@/lib/suppliers'
+import { matchSupplier, type KitchenSupplier } from '@/lib/suppliers'
 import type { AppTab } from '@/lib/permissions'
 
 type Bill = {
@@ -80,6 +80,7 @@ export default function BillsPage() {
 
   const [connected, setConnected] = useState<boolean | null>(null)
   const [bills, setBills] = useState<Bill[]>([])
+  const [suppliers, setSuppliers] = useState<KitchenSupplier[]>([])
   const [totalScanned, setTotalScanned] = useState<number>(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -140,6 +141,7 @@ export default function BillsPage() {
         headers: { Authorization: `Bearer ${data.session.access_token}` },
       }).catch(() => null)
       const billsPromise = loadBills()
+      void loadSuppliers()
 
       mePromise.then(async (meRes) => {
         if (meRes?.ok) {
@@ -195,6 +197,19 @@ export default function BillsPage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  async function loadSuppliers() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/suppliers', {
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+      })
+      if (res.ok) {
+        const out = await res.json()
+        setSuppliers(out.suppliers ?? [])
+      }
+    } catch { /* non-fatal — supplier chips just stay empty until reload */ }
   }
 
   async function openBill(bill: Bill) {
@@ -395,26 +410,35 @@ export default function BillsPage() {
     setSearchResults([])
   }
 
+  // Distinct supplier labels, in the order suppliers come back from the DB.
+  // Multiple Xero contacts can share one label (e.g. two contacts both
+  // labelled "Breadtop"), so dedupe.
+  const supplierLabels = useMemo(() => {
+    const seen = new Set<string>()
+    const labels: string[] = []
+    for (const s of suppliers) {
+      if (!seen.has(s.label)) { seen.add(s.label); labels.push(s.label) }
+    }
+    return labels
+  }, [suppliers])
+
   // Group all loaded bills by matched supplier label. Any bill whose contact
-  // isn't in the SUPPLIERS list is dropped. Per-supplier invoice-prefix
+  // isn't a kitchen supplier is dropped. Per-supplier invoice-prefix
   // exclusions (e.g. Southside Milk "RB…") are applied here too.
   const bySupplier = useMemo(() => {
     const map = new Map<string, Bill[]>()
-    const defsByLabel = new Map(SUPPLIERS.map(s => [s.label, s]))
-    for (const s of SUPPLIERS) map.set(s.label, [])
+    for (const label of supplierLabels) map.set(label, [])
     for (const b of bills) {
-      const label = matchSupplierLabel(b.contactName)
-      if (!label || !map.has(label)) continue
-      const def = defsByLabel.get(label)
-      if (def?.excludeInvoicePrefixes?.length) {
+      const def = matchSupplier(b.contactName, suppliers)
+      if (!def) continue
+      if (def.excludeInvoicePrefixes?.length) {
         const num = (b.invoiceNumber ?? '').toUpperCase()
-        const excluded = def.excludeInvoicePrefixes.some(p => num.startsWith(p.toUpperCase()))
-        if (excluded) continue
+        if (def.excludeInvoicePrefixes.some(p => num.startsWith(p.toUpperCase()))) continue
       }
-      map.get(label)!.push(b)
+      map.get(def.label)?.push(b)
     }
     return map
-  }, [bills])
+  }, [bills, suppliers, supplierLabels])
 
   const allVisibleBills = useMemo(() => {
     if (activeSupplier === 'All') {
@@ -592,16 +616,16 @@ export default function BillsPage() {
                     </Chip>
                   )
                 })()}
-                {SUPPLIERS.map(s => {
-                  const count = bySupplier.get(s.label)?.length ?? 0
+                {supplierLabels.map(label => {
+                  const count = bySupplier.get(label)?.length ?? 0
                   return (
                     <Chip
-                      key={s.label}
-                      active={s.label === activeSupplier}
-                      onClick={() => setActiveSupplier(s.label)}
+                      key={label}
+                      active={label === activeSupplier}
+                      onClick={() => setActiveSupplier(label)}
                       count={count}
                     >
-                      {s.label}
+                      {label}
                     </Chip>
                   )
                 })}

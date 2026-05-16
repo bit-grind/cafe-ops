@@ -43,6 +43,8 @@ export default function AdminPage() {
 
   const [invoiceCount, setInvoiceCount] = useState<number | null>(null)
 
+  const [view, setView] = useState<'users' | 'suppliers'>('users')
+
   async function toggleDetail(id: string) {
     if (expandedId === id) {
       setExpandedId(null)
@@ -207,8 +209,40 @@ export default function AdminPage() {
     <>
       <BpHeader email={email} onSignOut={signOut} activeTab="admin" allowedTabs={getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: false })} />
       <main className="bp-container" style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 20 }}>User management</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 16 }}>Admin</h1>
 
+        <div
+          style={{
+            display: 'flex',
+            gap: 4,
+            marginBottom: 20,
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+          }}
+        >
+          {(['users', 'suppliers'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              style={{
+                background: 'none',
+                border: 'none',
+                borderBottom: view === v ? '2px solid #fff' : '2px solid transparent',
+                color: view === v ? '#fff' : '#888',
+                padding: '8px 14px',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                textTransform: 'capitalize',
+                marginBottom: -1,
+              }}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+
+        {view === 'users' && (
+        <>
         <section className="bp-card" style={{ padding: 20, marginBottom: 24 }}>
           <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Create user</h2>
           <form onSubmit={createUser} style={{ display: 'grid', gap: 10, maxWidth: 420 }}>
@@ -410,7 +444,148 @@ export default function AdminPage() {
             {invoiceCount === null ? '—' : invoiceCount.toLocaleString()}
           </div>
         </section>
+        </>
+        )}
+
+        {view === 'suppliers' && <SuppliersPanel />}
       </main>
     </>
+  )
+}
+
+type SupplierCandidate = {
+  contactName: string
+  invoiceCount: number
+  lastInvoiceDate: string | null
+  selected: boolean
+}
+
+function SuppliersPanel() {
+  const [contacts, setContacts] = useState<SupplierCandidate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const { data } = await supabase.auth.getSession()
+        const res = await fetch('/api/admin/suppliers', {
+          headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` },
+        })
+        const json = await res.json()
+        if (cancelled) return
+        if (!res.ok) setError(json.error ?? 'Failed to load suppliers')
+        else setContacts(json.contacts ?? [])
+      } catch {
+        if (!cancelled) setError('Failed to load suppliers')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [])
+
+  async function toggle(contactName: string, selected: boolean) {
+    setError(null)
+    setPending((prev) => new Set(prev).add(contactName))
+    setContacts((prev) =>
+      prev.map((c) => (c.contactName === contactName ? { ...c, selected } : c)),
+    )
+    try {
+      const { data } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/suppliers', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${data.session?.access_token ?? ''}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contactName, selected }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        setError(json.error ?? 'Failed to save')
+        setContacts((prev) =>
+          prev.map((c) =>
+            c.contactName === contactName ? { ...c, selected: !selected } : c,
+          ),
+        )
+      }
+    } catch {
+      setError('Failed to save')
+      setContacts((prev) =>
+        prev.map((c) =>
+          c.contactName === contactName ? { ...c, selected: !selected } : c,
+        ),
+      )
+    } finally {
+      setPending((prev) => {
+        const next = new Set(prev)
+        next.delete(contactName)
+        return next
+      })
+    }
+  }
+
+  const selectedCount = contacts.filter((c) => c.selected).length
+
+  return (
+    <section className="bp-card" style={{ padding: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>Kitchen suppliers</h2>
+      <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 16, maxWidth: 560 }}>
+        Tick a contact to count it as a kitchen supplier. Ticked suppliers appear
+        on the Suppliers page, count toward Kitchen costs, and have their invoice
+        line items extracted automatically.
+      </div>
+
+      {error && (
+        <div style={{ color: '#c77070', fontSize: 12, marginBottom: 12 }}>{error}</div>
+      )}
+
+      {loading ? (
+        <div style={{ opacity: 0.6, fontSize: 13 }}>Loading…</div>
+      ) : (
+        <>
+          <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 10 }}>
+            {selectedCount} of {contacts.length} selected
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            {contacts.map((c) => {
+              const isPending = pending.has(c.contactName)
+              return (
+                <label
+                  key={c.contactName}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '20px 1fr auto',
+                    gap: 12,
+                    alignItems: 'center',
+                    padding: '9px 12px',
+                    borderRadius: 6,
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    cursor: isPending ? 'wait' : 'pointer',
+                    opacity: isPending ? 0.5 : 1,
+                    background: c.selected ? 'rgba(255,255,255,0.03)' : 'transparent',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={c.selected}
+                    disabled={isPending}
+                    onChange={(e) => toggle(c.contactName, e.target.checked)}
+                  />
+                  <span style={{ fontSize: 13 }}>{c.contactName}</span>
+                  <span style={{ fontSize: 11, opacity: 0.5, whiteSpace: 'nowrap' }}>
+                    {c.invoiceCount} {c.invoiceCount === 1 ? 'invoice' : 'invoices'}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </section>
   )
 }

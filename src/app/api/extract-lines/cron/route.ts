@@ -3,6 +3,7 @@ import { adminClient } from '@/lib/adminAuth'
 import { extractLinesFromInvoice } from '@/lib/extractLines'
 import { listBills } from '@/lib/xero'
 import { isKitchenSupplierBill } from '@/lib/suppliers'
+import { getKitchenSuppliers } from '@/lib/suppliers-db'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const maxDuration = 60
@@ -120,6 +121,7 @@ async function pickCandidates(
   limit: number
 ): Promise<Candidate[]> {
   const doneSet = await getDoneInvoiceIds(supabase)
+  const suppliers = await getKitchenSuppliers()
 
   const recentCutoff = new Date()
   recentCutoff.setDate(recentCutoff.getDate() - RECENT_DAYS)
@@ -131,7 +133,7 @@ async function pickCandidates(
   // isKitchenSupplierBill also drops Southside 'RB' rebate notes.
   const eligible = (c: Candidate) =>
     !doneSet.has(c.xero_invoice_id) &&
-    isKitchenSupplierBill(c.contact_name, c.invoice_number)
+    isKitchenSupplierBill(c.contact_name, c.invoice_number, suppliers)
 
   const { data: recent } = await supabase
     .from('xero_bill_cache')
