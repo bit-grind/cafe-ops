@@ -120,6 +120,16 @@ const MEASURE_UNITS = [
 const PACK_UNIT_RE = /\b(ctn|carton|case|box|tray|pack|pkt|bag|tub|btl|bottle|jar|tin|can|drum|each|ea|unit|pc|pcs)\b/i
 const CARTON_UNIT_RE = /\b(ctn|carton|case|box|tray|pack|pkt)\b/i
 const DENSITY_G_PER_ML: Array<{ re: RegExp; gPerMl: number }> = [
+  { re: /\b(condensed milk|sweetened condensed)\b/i, gPerMl: 1.3 },
+  { re: /\b(evaporated milk)\b/i, gPerMl: 1.07 },
+  { re: /\b(baking powder|baking soda|bicarb|bicarbonate|cream of tartar)\b/i, gPerMl: 0.9 },
+  { re: /\b(yeast)\b/i, gPerMl: 0.95 },
+  { re: /\b(flour|self raising|self-raising|plain flour|almond meal)\b/i, gPerMl: 0.53 },
+  { re: /\b(brown sugar)\b/i, gPerMl: 0.72 },
+  { re: /\b(caster sugar|castor sugar|icing sugar|white sugar|sugar)\b/i, gPerMl: 0.85 },
+  { re: /\b(cocoa|cacao)\b/i, gPerMl: 0.45 },
+  { re: /\b(cornflour|corn flour|cornstarch|corn starch|starch)\b/i, gPerMl: 0.55 },
+  { re: /\b(salt)\b/i, gPerMl: 1.2 },
   { re: /\b(mustard|mayo|mayonnaise|aioli|sauce|paste|jam|honey|syrup)\b/i, gPerMl: 1 },
   { re: /\b(vinegar|juice|oil)\b/i, gPerMl: 0.92 },
 ]
