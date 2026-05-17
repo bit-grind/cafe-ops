@@ -14,3 +14,39 @@ export async function GET(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ recipes: data })
 }
+
+export async function POST(req: Request) {
+  const user = await getSessionUser(req)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.isGuest) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const body = await req.json()
+  const { name, yield_qty, yield_unit, ingredients } = body
+
+  if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 })
+
+  const db = adminClient()
+  const { data: recipe, error } = await db
+    .from('recipes')
+    .insert({ name: name.trim(), yield_qty: yield_qty ?? 1, yield_unit: yield_unit ?? 'portion' })
+    .select('id, name, yield_qty, yield_unit')
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  if (Array.isArray(ingredients) && ingredients.length) {
+    await db.from('recipe_ingredients').insert(
+      ingredients.map((ing: Record<string, unknown>, i: number) => ({
+        recipe_id: recipe.id,
+        ingredient: ing.ingredient,
+        qty_value: ing.qty_value ?? null,
+        qty_unit: ing.qty_unit ?? null,
+        notes: ing.notes ?? null,
+        unit_cost: ing.unit_cost ?? null,
+        sort_order: i,
+      }))
+    )
+  }
+
+  return NextResponse.json({ recipe })
+}

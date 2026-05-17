@@ -5,151 +5,67 @@ import BpHeader from '@/components/BpHeader'
 import { supabase } from '@/lib/supabaseClient'
 import type { AppTab } from '@/lib/permissions'
 
-type RecipeSummary = {
-  id: number
-  name: string
-  yield_qty: number
-  yield_unit: string
-}
-
-type Ingredient = {
-  id: number
-  ingredient: string
-  qty_value: number | null
-  qty_unit: string | null
-  notes: string | null
-  unit_cost: number | null
-  sort_order: number
-}
-
-type SuggestionMatch = {
-  id: number
-  description: string
-  unit_price: number
-  unit: string | null
-  supplier: string | null
-  invoice_date: string | null
-  converted_price: number | null
-  converted_from: string | null
-  recipe_unit: string | null
-}
-
+type RecipeSummary = { id: number; name: string; yield_qty: number; yield_unit: string }
+type Ingredient = { id: number; ingredient: string; qty_value: number | null; qty_unit: string | null; notes: string | null; unit_cost: number | null; sort_order: number }
+type EditIngredient = { id: number | null; ingredient: string; qty_value: string; qty_unit: string; notes: string }
+type SuggestionMatch = { id: number; description: string; unit_price: number; unit: string | null; supplier: string | null; invoice_date: string | null; converted_price: number | null; converted_from: string | null; recipe_unit: string | null }
 type CostMap = Record<number, string>
 type SuggestionsMap = Record<number, SuggestionMatch[]>
 
-function fmtDate(d: string | null): string {
+function fmtDate(d: string | null) {
   if (!d) return ''
   return new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 }
-
-function fmt(n: number): string {
+function fmt(n: number) {
   return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function SuggestionDropdown({
-  matches,
-  onPick,
-}: {
-  matches: SuggestionMatch[]
-  onPick: (price: number) => void
-}) {
+function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; onPick: (price: number) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
+    function h(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
   }, [])
-
   if (!matches.length) return null
-
   const top = matches[0]
   const rest = matches.slice(1)
-
+  const hasConversion = top.converted_price != null
   return (
     <div ref={ref} style={{ position: 'relative', marginTop: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        {/* Primary suggestion chip */}
         <button
           onClick={() => onPick(top.converted_price ?? top.unit_price)}
-          title={top.converted_price != null
-            ? `Use ${fmt(top.converted_price)}/${top.recipe_unit} (converted from ${top.converted_from})`
-            : `Use raw invoice price ${fmt(top.unit_price)}${top.unit ? `/${top.unit}` : ''} — unit mismatch, may need manual conversion`}
-          style={{
-            flex: 1,
-            background: top.converted_price != null ? 'rgba(125,211,168,0.08)' : 'rgba(255,200,100,0.08)',
-            border: `1px solid ${top.converted_price != null ? 'rgba(125,211,168,0.25)' : 'rgba(255,200,100,0.25)'}`,
-            borderRadius: 5,
-            color: top.converted_price != null ? '#7dd3a8' : '#f5c842',
-            fontSize: 11,
-            padding: '3px 6px',
-            cursor: 'pointer',
-            font: 'inherit',
-            textAlign: 'left',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            minWidth: 0,
-          }}
+          title={hasConversion ? `Use ${fmt(top.converted_price!)}/${top.recipe_unit} (from ${top.converted_from})` : `Raw invoice price — units differ, verify before using`}
+          style={{ flex: 1, background: hasConversion ? 'rgba(125,211,168,0.08)' : 'rgba(255,200,100,0.08)', border: `1px solid ${hasConversion ? 'rgba(125,211,168,0.25)' : 'rgba(255,200,100,0.25)'}`, borderRadius: 5, color: hasConversion ? '#7dd3a8' : '#f5c842', fontSize: 11, padding: '3px 6px', cursor: 'pointer', font: 'inherit', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
         >
-          {top.converted_price != null
-            ? `↑ ${fmt(top.converted_price)}/${top.recipe_unit}`
-            : `↑ ${fmt(top.unit_price)}${top.unit ? `/${top.unit}` : ''} ⚠`}
+          {hasConversion ? `↑ ${fmt(top.converted_price!)}/${top.recipe_unit}` : `↑ ${fmt(top.unit_price)}${top.unit ? `/${top.unit}` : ''} ⚠`}
         </button>
-
-        {/* Dropdown toggle (only if alternatives exist) */}
-        {rest.length > 0 && (
-          <button
-            onClick={() => setOpen(o => !o)}
-            style={{
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid var(--border)',
-              borderRadius: 5,
-              color: 'var(--muted-strong)',
-              fontSize: 10,
-              padding: '3px 5px',
-              cursor: 'pointer',
-              font: 'inherit',
-              flexShrink: 0,
-            }}
-            aria-label="More suggestions"
-          >
-            ▾
-          </button>
-        )}
+        {rest.length > 0 && <button onClick={() => setOpen(o => !o)} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--muted-strong)', fontSize: 10, padding: '3px 5px', cursor: 'pointer', font: 'inherit', flexShrink: 0 }}>▾</button>}
       </div>
-
-      {/* Supplier label under chip */}
       <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {top.supplier ? top.supplier.split(' ').slice(0, 3).join(' ') : ''}
-        {top.invoice_date ? ` · ${fmtDate(top.invoice_date)}` : ''}
+        {top.supplier ? top.supplier.split(' ').slice(0, 3).join(' ') : ''}{top.invoice_date ? ` · ${fmtDate(top.invoice_date)}` : ''}
       </div>
-
-      {/* Dropdown panel */}
       {open && (
-        <div
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: '100%',
-            marginTop: 4,
-            zIndex: 50,
-            background: '#1a1a1a',
-            border: '1px solid rgba(255,255,255,0.18)',
-            borderRadius: 8,
-            minWidth: 260,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Top match */}
-          <SuggestionRow match={top} onPick={price => { onPick(price); setOpen(false) }} active />
-          {/* Alternatives */}
-          {rest.map(m => (
-            <SuggestionRow key={m.id} match={m} onPick={price => { onPick(price); setOpen(false) }} />
+        <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, minWidth: 280, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+          {[top, ...rest].map((m, i) => (
+            <button key={m.id} onClick={() => { onPick(m.converted_price ?? m.unit_price); setOpen(false) }}
+              style={{ width: '100%', background: i === 0 ? 'rgba(125,211,168,0.07)' : 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border)', color: 'inherit', cursor: 'pointer', font: 'inherit', padding: '8px 12px', textAlign: 'left' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#fff' }}>{m.description}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted-strong)', marginTop: 2 }}>{m.supplier ?? ''}{m.invoice_date ? ` · ${fmtDate(m.invoice_date)}` : ''}</div>
+                  {m.converted_from && <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 1 }}>Invoice: {m.converted_from}</div>}
+                  {!m.converted_price && <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>⚠ Units differ — verify before using</div>}
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  {m.converted_price != null
+                    ? <div style={{ fontWeight: 700, fontSize: 13, color: '#7dd3a8' }}>{fmt(m.converted_price)}<span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{m.recipe_unit}</span></div>
+                    : <div style={{ fontWeight: 700, fontSize: 13, color: '#f5c842' }}>{fmt(m.unit_price)}{m.unit ? <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{m.unit}</span> : ''}</div>}
+                </div>
+              </div>
+            </button>
           ))}
         </div>
       )}
@@ -157,69 +73,7 @@ function SuggestionDropdown({
   )
 }
 
-function SuggestionRow({
-  match,
-  onPick,
-  active = false,
-}: {
-  match: SuggestionMatch
-  onPick: (price: number) => void
-  active?: boolean
-}) {
-  return (
-    <button
-      onClick={() => onPick(match.converted_price ?? match.unit_price)}
-      style={{
-        width: '100%',
-        background: active ? 'rgba(125,211,168,0.07)' : 'transparent',
-        border: 'none',
-        borderTop: active ? 'none' : '1px solid var(--border)',
-        color: 'inherit',
-        cursor: 'pointer',
-        font: 'inherit',
-        padding: '8px 12px',
-        textAlign: 'left',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#fff' }}>
-            {match.description}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--muted-strong)', marginTop: 2 }}>
-            {match.supplier ?? ''}
-            {match.invoice_date ? ` · ${fmtDate(match.invoice_date)}` : ''}
-          </div>
-          {match.converted_from && (
-            <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 1 }}>
-              Invoice: {match.converted_from}
-            </div>
-          )}
-          {!match.converted_price && (
-            <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>
-              ⚠ Units differ — verify before using
-            </div>
-          )}
-        </div>
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          {match.converted_price != null ? (
-            <>
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#7dd3a8' }}>
-                {fmt(match.converted_price)}
-                <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{match.recipe_unit}</span>
-              </div>
-            </>
-          ) : (
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#f5c842' }}>
-              {fmt(match.unit_price)}
-              {match.unit ? <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{match.unit}</span> : ''}
-            </div>
-          )}
-        </div>
-      </div>
-    </button>
-  )
-}
+const EMPTY_ING: EditIngredient = { id: null, ingredient: '', qty_value: '', qty_unit: '', notes: '' }
 
 export default function RecipesPage() {
   const [loading, setLoading] = useState(true)
@@ -236,8 +90,19 @@ export default function RecipesPage() {
   const [suggestions, setSuggestions] = useState<SuggestionsMap>({})
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
   const [costs, setCosts] = useState<CostMap>({})
-  const [saving, setSaving] = useState(false)
+  const [costSaving, setCostSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
+
+  // Edit / create state
+  const [editMode, setEditMode] = useState(false)
+  const [isNewRecipe, setIsNewRecipe] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editYieldQty, setEditYieldQty] = useState('')
+  const [editYieldUnit, setEditYieldUnit] = useState('')
+  const [editIngredients, setEditIngredients] = useState<EditIngredient[]>([EMPTY_ING])
+  const [recipeSaving, setRecipeSaving] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [recipeError, setRecipeError] = useState<string | null>(null)
 
   useEffect(() => {
     async function init() {
@@ -246,21 +111,16 @@ export default function RecipesPage() {
       const accessToken = sessionData.session.access_token
       setEmail(sessionData.session.user.email ?? null)
       setToken(accessToken)
-
       const [meRes, recipesRes] = await Promise.all([
         fetch('/api/me', { headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => null),
         fetch('/api/recipes', { headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => null),
       ])
-
       if (meRes?.ok) {
         const me = await meRes.json()
         if (me.isGuest) { window.location.replace('/ops'); return }
         setAllowedTabs(me.allowedTabs ?? [])
       }
-      if (recipesRes?.ok) {
-        const body = await recipesRes.json()
-        setRecipes(body.recipes ?? [])
-      }
+      if (recipesRes?.ok) { const body = await recipesRes.json(); setRecipes(body.recipes ?? []) }
       setLoading(false)
     }
     init()
@@ -268,11 +128,7 @@ export default function RecipesPage() {
 
   const loadRecipe = useCallback(async (id: number, tok: string) => {
     setDetailLoading(true)
-    setIngredients([])
-    setCosts({})
-    setSuggestions({})
-    setSavedMsg(null)
-
+    setIngredients([]); setCosts({}); setSuggestions({}); setSavedMsg(null)
     const res = await fetch(`/api/recipes/${id}`, { headers: { Authorization: `Bearer ${tok}` } })
     if (res.ok) {
       const body = await res.json()
@@ -280,218 +136,304 @@ export default function RecipesPage() {
       const ings: Ingredient[] = body.ingredients ?? []
       setIngredients(ings)
       const initial: CostMap = {}
-      for (const ing of ings) {
-        initial[ing.id] = ing.unit_cost != null ? String(ing.unit_cost) : ''
-      }
+      for (const ing of ings) initial[ing.id] = ing.unit_cost != null ? String(ing.unit_cost) : ''
       setCosts(initial)
     }
     setDetailLoading(false)
-
-    // Load suggestions in background
     setSuggestionsLoading(true)
     const sugRes = await fetch(`/api/recipes/${id}/suggestions`, { headers: { Authorization: `Bearer ${tok}` } }).catch(() => null)
-    if (sugRes?.ok) {
-      const sugBody = await sugRes.json()
-      setSuggestions(sugBody.suggestions ?? {})
-    }
+    if (sugRes?.ok) { const b = await sugRes.json(); setSuggestions(b.suggestions ?? {}) }
     setSuggestionsLoading(false)
   }, [])
 
   useEffect(() => {
-    if (selectedId !== null && token) loadRecipe(selectedId, token)
-  }, [selectedId, token, loadRecipe])
+    if (selectedId !== null && token && !editMode) loadRecipe(selectedId, token)
+  }, [selectedId, token, loadRecipe, editMode])
 
-  async function signOut() {
-    await supabase.auth.signOut()
-    window.location.href = '/login'
+  async function signOut() { await supabase.auth.signOut(); window.location.href = '/login' }
+
+  // ── Edit / create handlers ─────────────────────────────────────────────
+
+  function startEdit() {
+    if (!selectedRecipe) return
+    setEditName(selectedRecipe.name)
+    setEditYieldQty(String(selectedRecipe.yield_qty))
+    setEditYieldUnit(selectedRecipe.yield_unit)
+    setEditIngredients(ingredients.map(ing => ({ id: ing.id, ingredient: ing.ingredient, qty_value: ing.qty_value != null ? String(ing.qty_value) : '', qty_unit: ing.qty_unit ?? '', notes: ing.notes ?? '' })))
+    setDeleteConfirm(false); setRecipeError(null); setEditMode(true); setIsNewRecipe(false)
   }
+
+  function startNewRecipe() {
+    setSelectedId(null); setSelectedRecipe(null); setIngredients([]); setCosts({}); setSuggestions({})
+    setEditName(''); setEditYieldQty('1'); setEditYieldUnit('portion')
+    setEditIngredients([{ ...EMPTY_ING }])
+    setDeleteConfirm(false); setRecipeError(null); setIsNewRecipe(true); setEditMode(true)
+  }
+
+  function cancelEdit() {
+    setEditMode(false); setIsNewRecipe(false); setDeleteConfirm(false); setRecipeError(null)
+  }
+
+  function updateIng(idx: number, field: keyof EditIngredient, value: string) {
+    setEditIngredients(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
+  }
+
+  function addIngRow() {
+    setEditIngredients(prev => [...prev, { ...EMPTY_ING }])
+  }
+
+  function removeIngRow(idx: number) {
+    setEditIngredients(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  async function saveRecipe() {
+    if (!token || !editName.trim()) return
+    setRecipeSaving(true); setRecipeError(null)
+
+    const ingsPayload = editIngredients
+      .filter(r => r.ingredient.trim())
+      .map((r, i) => ({
+        id: r.id,
+        ingredient: r.ingredient.trim(),
+        qty_value: r.qty_value ? parseFloat(r.qty_value) || null : null,
+        qty_unit: r.qty_unit.trim() || null,
+        notes: r.notes.trim() || null,
+        // Preserve saved cost for existing ingredients
+        unit_cost: r.id != null && costs[r.id] ? parseFloat(costs[r.id]) || null : null,
+        sort_order: i,
+      }))
+
+    const payload = { name: editName.trim(), yield_qty: parseFloat(editYieldQty) || 1, yield_unit: editYieldUnit.trim() || 'portion', ingredients: ingsPayload }
+
+    if (isNewRecipe) {
+      const res = await fetch('/api/recipes', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      if (res.ok) {
+        const body = await res.json()
+        const r = body.recipe as RecipeSummary
+        setRecipes(prev => [...prev, r].sort((a, b) => a.name.localeCompare(b.name)))
+        setEditMode(false); setIsNewRecipe(false)
+        setSelectedId(r.id) // triggers loadRecipe via effect
+      } else {
+        const e = await res.json(); setRecipeError(e.error ?? 'Failed to create')
+      }
+    } else {
+      const res = await fetch(`/api/recipes/${selectedId}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      if (res.ok) {
+        setRecipes(prev => prev.map(r => r.id === selectedId ? { ...r, name: payload.name, yield_qty: payload.yield_qty, yield_unit: payload.yield_unit } : r).sort((a, b) => a.name.localeCompare(b.name)))
+        setEditMode(false)
+        if (selectedId && token) loadRecipe(selectedId, token)
+      } else {
+        const e = await res.json(); setRecipeError(e.error ?? 'Failed to save')
+      }
+    }
+    setRecipeSaving(false)
+  }
+
+  async function deleteRecipe() {
+    if (!selectedId || !token) return
+    const res = await fetch(`/api/recipes/${selectedId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+    if (res.ok) {
+      setRecipes(prev => prev.filter(r => r.id !== selectedId))
+      setSelectedId(null); setSelectedRecipe(null); setIngredients([]); setCosts({}); setSuggestions({})
+      setEditMode(false); setIsNewRecipe(false); setDeleteConfirm(false)
+    }
+  }
+
+  // ── Cost handlers ──────────────────────────────────────────────────────
 
   async function saveCosts() {
     if (!selectedId || !token) return
-    setSaving(true)
-    setSavedMsg(null)
-    const payload = ingredients.map(ing => ({
-      id: ing.id,
-      unit_cost: costs[ing.id] !== '' && costs[ing.id] != null
-        ? parseFloat(costs[ing.id]) || null
-        : null,
-    }))
-    const res = await fetch(`/api/recipes/${selectedId}`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ costs: payload }),
-    })
-    setSaving(false)
+    setCostSaving(true); setSavedMsg(null)
+    const payload = ingredients.map(ing => ({ id: ing.id, unit_cost: costs[ing.id] !== '' && costs[ing.id] != null ? parseFloat(costs[ing.id]) || null : null }))
+    const res = await fetch(`/api/recipes/${selectedId}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ costs: payload }) })
+    setCostSaving(false)
     setSavedMsg(res.ok ? 'Saved' : 'Error saving')
     if (res.ok) setTimeout(() => setSavedMsg(null), 2500)
   }
 
   function applySuggestion(ingId: number, price: number) {
-    setSavedMsg(null)
-    setCosts(prev => ({ ...prev, [ingId]: String(price) }))
+    setSavedMsg(null); setCosts(prev => ({ ...prev, [ingId]: String(price) }))
   }
 
-  // Computed costs
+  // ── Computed ───────────────────────────────────────────────────────────
+
   const lineCosts = ingredients.map(ing => {
-    const costVal = parseFloat(costs[ing.id] ?? '') || null
-    if (costVal == null) return null
-    if (ing.qty_value != null) return ing.qty_value * costVal
-    return costVal
+    const v = parseFloat(costs[ing.id] ?? '') || null
+    if (v == null) return null
+    return ing.qty_value != null ? ing.qty_value * v : v
   })
   const totalBatch = lineCosts.reduce<number>((s, c) => s + (c ?? 0), 0)
-  const costPerUnit = selectedRecipe && selectedRecipe.yield_qty > 0
-    ? totalBatch / selectedRecipe.yield_qty
-    : 0
+  const costPerUnit = selectedRecipe && selectedRecipe.yield_qty > 0 ? totalBatch / selectedRecipe.yield_qty : 0
   const hasCosts = lineCosts.some(c => c != null)
+  const filtered = recipes.filter(r => r.name.toLowerCase().includes(search.toLowerCase()))
 
-  const filtered = recipes.filter(r =>
-    r.name.toLowerCase().includes(search.toLowerCase())
-  )
+  // ── Render ─────────────────────────────────────────────────────────────
 
   return (
     <div>
       <BpHeader email={email} onSignOut={signOut} activeTab="recipes" allowedTabs={allowedTabs} />
 
       <div className="bp-container" style={{ paddingTop: 28 }}>
-        <div style={{
-          fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase',
-          color: 'var(--muted-strong)', marginBottom: 18,
-        }}>
-          Recipe costing
-        </div>
+        <div style={{ fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-strong)', marginBottom: 18 }}>Recipe costing</div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 18, alignItems: 'start' }}>
 
-          {/* Left: recipe list */}
+          {/* ── Left: list ── */}
           <div className="bp-card" style={{ padding: 0, position: 'sticky', top: 20 }}>
-            <div style={{ padding: '12px 12px 8px' }}>
-              <input
-                className="bp-input"
-                placeholder="Search recipes…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{ fontSize: 13, padding: '8px 10px' }}
-              />
+            <div style={{ padding: '12px 12px 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <input className="bp-input" placeholder="Search recipes…" value={search} onChange={e => setSearch(e.target.value)} style={{ fontSize: 13, padding: '8px 10px' }} />
+              <button className="bp-btn bp-btn--primary" onClick={startNewRecipe} style={{ fontSize: 13, padding: '8px 10px' }}>+ New recipe</button>
             </div>
             {loading ? (
-              <div style={{ padding: '12px 14px' }}>
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="bp-skel" style={{ height: 36, marginBottom: 6, borderRadius: 8 }} />
-                ))}
-              </div>
+              <div style={{ padding: '12px 14px' }}>{[...Array(6)].map((_, i) => <div key={i} className="bp-skel" style={{ height: 36, marginBottom: 6, borderRadius: 8 }} />)}</div>
             ) : (
-              <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+              <div style={{ maxHeight: 'calc(100vh - 230px)', overflowY: 'auto' }}>
                 {filtered.map(r => {
                   const active = r.id === selectedId
                   return (
-                    <button
-                      key={r.id}
-                      onClick={() => setSelectedId(r.id)}
-                      style={{
-                        width: '100%', textAlign: 'left', padding: '10px 14px',
-                        background: active ? 'rgba(255,255,255,0.06)' : 'transparent',
-                        border: 'none', borderTop: '1px solid var(--border)',
-                        color: active ? '#fff' : 'var(--muted-strong)',
-                        cursor: 'pointer', font: 'inherit', fontSize: 13,
-                        fontWeight: active ? 600 : 400,
-                        transition: 'background 0.12s, color 0.12s',
-                      }}
-                    >
-                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {r.name}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--muted-strong)', marginTop: 2 }}>
-                        {r.yield_qty} × {r.yield_unit}
-                      </div>
+                    <button key={r.id} onClick={() => { setEditMode(false); setIsNewRecipe(false); setSelectedId(r.id) }}
+                      style={{ width: '100%', textAlign: 'left', padding: '10px 14px', background: active ? 'rgba(255,255,255,0.06)' : 'transparent', border: 'none', borderTop: '1px solid var(--border)', color: active ? '#fff' : 'var(--muted-strong)', cursor: 'pointer', font: 'inherit', fontSize: 13, fontWeight: active ? 600 : 400 }}>
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted-strong)', marginTop: 2 }}>{r.yield_qty} × {r.yield_unit}</div>
                     </button>
                   )
                 })}
-                {filtered.length === 0 && (
-                  <div style={{ padding: '16px 14px', fontSize: 13, color: 'var(--muted-strong)' }}>
-                    No recipes found
-                  </div>
-                )}
+                {filtered.length === 0 && <div style={{ padding: '16px 14px', fontSize: 13, color: 'var(--muted-strong)' }}>No recipes found</div>}
               </div>
             )}
           </div>
 
-          {/* Right: recipe detail */}
-          {!selectedId ? (
-            <div className="bp-card" style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              minHeight: 320, color: 'var(--muted-strong)', fontSize: 13,
-            }}>
-              Select a recipe to view and cost it
-            </div>
-          ) : detailLoading ? (
-            <div className="bp-card">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="bp-skel" style={{ height: 40, marginBottom: 10, borderRadius: 8 }} />
-              ))}
-            </div>
-          ) : selectedRecipe ? (
+          {/* ── Right: detail / edit ── */}
+          {editMode ? (
+            /* ── EDIT / CREATE MODE ── */
             <div>
-              {/* Recipe header */}
               <div className="bp-card" style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em' }}>
-                      {selectedRecipe.name}
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--muted-strong)', marginTop: 4 }}>
-                      Yields {selectedRecipe.yield_qty} {selectedRecipe.yield_unit}{selectedRecipe.yield_qty !== 1 ? 's' : ''}
-                      {suggestionsLoading && (
-                        <span style={{ marginLeft: 10, fontSize: 11, color: 'var(--muted-strong)' }}>
-                          · finding invoice prices…
-                        </span>
-                      )}
-                    </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <input className="bp-input" placeholder="Recipe name" value={editName} onChange={e => setEditName(e.target.value)}
+                    style={{ fontSize: 18, fontWeight: 700, padding: '10px 12px' }} />
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, color: 'var(--muted-strong)', flexShrink: 0 }}>Yields</span>
+                    <input className="bp-input" placeholder="qty" value={editYieldQty} onChange={e => setEditYieldQty(e.target.value)}
+                      inputMode="decimal" style={{ width: 72, fontSize: 13 }} />
+                    <input className="bp-input" placeholder="unit" value={editYieldUnit} onChange={e => setEditYieldUnit(e.target.value)}
+                      style={{ fontSize: 13 }} />
                   </div>
-
-                  {hasCosts && (
-                    <div style={{ display: 'flex', gap: 20, flexShrink: 0 }}>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-strong)' }}>
-                          Batch cost
-                        </div>
-                        <div style={{ fontSize: 22, fontWeight: 700, marginTop: 2 }}>{fmt(totalBatch)}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-strong)' }}>
-                          Per {selectedRecipe.yield_unit}
-                        </div>
-                        <div style={{ fontSize: 22, fontWeight: 700, marginTop: 2, color: '#7dd3a8' }}>
-                          {fmt(costPerUnit)}
-                        </div>
-                      </div>
+                  {recipeError && <div style={{ fontSize: 13, color: '#e58080' }}>{recipeError}</div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="bp-btn bp-btn--primary" onClick={saveRecipe} disabled={recipeSaving || !editName.trim()}>
+                        {recipeSaving ? 'Saving…' : isNewRecipe ? 'Create recipe' : 'Save changes'}
+                      </button>
+                      <button className="bp-btn" onClick={cancelEdit} disabled={recipeSaving}>Cancel</button>
                     </div>
-                  )}
+                    {!isNewRecipe && (
+                      deleteConfirm ? (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <span style={{ fontSize: 13, color: '#e58080' }}>Delete this recipe?</span>
+                          <button className="bp-btn" onClick={deleteRecipe} style={{ borderColor: '#e58080', color: '#e58080' }}>Yes, delete</button>
+                          <button className="bp-btn" onClick={() => setDeleteConfirm(false)}>No</button>
+                        </div>
+                      ) : (
+                        <button className="bp-btn" onClick={() => setDeleteConfirm(true)} style={{ fontSize: 13, color: 'var(--muted-strong)' }}>Delete recipe</button>
+                      )
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Ingredients table */}
-              <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="bp-card" style={{ padding: 0, overflow: 'visible' }}>
                 <table className="bp-table" style={{ tableLayout: 'fixed' }}>
                   <colgroup>
-                    <col style={{ width: '30%' }} />
-                    <col style={{ width: '10%' }} />
-                    <col style={{ width: '8%' }} />
-                    <col style={{ width: '16%' }} />
+                    <col style={{ width: 36 }} />
+                    <col />
+                    <col style={{ width: '11%' }} />
+                    <col style={{ width: '11%' }} />
                     <col style={{ width: '22%' }} />
-                    <col style={{ width: '14%' }} />
                   </colgroup>
                   <thead>
                     <tr>
+                      <th></th>
                       <th>Ingredient</th>
                       <th className="is-right">Qty</th>
                       <th>Unit</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editIngredients.map((ing, idx) => (
+                      <tr key={idx}>
+                        <td style={{ paddingRight: 4 }}>
+                          <button onClick={() => removeIngRow(idx)} title="Remove"
+                            style={{ background: 'none', border: 'none', color: 'var(--muted-strong)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 4px', display: 'flex', alignItems: 'center' }}>
+                            ×
+                          </button>
+                        </td>
+                        <td><input className="bp-input" value={ing.ingredient} onChange={e => updateIng(idx, 'ingredient', e.target.value)} placeholder="Ingredient name" style={{ fontSize: 13, padding: '6px 8px' }} /></td>
+                        <td><input className="bp-input" value={ing.qty_value} onChange={e => updateIng(idx, 'qty_value', e.target.value)} placeholder="—" inputMode="decimal" style={{ fontSize: 13, padding: '6px 8px', textAlign: 'right' }} /></td>
+                        <td><input className="bp-input" value={ing.qty_unit} onChange={e => updateIng(idx, 'qty_unit', e.target.value)} placeholder="g / mL…" style={{ fontSize: 12, padding: '6px 8px' }} /></td>
+                        <td><input className="bp-input" value={ing.notes} onChange={e => updateIng(idx, 'notes', e.target.value)} placeholder="to taste…" style={{ fontSize: 12, padding: '6px 8px', fontStyle: 'italic' }} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)' }}>
+                  <button className="bp-btn" onClick={addIngRow} style={{ fontSize: 13 }}>+ Add ingredient</button>
+                </div>
+              </div>
+            </div>
+
+          ) : !selectedId ? (
+            /* ── EMPTY STATE ── */
+            <div className="bp-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, color: 'var(--muted-strong)', fontSize: 13 }}>
+              Select a recipe to cost it, or create a new one
+            </div>
+
+          ) : detailLoading ? (
+            <div className="bp-card">{[...Array(5)].map((_, i) => <div key={i} className="bp-skel" style={{ height: 40, marginBottom: 10, borderRadius: 8 }} />)}</div>
+
+          ) : selectedRecipe ? (
+            /* ── VIEW / COST MODE ── */
+            <div>
+              <div className="bp-card" style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em' }}>{selectedRecipe.name}</div>
+                    <div style={{ fontSize: 13, color: 'var(--muted-strong)', marginTop: 4 }}>
+                      Yields {selectedRecipe.yield_qty} {selectedRecipe.yield_unit}{selectedRecipe.yield_qty !== 1 ? 's' : ''}
+                      {suggestionsLoading && <span style={{ marginLeft: 10, fontSize: 11 }}>· finding invoice prices…</span>}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    {hasCosts && (
+                      <div style={{ display: 'flex', gap: 20 }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-strong)' }}>Batch cost</div>
+                          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 2 }}>{fmt(totalBatch)}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-strong)' }}>Per {selectedRecipe.yield_unit}</div>
+                          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 2, color: '#7dd3a8' }}>{fmt(costPerUnit)}</div>
+                        </div>
+                      </div>
+                    )}
+                    <button className="bp-btn" onClick={startEdit} style={{ fontSize: 13, whiteSpace: 'nowrap' }}>Edit recipe</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
+                <table className="bp-table" style={{ tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: '30%' }} /><col style={{ width: '10%' }} /><col style={{ width: '8%' }} /><col style={{ width: '16%' }} /><col style={{ width: '22%' }} /><col style={{ width: '14%' }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>Ingredient</th><th className="is-right">Qty</th><th>Unit</th>
                       <th style={{ color: 'var(--muted-strong)' }}>Notes</th>
                       <th className="is-right">
                         $ / unit
                         {!suggestionsLoading && Object.values(suggestions).some(s => s.length > 0) && (
-                          <span style={{ fontSize: 10, fontWeight: 400, color: '#7dd3a8', marginLeft: 6 }}>
-                            ↑ from invoices
-                          </span>
+                          <span style={{ fontSize: 10, fontWeight: 400, color: '#7dd3a8', marginLeft: 6 }}>↑ from invoices</span>
                         )}
                       </th>
                       <th className="is-right">Line $</th>
@@ -500,70 +442,27 @@ export default function RecipesPage() {
                   <tbody>
                     {ingredients.map((ing, idx) => {
                       const line = lineCosts[idx]
-                      const isFlat = ing.qty_value == null
                       const ingSuggestions = suggestions[ing.id] ?? []
-
                       return (
                         <tr key={ing.id} style={{ verticalAlign: 'top' }}>
-                          <td style={{ fontWeight: 500, color: '#fff', paddingTop: 12 }}>
-                            {ing.ingredient}
-                          </td>
-                          <td className="is-right is-mono" style={{ color: 'var(--muted-strong)', paddingTop: 12 }}>
-                            {ing.qty_value != null ? ing.qty_value : '—'}
-                          </td>
-                          <td className="is-mono" style={{ color: 'var(--muted-strong)', fontSize: 11, paddingTop: 12 }}>
-                            {ing.qty_unit ?? ''}
-                          </td>
-                          <td style={{ color: 'var(--muted-strong)', fontSize: 12, fontStyle: ing.notes ? 'italic' : 'normal', paddingTop: 12 }}>
-                            {ing.notes ?? ''}
-                          </td>
+                          <td style={{ fontWeight: 500, color: '#fff', paddingTop: 12 }}>{ing.ingredient}</td>
+                          <td className="is-right is-mono" style={{ color: 'var(--muted-strong)', paddingTop: 12 }}>{ing.qty_value != null ? ing.qty_value : '—'}</td>
+                          <td className="is-mono" style={{ color: 'var(--muted-strong)', fontSize: 11, paddingTop: 12 }}>{ing.qty_unit ?? ''}</td>
+                          <td style={{ color: 'var(--muted-strong)', fontSize: 12, fontStyle: ing.notes ? 'italic' : 'normal', paddingTop: 12 }}>{ing.notes ?? ''}</td>
                           <td style={{ paddingTop: 10, paddingBottom: 10 }}>
-                            {/* Cost input */}
                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                               <span style={{ position: 'absolute', left: 6, fontSize: 11, color: 'var(--muted-strong)', pointerEvents: 'none', zIndex: 1 }}>$</span>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={costs[ing.id] ?? ''}
-                                onChange={e => {
-                                  setSavedMsg(null)
-                                  setCosts(prev => ({ ...prev, [ing.id]: e.target.value }))
-                                }}
-                                placeholder={isFlat ? 'enter flat cost' : 'enter price'}
-                                title={isFlat ? 'Enter flat batch cost for this ingredient' : `Cost per ${ing.qty_unit ?? 'unit'}`}
-                                style={{
-                                  width: '100%',
-                                  background: 'rgba(255,255,255,0.07)',
-                                  border: '1px solid rgba(255,255,255,0.2)',
-                                  borderRadius: 6,
-                                  color: '#fff',
-                                  padding: '5px 6px 5px 18px',
-                                  fontSize: 12,
-                                  fontFamily: 'ui-monospace, monospace',
-                                  outline: 'none',
-                                  textAlign: 'right',
-                                }}
+                              <input type="text" inputMode="decimal" value={costs[ing.id] ?? ''}
+                                onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setSavedMsg(null); setCosts(prev => ({ ...prev, [ing.id]: v })) } }}
+                                placeholder={ing.qty_value == null ? 'enter flat cost' : 'enter price'}
+                                style={{ width: '100%', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, color: '#fff', padding: '6px 6px 6px 18px', fontSize: 12, fontFamily: 'ui-monospace, monospace', outline: 'none', textAlign: 'right' }}
                                 onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.55)')}
-                                onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)')}
-                              />
+                                onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)')} />
                             </div>
-
-                            {/* Suggestion chips */}
-                            {ingSuggestions.length > 0 && (
-                              <SuggestionDropdown
-                                matches={ingSuggestions}
-                                onPick={price => applySuggestion(ing.id, price)}
-                              />
-                            )}
-                            {suggestionsLoading && ingSuggestions.length === 0 && (
-                              <div className="bp-skel" style={{ height: 22, borderRadius: 5, marginTop: 4 }} />
-                            )}
+                            {ingSuggestions.length > 0 && <SuggestionDropdown matches={ingSuggestions} onPick={price => applySuggestion(ing.id, price)} />}
+                            {suggestionsLoading && ingSuggestions.length === 0 && <div className="bp-skel" style={{ height: 22, borderRadius: 5, marginTop: 4 }} />}
                           </td>
-                          <td className="is-right is-mono" style={{
-                            fontWeight: line != null ? 600 : 400,
-                            color: line != null ? '#fff' : 'var(--muted-strong)',
-                            paddingTop: 12,
-                          }}>
+                          <td className="is-right is-mono" style={{ fontWeight: line != null ? 600 : 400, color: line != null ? '#fff' : 'var(--muted-strong)', paddingTop: 12 }}>
                             {line != null ? fmt(line) : '—'}
                           </td>
                         </tr>
@@ -574,47 +473,26 @@ export default function RecipesPage() {
                     <tfoot>
                       <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
                         <td colSpan={4} style={{ padding: '10px 14px', fontSize: 12, color: 'var(--muted-strong)' }}>
-                          {lineCosts.filter(c => c == null).length > 0
-                            ? `${lineCosts.filter(c => c == null).length} ingredient(s) without cost — totals are partial`
-                            : 'All ingredients costed'}
+                          {lineCosts.filter(c => c == null).length > 0 ? `${lineCosts.filter(c => c == null).length} ingredient(s) without cost — totals are partial` : 'All ingredients costed'}
                         </td>
-                        <td className="is-right" style={{ padding: '10px 14px', fontSize: 12, color: 'var(--muted-strong)', fontWeight: 600 }}>
-                          Batch
-                        </td>
-                        <td className="is-right is-mono" style={{ padding: '10px 14px', fontWeight: 700, fontSize: 14 }}>
-                          {fmt(totalBatch)}
-                        </td>
+                        <td className="is-right" style={{ padding: '10px 14px', fontSize: 12, color: 'var(--muted-strong)', fontWeight: 600 }}>Batch</td>
+                        <td className="is-right is-mono" style={{ padding: '10px 14px', fontWeight: 700, fontSize: 14 }}>{fmt(totalBatch)}</td>
                       </tr>
                       <tr style={{ background: 'rgba(125,211,168,0.06)' }}>
                         <td colSpan={5} style={{ padding: '10px 14px', fontSize: 12, color: 'var(--muted-strong)', fontWeight: 600 }}>
-                          Cost per {selectedRecipe.yield_unit}
-                          <span style={{ fontWeight: 400, marginLeft: 6 }}>
-                            ({fmt(totalBatch)} ÷ {selectedRecipe.yield_qty})
-                          </span>
+                          Cost per {selectedRecipe.yield_unit}<span style={{ fontWeight: 400, marginLeft: 6 }}>({fmt(totalBatch)} ÷ {selectedRecipe.yield_qty})</span>
                         </td>
-                        <td className="is-right is-mono" style={{ padding: '10px 14px', fontWeight: 700, fontSize: 14, color: '#7dd3a8' }}>
-                          {fmt(costPerUnit)}
-                        </td>
+                        <td className="is-right is-mono" style={{ padding: '10px 14px', fontWeight: 700, fontSize: 14, color: '#7dd3a8' }}>{fmt(costPerUnit)}</td>
                       </tr>
                     </tfoot>
                   )}
                 </table>
               </div>
 
-              {/* Save row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, justifyContent: 'flex-end' }}>
-                {savedMsg && (
-                  <span style={{ fontSize: 13, color: savedMsg === 'Saved' ? '#7dd3a8' : '#e58080' }}>
-                    {savedMsg}
-                  </span>
-                )}
-                <button
-                  className="bp-btn bp-btn--primary"
-                  onClick={saveCosts}
-                  disabled={saving}
-                  style={{ minWidth: 100 }}
-                >
-                  {saving ? 'Saving…' : 'Save costs'}
+                {savedMsg && <span style={{ fontSize: 13, color: savedMsg === 'Saved' ? '#7dd3a8' : '#e58080' }}>{savedMsg}</span>}
+                <button className="bp-btn bp-btn--primary" onClick={saveCosts} disabled={costSaving} style={{ minWidth: 100 }}>
+                  {costSaving ? 'Saving…' : 'Save costs'}
                 </button>
               </div>
             </div>
