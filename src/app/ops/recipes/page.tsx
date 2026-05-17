@@ -29,6 +29,9 @@ type SuggestionMatch = {
   unit: string | null
   supplier: string | null
   invoice_date: string | null
+  converted_price: number | null
+  converted_from: string | null
+  recipe_unit: string | null
 }
 
 type CostMap = Record<number, string>
@@ -71,14 +74,16 @@ function SuggestionDropdown({
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         {/* Primary suggestion chip */}
         <button
-          onClick={() => onPick(top.unit_price)}
-          title={`Use ${fmt(top.unit_price)}${top.unit ? ` / ${top.unit}` : ''} from ${top.supplier ?? 'invoice'}`}
+          onClick={() => onPick(top.converted_price ?? top.unit_price)}
+          title={top.converted_price != null
+            ? `Use ${fmt(top.converted_price)}/${top.recipe_unit} (converted from ${top.converted_from})`
+            : `Use raw invoice price ${fmt(top.unit_price)}${top.unit ? `/${top.unit}` : ''} — unit mismatch, may need manual conversion`}
           style={{
             flex: 1,
-            background: 'rgba(125,211,168,0.08)',
-            border: '1px solid rgba(125,211,168,0.25)',
+            background: top.converted_price != null ? 'rgba(125,211,168,0.08)' : 'rgba(255,200,100,0.08)',
+            border: `1px solid ${top.converted_price != null ? 'rgba(125,211,168,0.25)' : 'rgba(255,200,100,0.25)'}`,
             borderRadius: 5,
-            color: '#7dd3a8',
+            color: top.converted_price != null ? '#7dd3a8' : '#f5c842',
             fontSize: 11,
             padding: '3px 6px',
             cursor: 'pointer',
@@ -90,7 +95,9 @@ function SuggestionDropdown({
             minWidth: 0,
           }}
         >
-          ↑ {fmt(top.unit_price)}{top.unit ? `/${top.unit}` : ''}
+          {top.converted_price != null
+            ? `↑ ${fmt(top.converted_price)}/${top.recipe_unit}`
+            : `↑ ${fmt(top.unit_price)}${top.unit ? `/${top.unit}` : ''} ⚠`}
         </button>
 
         {/* Dropdown toggle (only if alternatives exist) */}
@@ -161,7 +168,7 @@ function SuggestionRow({
 }) {
   return (
     <button
-      onClick={() => onPick(match.unit_price)}
+      onClick={() => onPick(match.converted_price ?? match.unit_price)}
       style={{
         width: '100%',
         background: active ? 'rgba(125,211,168,0.07)' : 'transparent',
@@ -183,10 +190,31 @@ function SuggestionRow({
             {match.supplier ?? ''}
             {match.invoice_date ? ` · ${fmtDate(match.invoice_date)}` : ''}
           </div>
+          {match.converted_from && (
+            <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 1 }}>
+              Invoice: {match.converted_from}
+            </div>
+          )}
+          {!match.converted_price && (
+            <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>
+              ⚠ Units differ — verify before using
+            </div>
+          )}
         </div>
-        <div style={{ fontWeight: 700, fontSize: 13, color: '#7dd3a8', whiteSpace: 'nowrap', flexShrink: 0 }}>
-          {fmt(match.unit_price)}
-          {match.unit ? <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{match.unit}</span> : ''}
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          {match.converted_price != null ? (
+            <>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#7dd3a8' }}>
+                {fmt(match.converted_price)}
+                <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{match.recipe_unit}</span>
+              </div>
+            </>
+          ) : (
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#f5c842' }}>
+              {fmt(match.unit_price)}
+              {match.unit ? <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{match.unit}</span> : ''}
+            </div>
+          )}
         </div>
       </div>
     </button>
