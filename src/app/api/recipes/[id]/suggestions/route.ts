@@ -1,122 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser, adminClient } from '@/lib/adminAuth'
-
-const RECIPE_UNIT_ML: Record<string, number> = {
-  ml: 1, mL: 1, l: 1000, L: 1000, lt: 1000, ltr: 1000, litre: 1000, liter: 1000,
-  cup: 250, tbsp: 15, tablespoon: 15, tsp: 5, teaspoon: 5,
-}
-const RECIPE_UNIT_G: Record<string, number> = {
-  g: 1, gram: 1, grams: 1, kg: 1000, kilogram: 1000, kilograms: 1000,
-}
-const INVOICE_UNIT_ML: Record<string, number> = {
-  ml: 1, l: 1000, lt: 1000, ltr: 1000, litre: 1000, liter: 1000,
-}
-const INVOICE_UNIT_G: Record<string, number> = { g: 1, kg: 1000 }
-
-type PackSize = { type: 'mL'; amount: number } | { type: 'g'; amount: number }
-
-function parsePackSize(desc: string): PackSize | null {
-  const d = desc.toUpperCase()
-  let best: PackSize | null = null
-
-  // "N X M UNIT" — multi-pack, e.g. "12 X 1L", "6X500ML", "24X330ML"
-  const multiRe = /(\d+(?:\.\d+)?)\s*[X×]\s*(\d+(?:\.\d+)?)\s*(ML|L\b|LT\b|LTR\b|KG\b|G\b)/g
-  let m: RegExpExecArray | null
-  while ((m = multiRe.exec(d)) !== null) {
-    const count = parseFloat(m[1]), size = parseFloat(m[2]), unit = m[3].trim()
-    const c = toPackSize(count * size, unit)
-    if (c) best = pickLarger(best, c)
-  }
-  if (best) return best
-
-  // Single "N UNIT" — e.g. "2LT", "20LT", "2.5KG", "500ML"
-  // Note: "(N)" patterns like "2.5KG(6)" — the (6) means 6/case, NOT a multiplier
-  // We take the FIRST weight/volume measurement as the individual unit size
-  const singleRe = /(\d+(?:\.\d+)?)\s*(ML|L\b|LT\b|LTR\b|KG\b|G\b)/g
-  while ((m = singleRe.exec(d)) !== null) {
-    const c = toPackSize(parseFloat(m[1]), m[2].trim())
-    if (c) { best = pickLarger(best, c) }
-  }
-  return best
-}
-
-function toPackSize(amount: number, unit: string): PackSize | null {
-  if (unit === 'ML') return { type: 'mL', amount }
-  if (unit === 'L' || unit === 'LT' || unit === 'LTR') return { type: 'mL', amount: amount * 1000 }
-  if (unit === 'G') return { type: 'g', amount }
-  if (unit === 'KG') return { type: 'g', amount: amount * 1000 }
-  return null
-}
-
-function pickLarger(a: PackSize | null, b: PackSize): PackSize {
-  if (!a || a.type !== b.type) return a ?? b
-  return (a.type === 'mL' ? (a as {type:'mL';amount:number}).amount : (a as {type:'g';amount:number}).amount) >=
-         (b.type === 'mL' ? b.amount : b.amount) ? a : b
-}
-
-type ConvertResult = {
-  price: number       // price per recipe unit
-  from: string        // human-readable source e.g. "$22.55/btl (2.5kg)"
-  exact: boolean      // true = same measurement type; false = volume<->weight, density assumed
-}
-
-function convertPrice(
-  invoicePrice: number,
-  invoiceUnit: string | null,
-  description: string,
-  recipeUnit: string | null,
-): ConvertResult | null {
-  if (!recipeUnit) return null
-
-  const ru = recipeUnit.toLowerCase()
-  const iu = (invoiceUnit ?? '').toLowerCase()
-  const pack = parsePackSize(description)
-  const packStr = pack ? `$${invoicePrice}/${invoiceUnit ?? 'unit'} (${packLabel(pack)})` : ''
-
-  // ── Volume recipe unit (mL, L, cup, tbsp, tsp) ──────────────────────────
-  const recipeML = RECIPE_UNIT_ML[ru]
-  if (recipeML !== undefined) {
-    // Invoice priced directly by volume
-    const invML = INVOICE_UNIT_ML[iu]
-    if (invML !== undefined) {
-      return { price: round6(invoicePrice / invML * recipeML), from: `$${invoicePrice}/${invoiceUnit}`, exact: true }
-    }
-    // Pack size encodes volume
-    if (pack?.type === 'mL') {
-      return { price: round6(invoicePrice / pack.amount * recipeML), from: packStr, exact: true }
-    }
-    // Pack size encodes weight — approximate, treating 1g as 1mL (density ≈ water)
-    if (pack?.type === 'g') {
-      return { price: round6(invoicePrice / pack.amount * recipeML), from: packStr, exact: false }
-    }
-    return null
-  }
-
-  // ── Weight recipe unit (g, kg) ──────────────────────────────────────────
-  const recipeG = RECIPE_UNIT_G[ru]
-  if (recipeG !== undefined) {
-    const invG = INVOICE_UNIT_G[iu]
-    if (invG !== undefined) {
-      return { price: round6(invoicePrice / invG * recipeG), from: `$${invoicePrice}/${invoiceUnit}`, exact: true }
-    }
-    if (pack?.type === 'g') {
-      return { price: round6(invoicePrice / pack.amount * recipeG), from: packStr, exact: true }
-    }
-    // Pack size encodes volume — approximate, treating 1mL as 1g (density ≈ water)
-    if (pack?.type === 'mL') {
-      return { price: round6(invoicePrice / pack.amount * recipeG), from: packStr, exact: false }
-    }
-    return null
-  }
-
-  return null
-}
-
-function packLabel(pack: PackSize): string {
-  if (pack.type === 'mL') return pack.amount >= 1000 ? `${pack.amount / 1000}L` : `${pack.amount}mL`
-  return pack.amount >= 1000 ? `${pack.amount / 1000}kg` : `${pack.amount}g`
-}
-function round6(n: number) { return parseFloat(n.toFixed(6)) }
+import { convertRecipePrice } from '@/lib/recipeUnits'
 
 // ── Stop words ─────────────────────────────────────────────────────────────
 
@@ -182,7 +66,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     suggestions[ing.id] = deduped.map(r => {
       const raw = Number(r.unit_price)
-      const conv = convertPrice(raw, r.unit, r.description, ing.qty_unit)
+      const conv = convertRecipePrice({
+        invoicePrice: raw,
+        invoiceUnit: r.unit,
+        description: r.description,
+        recipeUnit: ing.qty_unit,
+      })
       return {
         id: r.id,
         description: r.description,
@@ -194,8 +83,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         converted_from: conv?.from ?? null,
         recipe_unit: ing.qty_unit,
         approximate: conv ? !conv.exact : false,
+        can_apply: conv?.canApply ?? false,
       }
-    })
+    }).sort((a, b) => Number(b.can_apply) - Number(a.can_apply) || Number(a.approximate) - Number(b.approximate))
   }))
 
   return NextResponse.json({ suggestions })

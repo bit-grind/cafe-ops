@@ -1,0 +1,204 @@
+export type MeasureKind = 'weight' | 'volume'
+
+export type NormalizedUnit = {
+  kind: MeasureKind
+  unit: 'g' | 'mL'
+  factor: number
+  label: string
+}
+
+export type PackSize = {
+  kind: MeasureKind
+  unit: 'g' | 'mL'
+  amount: number
+  label: string
+  confidence: 'high' | 'medium'
+}
+
+export type ConvertResult = {
+  price: number
+  from: string
+  exact: boolean
+  canApply: boolean
+}
+
+const UNIT_ALIASES: Record<string, NormalizedUnit> = {
+  g: { kind: 'weight', unit: 'g', factor: 1, label: 'g' },
+  gm: { kind: 'weight', unit: 'g', factor: 1, label: 'g' },
+  gms: { kind: 'weight', unit: 'g', factor: 1, label: 'g' },
+  gram: { kind: 'weight', unit: 'g', factor: 1, label: 'g' },
+  grams: { kind: 'weight', unit: 'g', factor: 1, label: 'g' },
+  kg: { kind: 'weight', unit: 'g', factor: 1000, label: 'kg' },
+  kgs: { kind: 'weight', unit: 'g', factor: 1000, label: 'kg' },
+  kilogram: { kind: 'weight', unit: 'g', factor: 1000, label: 'kg' },
+  kilograms: { kind: 'weight', unit: 'g', factor: 1000, label: 'kg' },
+
+  ml: { kind: 'volume', unit: 'mL', factor: 1, label: 'mL' },
+  millilitre: { kind: 'volume', unit: 'mL', factor: 1, label: 'mL' },
+  milliliter: { kind: 'volume', unit: 'mL', factor: 1, label: 'mL' },
+  millilitres: { kind: 'volume', unit: 'mL', factor: 1, label: 'mL' },
+  milliliters: { kind: 'volume', unit: 'mL', factor: 1, label: 'mL' },
+  l: { kind: 'volume', unit: 'mL', factor: 1000, label: 'L' },
+  lt: { kind: 'volume', unit: 'mL', factor: 1000, label: 'L' },
+  ltr: { kind: 'volume', unit: 'mL', factor: 1000, label: 'L' },
+  litre: { kind: 'volume', unit: 'mL', factor: 1000, label: 'L' },
+  liter: { kind: 'volume', unit: 'mL', factor: 1000, label: 'L' },
+  litres: { kind: 'volume', unit: 'mL', factor: 1000, label: 'L' },
+  liters: { kind: 'volume', unit: 'mL', factor: 1000, label: 'L' },
+  cup: { kind: 'volume', unit: 'mL', factor: 250, label: 'cup' },
+  cups: { kind: 'volume', unit: 'mL', factor: 250, label: 'cup' },
+  tbsp: { kind: 'volume', unit: 'mL', factor: 15, label: 'tbsp' },
+  tbs: { kind: 'volume', unit: 'mL', factor: 15, label: 'tbsp' },
+  tbl: { kind: 'volume', unit: 'mL', factor: 15, label: 'tbsp' },
+  tablespoon: { kind: 'volume', unit: 'mL', factor: 15, label: 'tbsp' },
+  tablespoons: { kind: 'volume', unit: 'mL', factor: 15, label: 'tbsp' },
+  tsp: { kind: 'volume', unit: 'mL', factor: 5, label: 'tsp' },
+  teaspoon: { kind: 'volume', unit: 'mL', factor: 5, label: 'tsp' },
+  teaspoons: { kind: 'volume', unit: 'mL', factor: 5, label: 'tsp' },
+}
+
+const MEASURE_UNITS = [
+  'millilitres',
+  'milliliters',
+  'millilitre',
+  'milliliter',
+  'kilograms',
+  'kilogram',
+  'litres',
+  'liters',
+  'grams',
+  'gram',
+  'kgs',
+  'kg',
+  'gms',
+  'gm',
+  'ml',
+  'ltr',
+  'lt',
+  'l',
+  'g',
+].join('|')
+
+const PACK_UNIT_RE = /\b(ctn|carton|case|box|tray|pack|pkt|bag|tub|btl|bottle|jar|tin|can|each|ea|unit|pc|pcs)\b/i
+const CARTON_UNIT_RE = /\b(ctn|carton|case|box|tray|pack|pkt)\b/i
+
+export function normalizeMeasureUnit(unit: string | null | undefined): NormalizedUnit | null {
+  if (!unit) return null
+  return UNIT_ALIASES[cleanUnit(unit)] ?? null
+}
+
+export function convertRecipePrice({
+  invoicePrice,
+  invoiceUnit,
+  description,
+  recipeUnit,
+}: {
+  invoicePrice: number
+  invoiceUnit: string | null
+  description: string
+  recipeUnit: string | null
+}): ConvertResult | null {
+  const recipe = normalizeMeasureUnit(recipeUnit)
+  if (!recipe || !Number.isFinite(invoicePrice) || invoicePrice <= 0) return null
+
+  const invoice = normalizeMeasureUnit(invoiceUnit)
+  if (invoice && invoice.kind === recipe.kind) {
+    return {
+      price: round6((invoicePrice / invoice.factor) * recipe.factor),
+      from: `$${invoicePrice}/${invoice.label}`,
+      exact: true,
+      canApply: true,
+    }
+  }
+
+  const pack = parsePackSize(description, invoiceUnit)
+  if (pack && pack.kind === recipe.kind) {
+    return {
+      price: round6((invoicePrice / pack.amount) * recipe.factor),
+      from: `$${invoicePrice}/${invoiceUnit || 'unit'} (${pack.label})`,
+      exact: pack.confidence === 'high',
+      canApply: pack.confidence === 'high',
+    }
+  }
+
+  return null
+}
+
+export function parsePackSize(description: string, invoiceUnit?: string | null): PackSize | null {
+  const normalized = description
+    .replace(/[×✕]/g, 'x')
+    .replace(/(\d),(\d)/g, '$1$2')
+    .toLowerCase()
+
+  const candidates: PackSize[] = []
+  const countThenSize = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*x\\s*(\\d+(?:\\.\\d+)?)\\s*(${MEASURE_UNITS})\\b`, 'gi')
+  const sizeThenCount = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${MEASURE_UNITS})\\b\\s*x\\s*(\\d+(?:\\.\\d+)?)`, 'gi')
+  const slashCount = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${MEASURE_UNITS})\\b\\s*/\\s*(\\d+)\\b`, 'gi')
+  const bracketCount = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${MEASURE_UNITS})\\b\\s*\\((\\d+)\\)`, 'gi')
+  const single = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${MEASURE_UNITS})\\b`, 'gi')
+
+  collect(countThenSize, normalized, ([count, amount, unit]) => toPackSize(Number(count) * Number(amount), unit, 'high'))
+  collect(sizeThenCount, normalized, ([amount, unit, count]) => toPackSize(Number(count) * Number(amount), unit, 'high'))
+  collect(slashCount, normalized, ([amount, unit, count]) => toPackSize(Number(count) * Number(amount), unit, 'high'))
+
+  const bracketIsCarton = CARTON_UNIT_RE.test(invoiceUnit ?? '') || CARTON_UNIT_RE.test(normalized)
+  collect(bracketCount, normalized, ([amount, unit, count]) => {
+    const multiplier = bracketIsCarton ? Number(count) : 1
+    return toPackSize(multiplier * Number(amount), unit, bracketIsCarton ? 'high' : 'medium')
+  })
+
+  collect(single, normalized, ([amount, unit]) => toPackSize(Number(amount), unit, PACK_UNIT_RE.test(invoiceUnit ?? '') ? 'high' : 'medium'))
+
+  return pickBest(candidates)
+
+  function collect(
+    regex: RegExp,
+    text: string,
+    build: (groups: string[]) => PackSize | null
+  ) {
+    let match: RegExpExecArray | null
+    while ((match = regex.exec(text)) !== null) {
+      const candidate = build(match.slice(1))
+      if (candidate) candidates.push(candidate)
+    }
+  }
+}
+
+function toPackSize(amount: number, unit: string, confidence: PackSize['confidence']): PackSize | null {
+  const normalized = normalizeMeasureUnit(unit)
+  if (!normalized || !Number.isFinite(amount) || amount <= 0) return null
+  const baseAmount = amount * normalized.factor
+  return {
+    kind: normalized.kind,
+    unit: normalized.unit,
+    amount: baseAmount,
+    label: packLabel(normalized.unit, baseAmount),
+    confidence,
+  }
+}
+
+function pickBest(candidates: PackSize[]): PackSize | null {
+  return candidates
+    .sort((a, b) => confidenceRank(b) - confidenceRank(a) || b.amount - a.amount)[0] ?? null
+}
+
+function confidenceRank(pack: PackSize) {
+  return pack.confidence === 'high' ? 2 : 1
+}
+
+function packLabel(unit: PackSize['unit'], amount: number): string {
+  if (unit === 'mL') return amount >= 1000 ? `${roundLabel(amount / 1000)}L` : `${roundLabel(amount)}mL`
+  return amount >= 1000 ? `${roundLabel(amount / 1000)}kg` : `${roundLabel(amount)}g`
+}
+
+function roundLabel(n: number) {
+  return Number.isInteger(n) ? String(n) : String(parseFloat(n.toFixed(3)))
+}
+
+function cleanUnit(unit: string) {
+  return unit.toLowerCase().replace(/\./g, '').trim()
+}
+
+function round6(n: number) {
+  return parseFloat(n.toFixed(6))
+}

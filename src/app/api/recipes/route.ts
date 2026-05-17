@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   if (Array.isArray(ingredients) && ingredients.length) {
-    await db.from('recipe_ingredients').insert(
+    const { error: ingredientError } = await db.from('recipe_ingredients').insert(
       ingredients.map((ing: Record<string, unknown>, i: number) => ({
         recipe_id: recipe.id,
         ingredient: ing.ingredient,
@@ -46,6 +46,7 @@ export async function POST(req: Request) {
         sort_order: i,
       }))
     )
+    if (ingredientError) return NextResponse.json({ error: ingredientError.message }, { status: 500 })
   }
 
   return NextResponse.json({ recipe })
