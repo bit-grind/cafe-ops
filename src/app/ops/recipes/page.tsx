@@ -46,7 +46,7 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
   if (!matches.length) return null
   const top = matches[0]
   const rest = matches.slice(1)
-  const pickValue = (m: SuggestionMatch) => m.can_apply && m.converted_price != null ? m.converted_price : null
+  const pickValue = (m: SuggestionMatch) => m.can_apply && m.converted_price != null ? m.converted_price : m.unit_price
   const labelOf = (m: SuggestionMatch) =>
     m.converted_price != null
       ? `${m.approximate ? '~' : ''}${fmtUnit(m.converted_price)}/${m.recipe_unit}`
@@ -73,14 +73,13 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
     <div ref={ref} style={{ position: 'relative', marginTop: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button
-          onClick={() => { const price = pickValue(top); if (price != null) onPick(price) }}
-          disabled={!top.can_apply}
+          onClick={() => onPick(pickValue(top))}
           title={
             topGood ? `Use ${fmtUnit(top.converted_price!)}/${top.recipe_unit} (from ${top.converted_from})`
-            : top.converted_price != null ? `Pack size was inferred with lower confidence. Verify before entering this price.`
-            : `No safe unit conversion found. Use the invoice detail as a reference only.`
+            : top.converted_price != null ? `Uses inferred price. Verify before saving.`
+            : `Uses raw invoice price. Adjust manually before saving.`
           }
-          style={{ flex: 1, background: topGood ? 'rgba(125,211,168,0.08)' : 'rgba(255,200,100,0.08)', border: `1px solid ${topGood ? 'rgba(125,211,168,0.25)' : 'rgba(255,200,100,0.25)'}`, borderRadius: 5, color: topGood ? '#7dd3a8' : '#f5c842', fontSize: 11, padding: '3px 6px', cursor: top.can_apply ? 'pointer' : 'not-allowed', font: 'inherit', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, opacity: top.can_apply ? 1 : 0.78 }}
+          style={{ flex: 1, background: topGood ? 'rgba(125,211,168,0.08)' : 'rgba(255,200,100,0.08)', border: `1px solid ${topGood ? 'rgba(125,211,168,0.25)' : 'rgba(255,200,100,0.25)'}`, borderRadius: 5, color: topGood ? '#7dd3a8' : '#f5c842', fontSize: 11, padding: '3px 6px', cursor: 'pointer', font: 'inherit', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
         >
           ↑ {labelOf(top)}{topGood ? '' : ' ⚠'}
         </button>
@@ -94,15 +93,15 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
           {[top, ...rest].map((m, i) => {
             const mGood = m.can_apply && m.converted_price != null && !m.approximate
             return (
-              <button key={m.id} disabled={!m.can_apply} onClick={() => { const price = pickValue(m); if (price != null) onPick(price); setOpen(false) }}
-                style={{ width: '100%', background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border)', color: 'inherit', cursor: m.can_apply ? 'pointer' : 'not-allowed', font: 'inherit', padding: '8px 12px', textAlign: 'left', opacity: m.can_apply ? 1 : 0.78 }}>
+              <button key={m.id} onClick={() => { onPick(pickValue(m)); setOpen(false) }}
+                style={{ width: '100%', background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border)', color: 'inherit', cursor: 'pointer', font: 'inherit', padding: '8px 12px', textAlign: 'left' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#fff' }}>{m.description}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted-strong)', marginTop: 2 }}>{m.supplier ?? ''}{m.invoice_date ? ` · ${fmtDate(m.invoice_date)}` : ''}</div>
                     {m.converted_from && <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 1 }}>Invoice: {m.converted_from}</div>}
-                    {m.converted_price != null && !m.can_apply && <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>Verify pack size before using</div>}
-                    {m.converted_price == null && <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>No safe unit conversion found</div>}
+                    {m.converted_price != null && !m.can_apply && <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>Uses inferred price - verify before saving</div>}
+                    {m.converted_price == null && <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>Uses raw invoice price - adjust manually</div>}
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     {m.converted_price != null
