@@ -8,7 +8,7 @@ import type { AppTab } from '@/lib/permissions'
 type RecipeSummary = { id: number; name: string; yield_qty: number; yield_unit: string }
 type Ingredient = { id: number; ingredient: string; qty_value: number | null; qty_unit: string | null; notes: string | null; unit_cost: number | null; sort_order: number }
 type EditIngredient = { id: number | null; ingredient: string; qty_value: string; qty_unit: string; notes: string }
-type SuggestionMatch = { id: number; description: string; unit_price: number; unit: string | null; supplier: string | null; invoice_date: string | null; converted_price: number | null; converted_from: string | null; recipe_unit: string | null }
+type SuggestionMatch = { id: number; description: string; unit_price: number; unit: string | null; supplier: string | null; invoice_date: string | null; converted_price: number | null; converted_from: string | null; recipe_unit: string | null; normalized_price: number | null; normalized_unit: string | null }
 type CostMap = Record<number, string>
 type SuggestionsMap = Record<number, SuggestionMatch[]>
 
@@ -18,6 +18,11 @@ function fmtDate(d: string | null) {
 }
 function fmt(n: number) {
   return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+function fmtUnit(n: number) {
+  if (n === 0) return '$0.00'
+  if (Math.abs(n) < 0.01) return `$${n.toPrecision(3)}`
+  return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 4 })
 }
 
 function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; onPick: (price: number) => void }) {
@@ -31,42 +36,60 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
   if (!matches.length) return null
   const top = matches[0]
   const rest = matches.slice(1)
-  const hasConversion = top.converted_price != null
+  const hasExact = top.converted_price != null
+  const hasNorm = !hasExact && top.normalized_price != null
   return (
     <div ref={ref} style={{ position: 'relative', marginTop: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button
-          onClick={() => onPick(top.converted_price ?? top.unit_price)}
-          title={hasConversion ? `Use ${fmt(top.converted_price!)}/${top.recipe_unit} (from ${top.converted_from})` : `Raw invoice price — units differ, verify before using`}
-          style={{ flex: 1, background: hasConversion ? 'rgba(125,211,168,0.08)' : 'rgba(255,200,100,0.08)', border: `1px solid ${hasConversion ? 'rgba(125,211,168,0.25)' : 'rgba(255,200,100,0.25)'}`, borderRadius: 5, color: hasConversion ? '#7dd3a8' : '#f5c842', fontSize: 11, padding: '3px 6px', cursor: 'pointer', font: 'inherit', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+          onClick={() => { if (hasExact) onPick(top.converted_price!); else setOpen(o => !o) }}
+          title={
+            hasExact ? `Use ${fmtUnit(top.converted_price!)}/${top.recipe_unit} (from ${top.converted_from})`
+            : hasNorm ? `~${fmt(top.normalized_price!)}/${top.normalized_unit} — expand to see details`
+            : `Raw invoice price — units differ, verify before using`
+          }
+          style={{ flex: 1, background: hasExact ? 'rgba(125,211,168,0.08)' : 'rgba(255,200,100,0.08)', border: `1px solid ${hasExact ? 'rgba(125,211,168,0.25)' : 'rgba(255,200,100,0.25)'}`, borderRadius: 5, color: hasExact ? '#7dd3a8' : '#f5c842', fontSize: 11, padding: '3px 6px', cursor: 'pointer', font: 'inherit', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
         >
-          {hasConversion ? `↑ ${fmt(top.converted_price!)}/${top.recipe_unit}` : `↑ ${fmt(top.unit_price)}${top.unit ? `/${top.unit}` : ''} ⚠`}
+          {hasExact
+            ? `↑ ${fmtUnit(top.converted_price!)}/${top.recipe_unit}`
+            : hasNorm
+              ? `↑ ~${fmt(top.normalized_price!)}/${top.normalized_unit} ⚠`
+              : `↑ ${fmt(top.unit_price)}${top.unit ? `/${top.unit}` : ''} ⚠`}
         </button>
-        {rest.length > 0 && <button onClick={() => setOpen(o => !o)} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--muted-strong)', fontSize: 10, padding: '3px 5px', cursor: 'pointer', font: 'inherit', flexShrink: 0 }}>▾</button>}
+        {(rest.length > 0 || hasNorm) && (
+          <button onClick={() => setOpen(o => !o)} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--muted-strong)', fontSize: 10, padding: '3px 5px', cursor: 'pointer', font: 'inherit', flexShrink: 0 }}>▾</button>
+        )}
       </div>
       <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {top.supplier ? top.supplier.split(' ').slice(0, 3).join(' ') : ''}{top.invoice_date ? ` · ${fmtDate(top.invoice_date)}` : ''}
       </div>
       {open && (
         <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, minWidth: 280, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
-          {[top, ...rest].map((m, i) => (
-            <button key={m.id} onClick={() => { onPick(m.converted_price ?? m.unit_price); setOpen(false) }}
-              style={{ width: '100%', background: i === 0 ? 'rgba(125,211,168,0.07)' : 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border)', color: 'inherit', cursor: 'pointer', font: 'inherit', padding: '8px 12px', textAlign: 'left' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#fff' }}>{m.description}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted-strong)', marginTop: 2 }}>{m.supplier ?? ''}{m.invoice_date ? ` · ${fmtDate(m.invoice_date)}` : ''}</div>
-                  {m.converted_from && <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 1 }}>Invoice: {m.converted_from}</div>}
-                  {!m.converted_price && <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>⚠ Units differ — verify before using</div>}
+          {[top, ...rest].map((m, i) => {
+            const mExact = m.converted_price != null
+            const mNorm = !mExact && m.normalized_price != null
+            return (
+              <button key={m.id} onClick={() => { if (mExact) { onPick(m.converted_price!); setOpen(false) } }}
+                style={{ width: '100%', background: i === 0 ? (mExact ? 'rgba(125,211,168,0.07)' : 'rgba(255,200,100,0.04)') : 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border)', color: 'inherit', cursor: mExact ? 'pointer' : 'default', font: 'inherit', padding: '8px 12px', textAlign: 'left' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#fff' }}>{m.description}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted-strong)', marginTop: 2 }}>{m.supplier ?? ''}{m.invoice_date ? ` · ${fmtDate(m.invoice_date)}` : ''}</div>
+                    {m.converted_from && <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 1 }}>Invoice: {m.converted_from}</div>}
+                    {mNorm && <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>⚠ Recipe uses {m.recipe_unit} — manually convert from {m.normalized_unit}</div>}
+                    {!mExact && !mNorm && <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>⚠ Units differ — verify before using</div>}
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    {mExact
+                      ? <div style={{ fontWeight: 700, fontSize: 13, color: '#7dd3a8' }}>{fmtUnit(m.converted_price!)}<span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{m.recipe_unit}</span></div>
+                      : mNorm
+                        ? <div style={{ fontWeight: 700, fontSize: 13, color: '#f5c842' }}>~{fmt(m.normalized_price!)}<span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{m.normalized_unit}</span></div>
+                        : <div style={{ fontWeight: 700, fontSize: 13, color: '#f5c842' }}>{fmt(m.unit_price)}{m.unit ? <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{m.unit}</span> : ''}</div>}
+                  </div>
                 </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  {m.converted_price != null
-                    ? <div style={{ fontWeight: 700, fontSize: 13, color: '#7dd3a8' }}>{fmt(m.converted_price)}<span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{m.recipe_unit}</span></div>
-                    : <div style={{ fontWeight: 700, fontSize: 13, color: '#f5c842' }}>{fmt(m.unit_price)}{m.unit ? <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted-strong)' }}>/{m.unit}</span> : ''}</div>}
-                </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
