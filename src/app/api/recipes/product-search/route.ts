@@ -28,6 +28,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const q = url.searchParams.get('q')?.trim()
   const recipeUnit = url.searchParams.get('recipeUnit')?.trim() || null
+  const ingredient = url.searchParams.get('ingredient')?.trim() || q
   if (!q || q.length < 2) return NextResponse.json({ results: [] })
 
   const { data, error } = await adminClient()
@@ -70,6 +71,7 @@ export async function GET(req: Request) {
         invoiceUnit: unit,
         description,
         recipeUnit,
+        ingredient,
       })
 
       return {

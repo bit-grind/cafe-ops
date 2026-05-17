@@ -71,6 +71,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         invoiceUnit: r.unit,
         description: r.description,
         recipeUnit: ing.qty_unit,
+        ingredient: ing.ingredient,
       })
       return {
         id: r.id,
