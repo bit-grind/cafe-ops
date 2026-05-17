@@ -11,6 +11,7 @@ type EditIngredient = { id: number | null; ingredient: string; qty_value: string
 type SuggestionMatch = { id: number; description: string; unit_price: number; unit: string | null; supplier: string | null; invoice_date: string | null; converted_price: number | null; converted_from: string | null; recipe_unit: string | null; approximate: boolean; can_apply: boolean }
 type CostMap = Record<number, string>
 type SuggestionsMap = Record<number, SuggestionMatch[]>
+type ManualSearchState = Record<number, { open: boolean; q: string; loading: boolean; results: SuggestionMatch[]; error: string | null }>
 
 function fmtDate(d: string | null) {
   if (!d) return ''
@@ -118,6 +119,91 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
   )
 }
 
+function ManualProductSearch({
+  ing,
+  token,
+  state,
+  onState,
+  onPick,
+}: {
+  ing: Ingredient
+  token: string | null
+  state: ManualSearchState[number] | undefined
+  onState: (patch: Partial<ManualSearchState[number]>) => void
+  onPick: (price: number) => void
+}) {
+  const open = state?.open ?? false
+  const q = state?.q ?? ing.ingredient
+  const loading = state?.loading ?? false
+  const results = state?.results ?? []
+  const error = state?.error ?? null
+
+  async function runSearch(query = q) {
+    if (!token || query.trim().length < 2) return
+    onState({ open: true, q: query, loading: true, error: null })
+    const params = new URLSearchParams({ q: query.trim() })
+    if (ing.qty_unit) params.set('recipeUnit', ing.qty_unit)
+    const res = await fetch(`/api/recipes/product-search?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => null)
+    if (!res?.ok) {
+      onState({ loading: false, results: [], error: 'Search failed' })
+      return
+    }
+    const body = await res.json()
+    onState({ loading: false, results: body.results ?? [], error: null })
+  }
+
+  return (
+    <div style={{ position: 'relative', marginTop: 6 }}>
+      {!open ? (
+        <button className="bp-btn" onClick={() => { onState({ open: true, q: ing.ingredient, results: [], error: null }); void runSearch(ing.ingredient) }}
+          style={{ width: '100%', fontSize: 11, padding: '4px 7px', justifyContent: 'center', color: 'var(--muted-strong)' }}>
+          Search invoices
+        </button>
+      ) : (
+        <div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <input className="bp-input" value={q} placeholder="Search invoice products"
+              onChange={e => onState({ q: e.target.value })}
+              onKeyDown={e => { if (e.key === 'Enter') void runSearch() }}
+              style={{ fontSize: 11, padding: '5px 7px' }} />
+            <button className="bp-btn" onClick={() => void runSearch()} disabled={loading || q.trim().length < 2} style={{ fontSize: 11, padding: '5px 7px' }}>
+              {loading ? '...' : 'Go'}
+            </button>
+            <button className="bp-btn" onClick={() => onState({ open: false })} style={{ fontSize: 11, padding: '5px 7px' }}>x</button>
+          </div>
+          <div style={{ position: 'absolute', right: 0, top: 34, zIndex: 20, width: 360, maxHeight: 280, overflowY: 'auto', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+            {loading && <div className="bp-skel" style={{ height: 34, margin: 8, borderRadius: 6 }} />}
+            {!loading && error && <div style={{ padding: 10, fontSize: 12, color: '#e58080' }}>{error}</div>}
+            {!loading && !error && results.length === 0 && <div style={{ padding: 10, fontSize: 12, color: 'var(--muted-strong)' }}>No invoice products found</div>}
+            {!loading && !error && results.map((m, i) => {
+              const canPick = m.can_apply && m.converted_price != null
+              return (
+                <button key={`${m.id}-${i}`} disabled={!canPick}
+                  onClick={() => { if (m.converted_price != null) onPick(m.converted_price); onState({ open: false }) }}
+                  style={{ width: '100%', background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border)', color: 'inherit', cursor: canPick ? 'pointer' : 'not-allowed', font: 'inherit', padding: '8px 10px', textAlign: 'left', opacity: canPick ? 1 : 0.72 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.description}</div>
+                      <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 2 }}>{m.supplier ?? ''}{m.invoice_date ? ` · ${fmtDate(m.invoice_date)}` : ''}</div>
+                      {m.converted_from && <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 1 }}>Invoice: {m.converted_from}</div>}
+                      {!canPick && <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>No safe conversion to {ing.qty_unit || 'recipe unit'}</div>}
+                    </div>
+                    <div style={{ flexShrink: 0, textAlign: 'right', fontSize: 12, fontWeight: 700, color: canPick ? '#7dd3a8' : '#f5c842' }}>
+                      {m.converted_price != null ? `${fmtUnit(m.converted_price)}/${m.recipe_unit}` : `${fmt(m.unit_price)}${m.unit ? `/${m.unit}` : ''}`}
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const EMPTY_ING: EditIngredient = { id: null, ingredient: '', qty_value: '', qty_unit: '', notes: '' }
 
 export default function RecipesPage() {
@@ -134,6 +220,7 @@ export default function RecipesPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<SuggestionsMap>({})
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [manualSearch, setManualSearch] = useState<ManualSearchState>({})
   const [costs, setCosts] = useState<CostMap>({})
   const [costSaving, setCostSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
@@ -173,7 +260,7 @@ export default function RecipesPage() {
 
   const loadRecipe = useCallback(async (id: number, tok: string) => {
     setDetailLoading(true)
-    setIngredients([]); setCosts({}); setSuggestions({}); setSavedMsg(null)
+    setIngredients([]); setCosts({}); setSuggestions({}); setManualSearch({}); setSavedMsg(null)
     const res = await fetch(`/api/recipes/${id}`, { headers: { Authorization: `Bearer ${tok}` } })
     if (res.ok) {
       const body = await res.json()
@@ -210,7 +297,7 @@ export default function RecipesPage() {
   }
 
   function startNewRecipe() {
-    setSelectedId(null); setSelectedRecipe(null); setIngredients([]); setCosts({}); setSuggestions({})
+    setSelectedId(null); setSelectedRecipe(null); setIngredients([]); setCosts({}); setSuggestions({}); setManualSearch({})
     setEditName(''); setEditYieldQty('1'); setEditYieldUnit('portion')
     setEditIngredients([{ ...EMPTY_ING }])
     setDeleteConfirm(false); setRecipeError(null); setIsNewRecipe(true); setEditMode(true)
@@ -280,7 +367,7 @@ export default function RecipesPage() {
     const res = await fetch(`/api/recipes/${selectedId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
     if (res.ok) {
       setRecipes(prev => prev.filter(r => r.id !== selectedId))
-      setSelectedId(null); setSelectedRecipe(null); setIngredients([]); setCosts({}); setSuggestions({})
+      setSelectedId(null); setSelectedRecipe(null); setIngredients([]); setCosts({}); setSuggestions({}); setManualSearch({})
       setEditMode(false); setIsNewRecipe(false); setDeleteConfirm(false)
     }
   }
@@ -299,6 +386,14 @@ export default function RecipesPage() {
 
   function applySuggestion(ingId: number, price: number) {
     setSavedMsg(null); setCosts(prev => ({ ...prev, [ingId]: String(price) }))
+  }
+
+  function updateManualSearch(ingId: number, patch: Partial<ManualSearchState[number]>) {
+    const emptyState = { open: false, q: '', loading: false, results: [], error: null }
+    setManualSearch(prev => ({
+      ...prev,
+      [ingId]: { ...emptyState, ...prev[ingId], ...patch },
+    }))
   }
 
   // ── Computed ───────────────────────────────────────────────────────────
@@ -506,6 +601,15 @@ export default function RecipesPage() {
                                 onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)')} />
                             </div>
                             {ingSuggestions.length > 0 && <SuggestionDropdown matches={ingSuggestions} onPick={price => applySuggestion(ing.id, price)} />}
+                            {!suggestionsLoading && ingSuggestions.length === 0 && (
+                              <ManualProductSearch
+                                ing={ing}
+                                token={token}
+                                state={manualSearch[ing.id]}
+                                onState={patch => updateManualSearch(ing.id, patch)}
+                                onPick={price => applySuggestion(ing.id, price)}
+                              />
+                            )}
                             {suggestionsLoading && ingSuggestions.length === 0 && <div className="bp-skel" style={{ height: 22, borderRadius: 5, marginTop: 4 }} />}
                           </td>
                           <td className="is-right is-mono" style={{ fontWeight: line != null ? 600 : 400, color: line != null ? '#fff' : 'var(--muted-strong)', paddingTop: 12 }}>
