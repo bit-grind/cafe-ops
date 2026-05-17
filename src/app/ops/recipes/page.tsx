@@ -178,19 +178,20 @@ function ManualProductSearch({
             {!loading && error && <div style={{ padding: 10, fontSize: 12, color: '#e58080' }}>{error}</div>}
             {!loading && !error && results.length === 0 && <div style={{ padding: 10, fontSize: 12, color: 'var(--muted-strong)' }}>No invoice products found</div>}
             {!loading && !error && results.map((m, i) => {
-              const canPick = m.can_apply && m.converted_price != null
+              const canApplyConverted = m.can_apply && m.converted_price != null
+              const pickPrice = m.converted_price ?? m.unit_price
               return (
-                <button key={`${m.id}-${i}`} disabled={!canPick}
-                  onClick={() => { if (m.converted_price != null) onPick(m.converted_price); onState({ open: false }) }}
-                  style={{ width: '100%', background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border)', color: 'inherit', cursor: canPick ? 'pointer' : 'not-allowed', font: 'inherit', padding: '8px 10px', textAlign: 'left', opacity: canPick ? 1 : 0.72 }}>
+                <button key={`${m.id}-${i}`}
+                  onClick={() => { onPick(pickPrice); onState({ open: false }) }}
+                  style={{ width: '100%', background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border)', color: 'inherit', cursor: 'pointer', font: 'inherit', padding: '8px 10px', textAlign: 'left' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 12, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.description}</div>
                       <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 2 }}>{m.supplier ?? ''}{m.invoice_date ? ` · ${fmtDate(m.invoice_date)}` : ''}</div>
                       {m.converted_from && <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 1 }}>Invoice: {m.converted_from}</div>}
-                      {!canPick && <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>No safe conversion to {ing.qty_unit || 'recipe unit'}</div>}
+                      {!canApplyConverted && <div style={{ fontSize: 10, color: '#f5c842', marginTop: 1 }}>Uses raw invoice price - adjust manually</div>}
                     </div>
-                    <div style={{ flexShrink: 0, textAlign: 'right', fontSize: 12, fontWeight: 700, color: canPick ? '#7dd3a8' : '#f5c842' }}>
+                    <div style={{ flexShrink: 0, textAlign: 'right', fontSize: 12, fontWeight: 700, color: canApplyConverted ? '#7dd3a8' : '#f5c842' }}>
                       {m.converted_price != null ? `${fmtUnit(m.converted_price)}/${m.recipe_unit}` : `${fmt(m.unit_price)}${m.unit ? `/${m.unit}` : ''}`}
                     </div>
                   </div>
