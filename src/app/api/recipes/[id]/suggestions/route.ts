@@ -41,43 +41,58 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       const kws = keywords(ing.ingredient)
       if (!kws.length) { suggestions[ing.id] = []; return }
 
+      // Step 1: find matching line items by keyword
       const { data: rows } = await db
         .from('extracted_line_items')
-        .select('id, description, unit_price, unit, xero_invoice_id, created_at, xero_bill_cache!inner(contact_name, invoice_date)')
+        .select('id, description, unit_price, unit, xero_invoice_id, created_at')
         .gt('unit_price', 0)
         .ilike('description', `%${kws[0]}%`)
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(30)
 
       if (!rows?.length) { suggestions[ing.id] = []; return }
 
       // Apply secondary keyword filter in JS
-      const filtered = kws[1]
+      const pool = kws[1]
         ? rows.filter(r => r.description.toLowerCase().includes(kws[1]))
         : rows
-
-      const pool = (filtered.length ? filtered : rows)
+      const filtered = pool.length ? pool : rows
 
       // De-duplicate by description+unit_price, keep most recent
       const seen = new Set<string>()
-      const deduped = pool.filter(r => {
+      const deduped = filtered.filter(r => {
         const key = `${r.description.toLowerCase()}|${r.unit_price}`
         if (seen.has(key)) return false
         seen.add(key)
         return true
       }).slice(0, 5)
 
-      suggestions[ing.id] = deduped.map(r => {
-        const cache = Array.isArray(r.xero_bill_cache) ? r.xero_bill_cache[0] : r.xero_bill_cache
-        return {
-          id: r.id,
-          description: r.description,
-          unit_price: Number(r.unit_price),
-          unit: r.unit,
-          supplier: (cache as { contact_name?: string })?.contact_name ?? null,
-          invoice_date: (cache as { invoice_date?: string })?.invoice_date ?? null,
+      // Step 2: look up supplier info for the invoice IDs we actually use
+      const invoiceIds = [...new Set(deduped.map(r => r.xero_invoice_id).filter(Boolean))]
+      const supplierMap: Record<string, { contact_name: string | null; invoice_date: string | null }> = {}
+
+      if (invoiceIds.length) {
+        const { data: bills } = await db
+          .from('xero_bill_cache')
+          .select('xero_invoice_id, contact_name, invoice_date')
+          .in('xero_invoice_id', invoiceIds)
+
+        for (const bill of bills ?? []) {
+          supplierMap[bill.xero_invoice_id] = {
+            contact_name: bill.contact_name,
+            invoice_date: bill.invoice_date,
+          }
         }
-      })
+      }
+
+      suggestions[ing.id] = deduped.map(r => ({
+        id: r.id,
+        description: r.description,
+        unit_price: Number(r.unit_price),
+        unit: r.unit,
+        supplier: supplierMap[r.xero_invoice_id]?.contact_name ?? null,
+        invoice_date: supplierMap[r.xero_invoice_id]?.invoice_date ?? null,
+      }))
     })
   )
 

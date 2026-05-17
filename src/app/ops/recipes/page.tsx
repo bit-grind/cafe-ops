@@ -494,20 +494,19 @@ export default function RecipesPage() {
                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                               <span style={{ position: 'absolute', left: 6, fontSize: 11, color: 'var(--muted-strong)', pointerEvents: 'none', zIndex: 1 }}>$</span>
                               <input
-                                type="number"
-                                min="0"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 value={costs[ing.id] ?? ''}
                                 onChange={e => {
                                   setSavedMsg(null)
                                   setCosts(prev => ({ ...prev, [ing.id]: e.target.value }))
                                 }}
-                                placeholder={isFlat ? 'flat' : '0.00'}
+                                placeholder={isFlat ? 'enter flat cost' : 'enter price'}
                                 title={isFlat ? 'Enter flat batch cost for this ingredient' : `Cost per ${ing.qty_unit ?? 'unit'}`}
                                 style={{
                                   width: '100%',
-                                  background: 'rgba(255,255,255,0.04)',
-                                  border: '1px solid var(--border)',
+                                  background: 'rgba(255,255,255,0.07)',
+                                  border: '1px solid rgba(255,255,255,0.2)',
                                   borderRadius: 6,
                                   color: '#fff',
                                   padding: '5px 6px 5px 18px',
@@ -516,8 +515,8 @@ export default function RecipesPage() {
                                   outline: 'none',
                                   textAlign: 'right',
                                 }}
-                                onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.32)')}
-                                onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                                onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.55)')}
+                                onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)')}
                               />
                             </div>
 
