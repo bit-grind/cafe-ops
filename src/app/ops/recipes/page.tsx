@@ -51,7 +51,7 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
     m.converted_price != null
       ? `${m.approximate ? '~' : ''}${fmtUnit(m.converted_price)}/${m.recipe_unit}`
       : `${fmt(m.unit_price)}${m.unit ? `/${m.unit}` : ''}`
-  const topGood = top.can_apply && top.converted_price != null && !top.approximate
+  const topGood = top.can_apply && top.converted_price != null
 
   function toggle() {
     if (open) { setOpen(false); return }
@@ -75,7 +75,7 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
         <button
           onClick={() => onPick(pickValue(top))}
           title={
-            topGood ? `Use ${fmtUnit(top.converted_price!)}/${top.recipe_unit} (from ${top.converted_from})`
+            topGood ? `Use ${fmtUnit(top.converted_price!)}/${top.recipe_unit} (from ${top.converted_from})${top.approximate ? ' - density estimate' : ''}`
             : top.converted_price != null ? `Uses inferred price. Verify before saving.`
             : `Uses raw invoice price. Adjust manually before saving.`
           }
@@ -91,7 +91,7 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
       {open && coords && (
         <div style={{ position: 'fixed', left: coords.left, top: coords.top, bottom: coords.bottom, zIndex: 1000, width: 280, maxHeight: '60vh', overflowY: 'auto', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
           {[top, ...rest].map((m, i) => {
-            const mGood = m.can_apply && m.converted_price != null && !m.approximate
+            const mGood = m.can_apply && m.converted_price != null
             return (
               <button key={m.id} onClick={() => { onPick(pickValue(m)); setOpen(false) }}
                 style={{ width: '100%', background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border)', color: 'inherit', cursor: 'pointer', font: 'inherit', padding: '8px 12px', textAlign: 'left' }}>
