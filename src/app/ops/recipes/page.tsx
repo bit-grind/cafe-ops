@@ -27,12 +27,21 @@ function fmtUnit(n: number) {
 
 function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; onPick: (price: number) => void }) {
   const [open, setOpen] = useState(false)
+  const [coords, setCoords] = useState<{ left: number; top?: number; bottom?: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    function h(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
+    if (!open) return
+    function onDown(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    function close() { setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
   if (!matches.length) return null
   const top = matches[0]
   const rest = matches.slice(1)
@@ -42,6 +51,23 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
       ? `${m.approximate ? '~' : ''}${fmtUnit(m.converted_price)}/${m.recipe_unit}`
       : `${fmt(m.unit_price)}${m.unit ? `/${m.unit}` : ''}`
   const topGood = top.converted_price != null && !top.approximate
+
+  function toggle() {
+    if (open) { setOpen(false); return }
+    const el = ref.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const width = 280
+    const estHeight = Math.min(matches.length, 5) * 84 + 4
+    const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
+    if (window.innerHeight - rect.bottom < estHeight && rect.top > estHeight) {
+      setCoords({ left, bottom: window.innerHeight - rect.top + 4 })
+    } else {
+      setCoords({ left, top: rect.bottom + 4 })
+    }
+    setOpen(true)
+  }
+
   return (
     <div ref={ref} style={{ position: 'relative', marginTop: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -56,13 +82,13 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
         >
           ↑ {labelOf(top)}{topGood ? '' : ' ⚠'}
         </button>
-        {rest.length > 0 && <button onClick={() => setOpen(o => !o)} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--muted-strong)', fontSize: 10, padding: '3px 5px', cursor: 'pointer', font: 'inherit', flexShrink: 0 }}>▾</button>}
+        {rest.length > 0 && <button onClick={toggle} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--muted-strong)', fontSize: 10, padding: '3px 5px', cursor: 'pointer', font: 'inherit', flexShrink: 0 }}>▾</button>}
       </div>
       <div style={{ fontSize: 10, color: 'var(--muted-strong)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {top.supplier ? top.supplier.split(' ').slice(0, 3).join(' ') : ''}{top.invoice_date ? ` · ${fmtDate(top.invoice_date)}` : ''}
       </div>
-      {open && (
-        <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, minWidth: 280, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+      {open && coords && (
+        <div style={{ position: 'fixed', left: coords.left, top: coords.top, bottom: coords.bottom, zIndex: 1000, width: 280, maxHeight: '60vh', overflowY: 'auto', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
           {[top, ...rest].map((m, i) => {
             const mGood = m.converted_price != null && !m.approximate
             return (
