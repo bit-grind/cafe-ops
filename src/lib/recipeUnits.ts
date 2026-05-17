@@ -1,14 +1,14 @@
-export type MeasureKind = 'weight' | 'volume'
+export type MeasureKind = 'weight' | 'volume' | 'count'
 
 export type NormalizedUnit = {
   kind: MeasureKind
-  unit: 'g' | 'mL'
+  unit: 'g' | 'mL' | CountUnit
   factor: number
   label: string
 }
 
 export type PackSize = {
-  kind: MeasureKind
+  kind: 'weight' | 'volume'
   unit: 'g' | 'mL'
   amount: number
   label: string
@@ -21,6 +21,8 @@ export type ConvertResult = {
   exact: boolean
   canApply: boolean
 }
+
+type CountUnit = 'each' | 'bunch' | 'tray' | 'box' | 'pack' | 'bag' | 'tub' | 'bottle' | 'jar' | 'tin' | 'can'
 
 const UNIT_ALIASES: Record<string, NormalizedUnit> = {
   g: { kind: 'weight', unit: 'g', factor: 1, label: 'g' },
@@ -55,6 +57,40 @@ const UNIT_ALIASES: Record<string, NormalizedUnit> = {
   tsp: { kind: 'volume', unit: 'mL', factor: 5, label: 'tsp' },
   teaspoon: { kind: 'volume', unit: 'mL', factor: 5, label: 'tsp' },
   teaspoons: { kind: 'volume', unit: 'mL', factor: 5, label: 'tsp' },
+
+  each: { kind: 'count', unit: 'each', factor: 1, label: 'each' },
+  ea: { kind: 'count', unit: 'each', factor: 1, label: 'each' },
+  unit: { kind: 'count', unit: 'each', factor: 1, label: 'each' },
+  units: { kind: 'count', unit: 'each', factor: 1, label: 'each' },
+  pc: { kind: 'count', unit: 'each', factor: 1, label: 'each' },
+  pcs: { kind: 'count', unit: 'each', factor: 1, label: 'each' },
+  bunch: { kind: 'count', unit: 'bunch', factor: 1, label: 'bunch' },
+  bunches: { kind: 'count', unit: 'bunch', factor: 1, label: 'bunch' },
+  tray: { kind: 'count', unit: 'tray', factor: 1, label: 'tray' },
+  trays: { kind: 'count', unit: 'tray', factor: 1, label: 'tray' },
+  box: { kind: 'count', unit: 'box', factor: 1, label: 'box' },
+  boxes: { kind: 'count', unit: 'box', factor: 1, label: 'box' },
+  ctn: { kind: 'count', unit: 'box', factor: 1, label: 'box' },
+  carton: { kind: 'count', unit: 'box', factor: 1, label: 'box' },
+  cartons: { kind: 'count', unit: 'box', factor: 1, label: 'box' },
+  case: { kind: 'count', unit: 'box', factor: 1, label: 'box' },
+  cases: { kind: 'count', unit: 'box', factor: 1, label: 'box' },
+  pack: { kind: 'count', unit: 'pack', factor: 1, label: 'pack' },
+  packs: { kind: 'count', unit: 'pack', factor: 1, label: 'pack' },
+  pkt: { kind: 'count', unit: 'pack', factor: 1, label: 'pack' },
+  bag: { kind: 'count', unit: 'bag', factor: 1, label: 'bag' },
+  bags: { kind: 'count', unit: 'bag', factor: 1, label: 'bag' },
+  tub: { kind: 'count', unit: 'tub', factor: 1, label: 'tub' },
+  tubs: { kind: 'count', unit: 'tub', factor: 1, label: 'tub' },
+  btl: { kind: 'count', unit: 'bottle', factor: 1, label: 'bottle' },
+  bottle: { kind: 'count', unit: 'bottle', factor: 1, label: 'bottle' },
+  bottles: { kind: 'count', unit: 'bottle', factor: 1, label: 'bottle' },
+  jar: { kind: 'count', unit: 'jar', factor: 1, label: 'jar' },
+  jars: { kind: 'count', unit: 'jar', factor: 1, label: 'jar' },
+  tin: { kind: 'count', unit: 'tin', factor: 1, label: 'tin' },
+  tins: { kind: 'count', unit: 'tin', factor: 1, label: 'tin' },
+  can: { kind: 'count', unit: 'can', factor: 1, label: 'can' },
+  cans: { kind: 'count', unit: 'can', factor: 1, label: 'can' },
 }
 
 const MEASURE_UNITS = [
@@ -84,7 +120,8 @@ const CARTON_UNIT_RE = /\b(ctn|carton|case|box|tray|pack|pkt)\b/i
 
 export function normalizeMeasureUnit(unit: string | null | undefined): NormalizedUnit | null {
   if (!unit) return null
-  return UNIT_ALIASES[cleanUnit(unit)] ?? null
+  const cleaned = cleanUnit(unit)
+  return UNIT_ALIASES[cleaned] ?? cleaned.split(/\s+/).map(part => UNIT_ALIASES[part]).find(Boolean) ?? null
 }
 
 export function convertRecipePrice({
@@ -102,7 +139,16 @@ export function convertRecipePrice({
   if (!recipe || !Number.isFinite(invoicePrice) || invoicePrice <= 0) return null
 
   const invoice = normalizeMeasureUnit(invoiceUnit)
-  if (invoice && invoice.kind === recipe.kind) {
+  if (invoice && invoice.kind === 'count' && recipe.kind === 'count' && invoice.unit === recipe.unit) {
+    return {
+      price: round6((invoicePrice / invoice.factor) * recipe.factor),
+      from: `$${invoicePrice}/${invoice.label}`,
+      exact: true,
+      canApply: true,
+    }
+  }
+
+  if (invoice && invoice.kind !== 'count' && invoice.kind === recipe.kind) {
     return {
       price: round6((invoicePrice / invoice.factor) * recipe.factor),
       from: `$${invoicePrice}/${invoice.label}`,
@@ -167,12 +213,14 @@ export function parsePackSize(description: string, invoiceUnit?: string | null):
 function toPackSize(amount: number, unit: string, confidence: PackSize['confidence']): PackSize | null {
   const normalized = normalizeMeasureUnit(unit)
   if (!normalized || !Number.isFinite(amount) || amount <= 0) return null
+  if (normalized.kind === 'count') return null
+  const baseUnit = normalized.unit === 'g' ? 'g' : 'mL'
   const baseAmount = amount * normalized.factor
   return {
     kind: normalized.kind,
-    unit: normalized.unit,
+    unit: baseUnit,
     amount: baseAmount,
-    label: packLabel(normalized.unit, baseAmount),
+    label: packLabel(baseUnit, baseAmount),
     confidence,
   }
 }
