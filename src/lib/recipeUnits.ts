@@ -22,7 +22,7 @@ export type ConvertResult = {
   canApply: boolean
 }
 
-type CountUnit = 'each' | 'bunch' | 'tray' | 'box' | 'pack' | 'bag' | 'tub' | 'bottle' | 'jar' | 'tin' | 'can'
+type CountUnit = 'each' | 'bunch' | 'tray' | 'box' | 'pack' | 'bag' | 'tub' | 'bottle' | 'jar' | 'tin' | 'can' | 'drum'
 
 const UNIT_ALIASES: Record<string, NormalizedUnit> = {
   g: { kind: 'weight', unit: 'g', factor: 1, label: 'g' },
@@ -91,6 +91,8 @@ const UNIT_ALIASES: Record<string, NormalizedUnit> = {
   tins: { kind: 'count', unit: 'tin', factor: 1, label: 'tin' },
   can: { kind: 'count', unit: 'can', factor: 1, label: 'can' },
   cans: { kind: 'count', unit: 'can', factor: 1, label: 'can' },
+  drum: { kind: 'count', unit: 'drum', factor: 1, label: 'drum' },
+  drums: { kind: 'count', unit: 'drum', factor: 1, label: 'drum' },
 }
 
 const MEASURE_UNITS = [
@@ -115,7 +117,7 @@ const MEASURE_UNITS = [
   'g',
 ].join('|')
 
-const PACK_UNIT_RE = /\b(ctn|carton|case|box|tray|pack|pkt|bag|tub|btl|bottle|jar|tin|can|each|ea|unit|pc|pcs)\b/i
+const PACK_UNIT_RE = /\b(ctn|carton|case|box|tray|pack|pkt|bag|tub|btl|bottle|jar|tin|can|drum|each|ea|unit|pc|pcs)\b/i
 const CARTON_UNIT_RE = /\b(ctn|carton|case|box|tray|pack|pkt)\b/i
 
 export function normalizeMeasureUnit(unit: string | null | undefined): NormalizedUnit | null {
