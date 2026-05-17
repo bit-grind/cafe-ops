@@ -55,10 +55,9 @@ function pickLarger(a: PackSize | null, b: PackSize): PackSize {
 }
 
 type ConvertResult = {
-  price: number
-  unit: string        // unit the price applies to (recipe unit, or 'kg'/'L' for normalized)
+  price: number       // price per recipe unit
   from: string        // human-readable source e.g. "$22.55/btl (2.5kg)"
-  exact: boolean      // true = price is per recipe unit; false = normalized, needs manual conversion
+  exact: boolean      // true = same measurement type; false = volume<->weight, density assumed
 }
 
 function convertPrice(
@@ -67,70 +66,45 @@ function convertPrice(
   description: string,
   recipeUnit: string | null,
 ): ConvertResult | null {
-  if (!recipeUnit) {
-    // No recipe unit — still try to normalize to $/kg or $/L from pack size
-    const pack = parsePackSize(description)
-    if (!pack) return null
-    const label = `$${invoicePrice}/${invoiceUnit ?? 'unit'} (${packLabel(pack)})`
-    if (pack.type === 'mL') return { price: round(invoicePrice / pack.amount * 1000), unit: 'L', from: label, exact: false }
-    return { price: round(invoicePrice / pack.amount * 1000), unit: 'kg', from: label, exact: false }
-  }
+  if (!recipeUnit) return null
 
   const ru = recipeUnit.toLowerCase()
   const iu = (invoiceUnit ?? '').toLowerCase()
+  const pack = parsePackSize(description)
+  const packStr = pack ? `$${invoicePrice}/${invoiceUnit ?? 'unit'} (${packLabel(pack)})` : ''
 
-  // ── Volume → volume ────────────────────────────────────────────────────
+  // ── Volume recipe unit (mL, L, cup, tbsp, tsp) ──────────────────────────
   const recipeML = RECIPE_UNIT_ML[ru]
   if (recipeML !== undefined) {
-    let pricePerML: number | null = null
-    let fromStr = ''
-
+    // Invoice priced directly by volume
     const invML = INVOICE_UNIT_ML[iu]
     if (invML !== undefined) {
-      pricePerML = invoicePrice / invML
-      fromStr = `$${invoicePrice}/${invoiceUnit}`
+      return { price: round6(invoicePrice / invML * recipeML), from: `$${invoicePrice}/${invoiceUnit}`, exact: true }
     }
-    if (pricePerML === null) {
-      const pack = parsePackSize(description)
-      if (pack?.type === 'mL') {
-        pricePerML = invoicePrice / pack.amount
-        fromStr = `$${invoicePrice}/${invoiceUnit ?? 'unit'} (${packLabel(pack)})`
-      } else if (pack?.type === 'g') {
-        // Weight pack, volume recipe — show normalized $/L as fallback
-        const label = `$${invoicePrice}/${invoiceUnit ?? 'unit'} (${packLabel(pack)})`
-        return { price: round(invoicePrice / pack.amount * 1000), unit: 'kg', from: label, exact: false }
-      }
+    // Pack size encodes volume
+    if (pack?.type === 'mL') {
+      return { price: round6(invoicePrice / pack.amount * recipeML), from: packStr, exact: true }
     }
-    if (pricePerML !== null) {
-      return { price: round6(pricePerML * recipeML), unit: recipeUnit, from: fromStr, exact: true }
+    // Pack size encodes weight — approximate, treating 1g as 1mL (density ≈ water)
+    if (pack?.type === 'g') {
+      return { price: round6(invoicePrice / pack.amount * recipeML), from: packStr, exact: false }
     }
     return null
   }
 
-  // ── Weight → weight ────────────────────────────────────────────────────
+  // ── Weight recipe unit (g, kg) ──────────────────────────────────────────
   const recipeG = RECIPE_UNIT_G[ru]
   if (recipeG !== undefined) {
-    let pricePerG: number | null = null
-    let fromStr = ''
-
     const invG = INVOICE_UNIT_G[iu]
     if (invG !== undefined) {
-      pricePerG = invoicePrice / invG
-      fromStr = `$${invoicePrice}/${invoiceUnit}`
+      return { price: round6(invoicePrice / invG * recipeG), from: `$${invoicePrice}/${invoiceUnit}`, exact: true }
     }
-    if (pricePerG === null) {
-      const pack = parsePackSize(description)
-      if (pack?.type === 'g') {
-        pricePerG = invoicePrice / pack.amount
-        fromStr = `$${invoicePrice}/${invoiceUnit ?? 'unit'} (${packLabel(pack)})`
-      } else if (pack?.type === 'mL') {
-        // Volume pack, weight recipe — normalized $/L fallback
-        const label = `$${invoicePrice}/${invoiceUnit ?? 'unit'} (${packLabel(pack)})`
-        return { price: round(invoicePrice / pack.amount * 1000), unit: 'L', from: label, exact: false }
-      }
+    if (pack?.type === 'g') {
+      return { price: round6(invoicePrice / pack.amount * recipeG), from: packStr, exact: true }
     }
-    if (pricePerG !== null) {
-      return { price: round6(pricePerG * recipeG), unit: recipeUnit, from: fromStr, exact: true }
+    // Pack size encodes volume — approximate, treating 1mL as 1g (density ≈ water)
+    if (pack?.type === 'mL') {
+      return { price: round6(invoicePrice / pack.amount * recipeG), from: packStr, exact: false }
     }
     return null
   }
@@ -142,7 +116,6 @@ function packLabel(pack: PackSize): string {
   if (pack.type === 'mL') return pack.amount >= 1000 ? `${pack.amount / 1000}L` : `${pack.amount}mL`
   return pack.amount >= 1000 ? `${pack.amount / 1000}kg` : `${pack.amount}g`
 }
-function round(n: number) { return parseFloat(n.toFixed(4)) }
 function round6(n: number) { return parseFloat(n.toFixed(6)) }
 
 // ── Stop words ─────────────────────────────────────────────────────────────
@@ -217,12 +190,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         unit: r.unit,
         supplier: supplierMap[r.xero_invoice_id]?.contact_name ?? null,
         invoice_date: supplierMap[r.xero_invoice_id]?.invoice_date ?? null,
-        converted_price: conv?.exact ? conv.price : null,
+        converted_price: conv?.price ?? null,
         converted_from: conv?.from ?? null,
         recipe_unit: ing.qty_unit,
-        // Normalized fallback: best price info even when exact conversion isn't possible
-        normalized_price: conv && !conv.exact ? conv.price : null,
-        normalized_unit: conv && !conv.exact ? conv.unit : null,
+        approximate: conv ? !conv.exact : false,
       }
     })
   }))
