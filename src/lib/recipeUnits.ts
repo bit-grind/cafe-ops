@@ -119,6 +119,10 @@ const MEASURE_UNITS = [
 
 const PACK_UNIT_RE = /\b(ctn|carton|case|box|tray|pack|pkt|bag|tub|btl|bottle|jar|tin|can|drum|each|ea|unit|pc|pcs)\b/i
 const CARTON_UNIT_RE = /\b(ctn|carton|case|box|tray|pack|pkt)\b/i
+const DENSITY_G_PER_ML: Array<{ re: RegExp; gPerMl: number }> = [
+  { re: /\b(mustard|mayo|mayonnaise|aioli|sauce|paste|jam|honey|syrup)\b/i, gPerMl: 1 },
+  { re: /\b(vinegar|juice|oil)\b/i, gPerMl: 0.92 },
+]
 
 export function normalizeMeasureUnit(unit: string | null | undefined): NormalizedUnit | null {
   if (!unit) return null
@@ -131,11 +135,13 @@ export function convertRecipePrice({
   invoiceUnit,
   description,
   recipeUnit,
+  ingredient,
 }: {
   invoicePrice: number
   invoiceUnit: string | null
   description: string
   recipeUnit: string | null
+  ingredient?: string | null
 }): ConvertResult | null {
   const recipe = normalizeMeasureUnit(recipeUnit)
   if (!recipe || !Number.isFinite(invoicePrice) || invoicePrice <= 0) return null
@@ -169,7 +175,36 @@ export function convertRecipePrice({
     }
   }
 
+  const density = densityFor(`${ingredient ?? ''} ${description}`)
+  if (pack && density) {
+    if (pack.kind === 'weight' && recipe.kind === 'volume') {
+      const recipeG = recipe.factor * density.gPerMl
+      return {
+        price: round6((invoicePrice / pack.amount) * recipeG),
+        from: `$${invoicePrice}/${invoiceUnit || 'unit'} (${pack.label}, ${density.label})`,
+        exact: false,
+        canApply: true,
+      }
+    }
+
+    if (pack.kind === 'volume' && recipe.kind === 'weight') {
+      const packG = pack.amount * density.gPerMl
+      return {
+        price: round6((invoicePrice / packG) * recipe.factor),
+        from: `$${invoicePrice}/${invoiceUnit || 'unit'} (${pack.label}, ${density.label})`,
+        exact: false,
+        canApply: true,
+      }
+    }
+  }
+
   return null
+}
+
+function densityFor(text: string): { gPerMl: number; label: string } | null {
+  const match = DENSITY_G_PER_ML.find(entry => entry.re.test(text))
+  if (!match) return null
+  return { gPerMl: match.gPerMl, label: `${match.gPerMl}g/mL` }
 }
 
 export function parsePackSize(description: string, invoiceUnit?: string | null): PackSize | null {

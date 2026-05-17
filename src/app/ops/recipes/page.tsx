@@ -142,6 +142,7 @@ function ManualProductSearch({
     onState({ open: true, q: query, loading: true, error: null })
     const params = new URLSearchParams({ q: query.trim() })
     if (ing.qty_unit) params.set('recipeUnit', ing.qty_unit)
+    params.set('ingredient', ing.ingredient)
     const res = await fetch(`/api/recipes/product-search?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
     }).catch(() => null)
