@@ -26,7 +26,7 @@ function fmtUnit(n: number) {
   return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 4 })
 }
 
-function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; onPick: (price: number) => void }) {
+function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; onPick: (match: SuggestionMatch, price: number) => void }) {
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<{ left: number; top?: number; bottom?: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -73,7 +73,7 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
     <div ref={ref} style={{ position: 'relative', marginTop: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button
-          onClick={() => onPick(pickValue(top))}
+          onClick={() => onPick(top, pickValue(top))}
           title={
             topGood ? `Use ${fmtUnit(top.converted_price!)}/${top.recipe_unit} (from ${top.converted_from})${top.approximate ? ' - density estimate' : ''}`
             : top.converted_price != null ? `Uses inferred price. Verify before saving.`
@@ -93,7 +93,7 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
           {[top, ...rest].map((m, i) => {
             const mGood = m.can_apply && m.converted_price != null
             return (
-              <button key={m.id} onClick={() => { onPick(pickValue(m)); setOpen(false) }}
+              <button key={m.id} onClick={() => { onPick(m, pickValue(m)); setOpen(false) }}
                 style={{ width: '100%', background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border)', color: 'inherit', cursor: 'pointer', font: 'inherit', padding: '8px 12px', textAlign: 'left' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
@@ -129,7 +129,7 @@ function ManualProductSearch({
   token: string | null
   state: ManualSearchState[number] | undefined
   onState: (patch: Partial<ManualSearchState[number]>) => void
-  onPick: (price: number) => void
+  onPick: (match: SuggestionMatch, price: number) => void
 }) {
   const open = state?.open ?? false
   const q = state?.q ?? ing.ingredient
@@ -182,7 +182,7 @@ function ManualProductSearch({
               const pickPrice = m.converted_price ?? m.unit_price
               return (
                 <button key={`${m.id}-${i}`}
-                  onClick={() => { onPick(pickPrice); onState({ open: false }) }}
+                  onClick={() => { onPick(m, pickPrice); onState({ open: false }) }}
                   style={{ width: '100%', background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border)', color: 'inherit', cursor: 'pointer', font: 'inherit', padding: '8px 10px', textAlign: 'left' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                     <div style={{ minWidth: 0 }}>
@@ -385,8 +385,15 @@ export default function RecipesPage() {
     if (res.ok) setTimeout(() => setSavedMsg(null), 2500)
   }
 
-  function applySuggestion(ingId: number, price: number) {
+  function applySuggestion(ingId: number, match: SuggestionMatch, price: number) {
     setSavedMsg(null); setCosts(prev => ({ ...prev, [ingId]: String(price) }))
+    setSuggestions(prev => {
+      const current = prev[ingId] ?? []
+      return {
+        ...prev,
+        [ingId]: [match, ...current.filter(item => item.id !== match.id)],
+      }
+    })
   }
 
   function updateManualSearch(ingId: number, patch: Partial<ManualSearchState[number]>) {
@@ -601,14 +608,14 @@ export default function RecipesPage() {
                                 onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.55)')}
                                 onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)')} />
                             </div>
-                            {ingSuggestions.length > 0 && <SuggestionDropdown matches={ingSuggestions} onPick={price => applySuggestion(ing.id, price)} />}
+                            {ingSuggestions.length > 0 && <SuggestionDropdown matches={ingSuggestions} onPick={(match, price) => applySuggestion(ing.id, match, price)} />}
                             {!suggestionsLoading && ingSuggestions.length === 0 && (
                               <ManualProductSearch
                                 ing={ing}
                                 token={token}
                                 state={manualSearch[ing.id]}
                                 onState={patch => updateManualSearch(ing.id, patch)}
-                                onPick={price => applySuggestion(ing.id, price)}
+                                onPick={(match, price) => applySuggestion(ing.id, match, price)}
                               />
                             )}
                             {suggestionsLoading && ingSuggestions.length === 0 && <div className="bp-skel" style={{ height: 22, borderRadius: 5, marginTop: 4 }} />}
