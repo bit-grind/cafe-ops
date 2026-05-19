@@ -31,6 +31,13 @@ type OnboardingStatus = {
   nextStep?: string
 }
 
+type TeamMember = {
+  userId: string
+  email: string | null
+  role: string
+  createdAt: string
+}
+
 export default function OnboardingPage() {
   const [email, setEmail] = useState<string | null>(null)
   const [businessName, setBusinessName] = useState('')
@@ -43,6 +50,12 @@ export default function OnboardingPage() {
   const [organization, setOrganization] = useState<MeResponse['organization']>(null)
   const [integrations, setIntegrations] = useState<OnboardingStatus['integrations']>([])
   const [nextStep, setNextStep] = useState<string | null>(null)
+  const [members, setMembers] = useState<TeamMember[]>([])
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('guest')
+  const [invitePassword, setInvitePassword] = useState('')
+  const [inviteResult, setInviteResult] = useState<string | null>(null)
+  const [inviting, setInviting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -81,6 +94,12 @@ export default function OnboardingPage() {
             setIntegrations(statusBody.integrations ?? [])
             setNextStep(statusBody.nextStep ?? null)
           }
+
+          const teamRes = await fetch('/api/onboarding/team', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          })
+          const teamBody = (await teamRes.json().catch(() => ({}))) as { members?: TeamMember[] }
+          if (!cancelled && teamRes.ok) setMembers(teamBody.members ?? [])
         }
       }
       setBusy(false)
@@ -139,6 +158,60 @@ export default function OnboardingPage() {
     setMessage(body.alreadyExists ? 'Business profile already exists.' : 'Business profile created.')
   }
 
+  async function inviteMember(e: React.FormEvent) {
+    e.preventDefault()
+    setInviting(true)
+    setError(null)
+    setInviteResult(null)
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session) {
+      window.location.href = '/login'
+      return
+    }
+
+    const res = await fetch('/api/onboarding/team', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: inviteEmail,
+        role: inviteRole,
+        password: invitePassword || undefined,
+      }),
+    })
+    const body = await res.json().catch(() => ({}))
+    setInviting(false)
+
+    if (!res.ok) {
+      setError(body.error ?? 'Unable to add team member.')
+      return
+    }
+
+    const member = body.member
+    setMembers((current) => [
+      ...current.filter((row) => row.userId !== member.userId),
+      {
+        userId: member.userId,
+        email: member.email,
+        role: member.role,
+        createdAt: new Date().toISOString(),
+      },
+    ])
+    setInviteEmail('')
+    setInvitePassword('')
+    setInviteResult(
+      member.temporaryPassword
+        ? `User created. Temporary password: ${member.temporaryPassword}`
+        : 'Team member added.'
+    )
+  }
+
   const xeroStatus = integrations?.find((row) => row.provider === 'xero')?.status
   const steps = [
     ['Business profile', !!organization?.onboarding?.businessProfileComplete || !!organization],
@@ -166,57 +239,129 @@ export default function OnboardingPage() {
         {busy ? (
           <div className="bp-card">Loading setup...</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(260px, 0.8fr)', gap: 18 }}>
-            <section className="bp-card" style={{ padding: 22 }}>
-              <div style={{ color: 'var(--muted-strong)', fontSize: 13, marginBottom: 6 }}>{email}</div>
-              <h2 style={{ fontSize: 18, margin: '0 0 18px', fontWeight: 650 }}>
-                {organization ? 'Business profile' : 'Create your business profile'}
-              </h2>
+          <div className="onboarding-grid">
+            <div style={{ display: 'grid', gap: 18 }}>
+              <section className="bp-card" style={{ padding: 22 }}>
+                <div style={{ color: 'var(--muted-strong)', fontSize: 13, marginBottom: 6 }}>{email}</div>
+                <h2 style={{ fontSize: 18, margin: '0 0 18px', fontWeight: 650 }}>
+                  {organization ? 'Business profile' : 'Create your business profile'}
+                </h2>
 
-              <form onSubmit={createOrganization} style={{ display: 'grid', gap: 14 }}>
-                <label style={{ display: 'grid', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
-                  Business name
-                  <input
-                    className="bp-input"
-                    value={businessName}
-                    disabled={!!organization || saving}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    placeholder="Example Cafe"
-                  />
-                </label>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
+                <form onSubmit={createOrganization} style={{ display: 'grid', gap: 14 }}>
                   <label style={{ display: 'grid', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
-                    Timezone
+                    Business name
                     <input
                       className="bp-input"
-                      value={timezone}
+                      value={businessName}
                       disabled={!!organization || saving}
-                      onChange={(e) => setTimezone(e.target.value)}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      placeholder="Example Cafe"
                     />
                   </label>
-                  <label style={{ display: 'grid', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
-                    Currency
-                    <input
-                      className="bp-input"
-                      value={currencyCode}
-                      disabled={!!organization || saving}
-                      maxLength={3}
-                      onChange={(e) => setCurrencyCode(e.target.value.toUpperCase())}
-                    />
-                  </label>
-                </div>
 
-                {!organization && (
-                  <button className="bp-btn bp-btn--primary" disabled={saving || !businessName.trim()}>
-                    {saving ? 'Creating...' : 'Create business'}
-                  </button>
-                )}
-              </form>
+                  <div className="onboarding-profile-grid">
+                    <label style={{ display: 'grid', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
+                      Timezone
+                      <input
+                        className="bp-input"
+                        value={timezone}
+                        disabled={!!organization || saving}
+                        onChange={(e) => setTimezone(e.target.value)}
+                      />
+                    </label>
+                    <label style={{ display: 'grid', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
+                      Currency
+                      <input
+                        className="bp-input"
+                        value={currencyCode}
+                        disabled={!!organization || saving}
+                        maxLength={3}
+                        onChange={(e) => setCurrencyCode(e.target.value.toUpperCase())}
+                      />
+                    </label>
+                  </div>
 
-              {message && <p style={{ color: '#95d5a8', fontSize: 13, marginTop: 14 }}>{message}</p>}
-              {error && <p style={{ color: '#e58080', fontSize: 13, marginTop: 14 }}>{error}</p>}
-            </section>
+                  {!organization && (
+                    <button className="bp-btn bp-btn--primary" disabled={saving || !businessName.trim()}>
+                      {saving ? 'Creating...' : 'Create business'}
+                    </button>
+                  )}
+                </form>
+
+                {message && <p style={{ color: '#95d5a8', fontSize: 13, marginTop: 14 }}>{message}</p>}
+                {error && <p style={{ color: '#e58080', fontSize: 13, marginTop: 14 }}>{error}</p>}
+              </section>
+
+              {organization && (
+                <section className="bp-card" style={{ padding: 22 }}>
+                  <h2 style={{ fontSize: 18, margin: '0 0 18px', fontWeight: 650 }}>Team</h2>
+
+                  <form onSubmit={inviteMember} className="onboarding-team-form">
+                    <label style={{ display: 'grid', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
+                      Email
+                      <input
+                        className="bp-input"
+                        value={inviteEmail}
+                        disabled={inviting}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        placeholder="person@example.com"
+                      />
+                    </label>
+                    <label style={{ display: 'grid', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
+                      Role
+                      <select
+                        className="bp-input"
+                        value={inviteRole}
+                        disabled={inviting}
+                        onChange={(e) => setInviteRole(e.target.value)}
+                      >
+                        <option value="guest">Guest</option>
+                        <option value="kitchen">Kitchen</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </label>
+                    <label style={{ display: 'grid', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
+                      Password
+                      <input
+                        className="bp-input"
+                        value={invitePassword}
+                        disabled={inviting}
+                        type="password"
+                        onChange={(e) => setInvitePassword(e.target.value)}
+                        placeholder="Auto-generate"
+                      />
+                    </label>
+                    <button className="bp-btn bp-btn--primary" disabled={inviting || !inviteEmail.trim()}>
+                      {inviting ? 'Adding...' : 'Add'}
+                    </button>
+                  </form>
+
+                  {inviteResult && <p style={{ color: '#95d5a8', fontSize: 13, marginTop: 14 }}>{inviteResult}</p>}
+
+                  <div style={{ display: 'grid', gap: 8, marginTop: 18 }}>
+                    {members.map((member) => (
+                      <div
+                        key={member.userId}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          borderTop: '1px solid var(--border)',
+                          paddingTop: 10,
+                          fontSize: 13,
+                        }}
+                      >
+                        <span>{member.email ?? member.userId}</span>
+                        <span style={{ color: 'var(--muted-strong)' }}>{member.role}</span>
+                      </div>
+                    ))}
+                    {members.length === 0 && (
+                      <div style={{ color: 'var(--muted-strong)', fontSize: 13 }}>No team members yet.</div>
+                    )}
+                  </div>
+                </section>
+              )}
+            </div>
 
             <aside className="bp-card" style={{ padding: 22 }}>
               <h2 style={{ fontSize: 16, margin: '0 0 14px', fontWeight: 650 }}>Launch checklist</h2>
