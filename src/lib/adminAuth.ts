@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { getTenantForUser, roleFromTenantOrMetadata, type RequestTenant } from './tenant'
 
 /**
  * Admin email lives in the ADMIN_EMAIL env var, never in source. Set it in
@@ -55,7 +56,9 @@ export async function getSessionUser(req: Request): Promise<
   | null
   | {
       email: string | null
+      userId: string
       role: string | null
+      tenant: RequestTenant | null
       isAdmin: boolean
       isGuest: boolean
       isKitchen: boolean
@@ -69,11 +72,16 @@ export async function getSessionUser(req: Request): Promise<
   const { data: { user } } = await anonClient.auth.getUser()
   if (!user) return null
   const email = user.email ?? null
-  const role = (user.user_metadata?.role as string) ?? null
+  const metadataRole = (user.user_metadata?.role as string) ?? null
+  const tenant = await getTenantForUser(user.id)
+  const globalAdmin = isAdminEmail(email)
+  const role = roleFromTenantOrMetadata(tenant?.role, metadataRole, globalAdmin)
   return {
     email,
+    userId: user.id,
     role,
-    isAdmin: isAdminEmail(email),
+    tenant,
+    isAdmin: role === 'admin',
     isGuest: role === 'guest' || email === 'guest@thebluepoppy.co',
     isKitchen: role === 'kitchen',
   }
