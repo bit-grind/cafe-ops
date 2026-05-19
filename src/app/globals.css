@@ -219,6 +219,34 @@ button.bp-metric:hover {
   font-weight: 500;
 }
 
+.onboarding-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.onboarding-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 12px;
+}
+
+.onboarding-team-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 140px minmax(160px, 0.8fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+@media (max-width: 820px) {
+  .onboarding-grid,
+  .onboarding-profile-grid,
+  .onboarding-team-form {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Table shell for data rows (used inside .bp-card with padding:0) */
 .bp-table {
   width: 100%;
