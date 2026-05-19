@@ -10,6 +10,12 @@ const geist = Geist({
 export const metadata: Metadata = {
   title: "The Cafe — Ops",
   description: "Internal operations dashboard for The Cafe",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Ops",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({
