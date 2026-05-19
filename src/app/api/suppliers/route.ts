@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSessionUser } from '@/lib/adminAuth'
 import { getKitchenSuppliers } from '@/lib/suppliers-db'
+import { isOrganizationsEnabled } from '@/lib/tenant'
 
 /**
  * GET /api/suppliers
@@ -10,14 +11,11 @@ import { getKitchenSuppliers } from '@/lib/suppliers-db'
  * roles, and all of them need the list to render supplier chips.
  */
 export async function GET(req: Request) {
-  const anon = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } },
-  )
-  const { data: { user } } = await anon.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await getSessionUser(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const suppliers = await getKitchenSuppliers()
+  const suppliers = await getKitchenSuppliers(
+    isOrganizationsEnabled() ? session.tenant?.organizationId : null
+  )
   return NextResponse.json({ suppliers })
 }
