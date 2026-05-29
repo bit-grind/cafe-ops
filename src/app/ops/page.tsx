@@ -18,6 +18,13 @@ type Day = {
   aov: number
 }
 
+type Brief = {
+  brief_date: string
+  narrative: string
+  generated_at?: string
+  metrics?: { day_of_week?: string; vs_same_weekday_avg_pct?: number | null }
+}
+
 function startOfWeekMon(d: Date) {
   const x = new Date(d)
   const day = x.getDay()
@@ -32,6 +39,8 @@ export default function OpsHome() {
   const [email, setEmail] = useState<string | null>(null)
   const [allowedTabs, setAllowedTabs] = useState<AppTab[]>([])
   const [days, setDays] = useState<Day[]>([])
+  const [brief, setBrief] = useState<Brief | null>(null)
+  const [briefLoading, setBriefLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
@@ -65,6 +74,14 @@ export default function OpsHome() {
           setAllowedTabs(me.allowedTabs ?? [])
         } catch { /* non-fatal */ }
       }
+
+      // Morning brief loads independently so it never delays the metric cards.
+      // It may generate on demand server-side (one AI call) the first time each day.
+      fetch('/api/brief', { headers: { Authorization: `Bearer ${accessToken}` } })
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => { if (d?.brief) setBrief(d.brief as Brief) })
+        .catch(() => { /* non-fatal — just hide the card */ })
+        .finally(() => setBriefLoading(false))
 
       setDays((daysRes.data as Day[] | null) ?? [])
       setLoading(false)
@@ -137,6 +154,28 @@ export default function OpsHome() {
       <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" allowedTabs={allowedTabs} />
 
       <div className="bp-container">
+        {(briefLoading || brief) && (
+          <div className="bp-card" style={{ marginTop: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: brief ? 8 : 0, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted-strong)' }}>
+                Morning brief
+              </span>
+              {brief?.metrics?.day_of_week && (
+                <span style={{ fontSize: 11, color: 'var(--muted-strong)' }}>
+                  {brief.metrics.day_of_week} · {fmtDate(brief.brief_date)}
+                </span>
+              )}
+            </div>
+            {brief ? (
+              <div style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>
+                {brief.narrative}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--muted-strong)' }}>Preparing your morning brief…</div>
+            )}
+          </div>
+        )}
+
         <div
           style={{
             display: 'grid',
