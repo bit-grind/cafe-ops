@@ -5,5 +5,8 @@
     "src/app/api/extract-lines/cron/route.ts": {
       "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    { "path": "/api/brief/cron", "schedule": "0 20 * * *" }
+  ]
 }
