@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin, adminClient, isAdminEmail } from '@/lib/adminAuth'
+import { requireAdmin, adminClient, isAdminEmail, setUserRole, deleteUserRole, getUserRoles } from '@/lib/adminAuth'
 
 export async function GET(
   req: Request,
@@ -18,6 +18,7 @@ export async function GET(
     return NextResponse.json({ error: userErr?.message ?? 'Not found' }, { status: 404 })
   }
   const u = userRes.user
+  const roleMap = await getUserRoles([id])
 
   const { data: queries, error: qErr } = await supabase
     .from('ask_queries')
@@ -32,7 +33,7 @@ export async function GET(
     user: {
       id: u.id,
       email: u.email ?? null,
-      role: ((u.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'admin',
+      role: roleMap[id] ?? ((u.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'admin',
       created_at: u.created_at,
       last_sign_in_at: u.last_sign_in_at ?? null,
       email_confirmed_at: u.email_confirmed_at ?? null,
@@ -73,6 +74,9 @@ export async function PATCH(
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Server-controlled role is the source of truth; keep it in sync.
+  await setUserRole(id, data.user.email ?? null, newRole as string)
+
   return NextResponse.json({
     user: {
       id: data.user.id,
@@ -105,6 +109,8 @@ export async function DELETE(
 
   const { error } = await supabase.auth.admin.deleteUser(id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await deleteUserRole(id)
 
   return NextResponse.json({ ok: true })
 }
