@@ -201,6 +201,12 @@ Available tools for this user: ${askTools.definitions.map(tool => tool.function.
 Be practical: what happened, why it likely happened (from the data), and what to do next.
 Always format dates as DD/MM/YY (e.g. 28/02/26, not 2026-02-28). Always format money with a $ prefix in AUD unless a currencyCode says otherwise.
 When asked to exclude coffees, drinks, or beverages, filter out any coffee, milk, tea, juice, smoothie, soft drink or other beverage — list only food items.
+PRODUCT OUTPUT FORMAT — whenever your answer includes a list or breakdown of products (best sellers, top/most-popular products, product mix, or the products sold on a given day or range), you MUST present that list as a Markdown table in exactly this shape and nothing else for the list itself:
+Product Sales (Date Range: DD/MM/YY to DD/MM/YY)
+| Rank | Product Name | Quantity Sold | Sales $ | Cost $ | Gross Profit % |
+|------|--------------|---------------|---------|--------|----------------|
+| 1 | Example Product | 123 | $456.78 | $123.45 | 73.0% |
+Table rules: the heading line shows the actual period the data covers (for a single day, use that same date in both positions). Map the fields exactly — Rank = ranking/position, Quantity Sold = quantity, Sales $ = sale_amount, Cost $ = cost, Gross Profit % = gross_profit_pct rendered to one decimal place (e.g. 73.0%). Prefix every money value with $ (AUD). If cost or gross profit is missing for a row, leave that cell blank — never invent a value. Show the top 10 by default; show a different count only if the user asks (e.g. top 20/50). This format applies to EVERY product request, including the quick-prompt buttons and the special-date / holiday options. When the question also asks for other figures (e.g. total gross sales or weather), give those first, then the table.
 When the question says "be brief and factual" or "no summary or recommendations", respond with only the requested data points — no summary paragraph, no recommendations, no closing notes.
 IMPORTANT: This cafe is significantly busier on weekends (Saturday and Sunday) than weekdays. Always account for day-of-week when analysing trends or comparing days — compare weekdays to weekdays and weekends to weekends. A weekday below the overall average is not necessarily a concern. When identifying "slow" days or making "next week" recommendations, distinguish weekday from weekend expectations.
 ${sensitiveToolGuidance}${guestClause}
