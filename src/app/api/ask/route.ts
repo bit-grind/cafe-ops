@@ -8,7 +8,8 @@ import {
 } from '@/lib/ask/dateParsing'
 import { isoDate, mondayOf } from '@/lib/dates'
 import { fmtDate } from '@/lib/fmt'
-import { ASK_TOOLS, executeAskTool } from '@/lib/ask/tools'
+import { executeAskTool, getAskToolsForRole } from '@/lib/ask/tools'
+import { consumeRateLimit } from '@/lib/serverAuth'
 
 type AskBody = { question: string }
 type Day = {
@@ -35,9 +36,14 @@ type ChatResponse = {
 }
 
 const MODEL = 'gpt-4.1'
-const MAX_STEPS = 5 // up to 4 rounds of tool calls, then a forced final answer
+const MAX_STEPS = 3
+const MAX_TOOL_CALLS = 6
+const MAX_TOOL_RESULT_CHARS = 20_000
+const MAX_TOTAL_TOOL_RESULT_CHARS = 60_000
+const MAX_QUESTION_CHARS = 500
 
-async function openaiChat(messages: ChatMessage[], useTools: boolean): Promise<ChatResponse> {
+async function openaiChat(messages: ChatMessage[], tools: ReturnType<typeof getAskToolsForRole>['definitions'] | null): Promise<ChatResponse> {
+  if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured')
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -48,23 +54,35 @@ async function openaiChat(messages: ChatMessage[], useTools: boolean): Promise<C
       model: MODEL,
       messages,
       temperature: 0.2,
-      ...(useTools ? { tools: ASK_TOOLS, tool_choice: 'auto' } : {}),
+      max_completion_tokens: 700,
+      ...(tools ? { tools, tool_choice: 'auto' } : {}),
     }),
+    signal: AbortSignal.timeout(25_000),
   })
+  if (!resp.ok) throw new Error(`OpenAI request failed with status ${resp.status}`)
   return (await resp.json()) as ChatResponse
 }
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as AskBody
+    const rawBody = await req.text()
+    if (rawBody.length > 2_000) return NextResponse.json({ error: 'Request body too large' }, { status: 413 })
+    const body = JSON.parse(rawBody) as AskBody
     const question = (body.question || '').trim()
     if (!question) return NextResponse.json({ error: 'Missing question' }, { status: 400 })
+    if (question.length > MAX_QUESTION_CHARS) return NextResponse.json({ error: 'Question is too long' }, { status: 400 })
 
     // Authenticate via the shared helper, which resolves the role from the
     // server-controlled user_role table (not user-writable metadata).
     const session = await getSessionUser(req)
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const isGuest = session.isGuest
+    const withinLimit = await consumeRateLimit('ask-ai', session.id, {
+      windowSeconds: 60,
+      limit: isGuest ? 3 : 10,
+    })
+    if (!withinLimit) return NextResponse.json({ error: 'Too many requests. Please wait a minute and try again.' }, { status: 429 })
+    const askTools = getAskToolsForRole(session.role, session.isAdmin)
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -78,7 +96,10 @@ export async function POST(req: Request) {
       .select('business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov')
       .order('business_date', { ascending: false })
       .limit(35)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      console.error('sales_business_day query failed:', error.message)
+      return NextResponse.json({ error: 'Unable to load sales data' }, { status: 500 })
+    }
 
     // Product-level data availability (so the AI knows what ranges it can ask for).
     const [rangeMin, rangeMax] = await Promise.all([
@@ -158,24 +179,31 @@ export async function POST(req: Request) {
     const actualToday = isoDate(new Date())
 
     const guestClause = isGuest
-      ? `\nIMPORTANT: This user is a guest with READ-ONLY access. You may answer questions about sales data, products, trends, general business metrics, and supplier bills (including specific line items, amounts, and suppliers). If the user asks you to modify, delete, update, or change any data, settings, or configurations, politely decline and explain that guests have read-only access.`
+      ? `\nIMPORTANT: This user is a guest with READ-ONLY access to sales data only. Do not answer questions about supplier bills, invoice line items, ingredient costs, settings, or configurations. Politely decline those requests.`
       : ''
+    const sensitiveToolGuidance = isGuest
+      ? ''
+      : `
+For supplier bills: Status=AUTHORISED means approved but not fully paid (amountDue > 0 is outstanding); Status=PAID means settled. For "unpaid"/"owing"/"outstanding", filter to amountDue > 0. Each bill's lineItems (description, quantity, unitAmount, lineAmount) answer "what did we buy" / "how much did we spend on Y" — sum lineAmount, matching descriptions case-insensitively. lineAmountTypes indicates whether line amounts are tax Inclusive/Exclusive/NoTax.
+Extracted supplier line items (search_purchase_line_items) are detailed product-level data read off the actual supplier PDFs (e.g. "Bega Tasty Cheddar 1kg") with unit prices and invoice dates — prefer these for specific product/ingredient and price-change questions.`
+    const onDemandData = isGuest
+      ? 'older dates, specific days, product breakdowns, weather'
+      : 'older dates, specific days, product breakdowns, supplier bills, weather, ingredient costs'
 
     const system = `
 You are Blue Poppy Ops AI for a Brisbane cafe.
 Today's actual date is ${actualToday}. Always treat this as "today" — do not confuse it with the latest date in the sales data.
 
-You have TOOLS to fetch data on demand. The prompt seeds you with recent headline metrics and the last 14 days only — for anything else (older dates, specific days, product breakdowns, supplier bills, weather, ingredient costs) you MUST call the relevant tool rather than guessing. Call multiple tools as needed, then answer. Never invent numbers; if a tool returns no data, say what's missing and what range is available.
+You have TOOLS to fetch data on demand. The prompt seeds you with recent headline metrics and the last 14 days only — for anything else (${onDemandData}) you MUST call the relevant tool rather than guessing. Call multiple tools as needed, then answer. Never invent numbers; if a tool returns no data, say what's missing and what range is available.
 
-Available data via tools: get_daily_sales (any date range), get_top_products (aggregated best sellers for a range), get_products_for_date (one day's product rows), search_purchase_line_items (product-level supplier purchases from scanned PDF invoices, with unit prices and dates), get_supplier_bills (Xero accounts-payable bills with line items), get_weather (historical Brisbane weather).
+Available tools for this user: ${askTools.definitions.map(tool => tool.function.name).join(', ')}.
 
 Be practical: what happened, why it likely happened (from the data), and what to do next.
 Always format dates as DD/MM/YY (e.g. 28/02/26, not 2026-02-28). Always format money with a $ prefix in AUD unless a currencyCode says otherwise.
 When asked to exclude coffees, drinks, or beverages, filter out any coffee, milk, tea, juice, smoothie, soft drink or other beverage — list only food items.
 When the question says "be brief and factual" or "no summary or recommendations", respond with only the requested data points — no summary paragraph, no recommendations, no closing notes.
 IMPORTANT: This cafe is significantly busier on weekends (Saturday and Sunday) than weekdays. Always account for day-of-week when analysing trends or comparing days — compare weekdays to weekdays and weekends to weekends. A weekday below the overall average is not necessarily a concern. When identifying "slow" days or making "next week" recommendations, distinguish weekday from weekend expectations.
-For supplier bills: Status=AUTHORISED means approved but not fully paid (amountDue > 0 is outstanding); Status=PAID means settled. For "unpaid"/"owing"/"outstanding", filter to amountDue > 0. Each bill's lineItems (description, quantity, unitAmount, lineAmount) answer "what did we buy" / "how much did we spend on Y" — sum lineAmount, matching descriptions case-insensitively. lineAmountTypes indicates whether line amounts are tax Inclusive/Exclusive/NoTax.
-Extracted supplier line items (search_purchase_line_items) are detailed product-level data read off the actual supplier PDFs (e.g. "Bega Tasty Cheddar 1kg") with unit prices and invoice dates — prefer these for specific product/ingredient and price-change questions.${guestClause}
+${sensitiveToolGuidance}${guestClause}
 `.trim()
 
     const recent14 = (days ?? []).slice(0, 14)
@@ -200,9 +228,11 @@ Product-level sales data is available from ${productDateRange ? `${productDateRa
     ]
 
     let answer: string | null = null
+    let toolCallsUsed = 0
+    let toolResultChars = 0
     for (let step = 0; step < MAX_STEPS; step++) {
       const forceFinal = step === MAX_STEPS - 1
-      const out = await openaiChat(messages, !forceFinal)
+      const out = await openaiChat(messages, forceFinal ? null : askTools.definitions)
       if (out.error?.message) return NextResponse.json({ error: out.error.message }, { status: 502 })
       const msg = out.choices?.[0]?.message
       if (!msg) return NextResponse.json({ error: 'No response from model' }, { status: 502 })
@@ -210,14 +240,23 @@ Product-level sales data is available from ${productDateRange ? `${productDateRa
       messages.push(msg)
 
       if (!forceFinal && msg.tool_calls && msg.tool_calls.length > 0) {
+        if (toolCallsUsed + msg.tool_calls.length > MAX_TOOL_CALLS) {
+          return NextResponse.json({ error: 'Ask AI request exceeded its tool-call budget' }, { status: 422 })
+        }
         for (const tc of msg.tool_calls) {
+          toolCallsUsed++
           let parsedArgs: Record<string, unknown> = {}
           try { parsedArgs = JSON.parse(tc.function.arguments || '{}') } catch { /* bad args → empty */ }
-          const result = await executeAskTool(tc.function.name, parsedArgs, { supabase })
+          const result = await executeAskTool(tc.function.name, parsedArgs, { supabase, allowedTools: askTools.allowedNames })
+          const content = JSON.stringify(result).slice(0, MAX_TOOL_RESULT_CHARS)
+          toolResultChars += content.length
+          if (toolResultChars > MAX_TOTAL_TOOL_RESULT_CHARS) {
+            return NextResponse.json({ error: 'Ask AI request exceeded its data budget' }, { status: 422 })
+          }
           messages.push({
             role: 'tool',
             tool_call_id: tc.id,
-            content: JSON.stringify(result).slice(0, 100_000),
+            content,
           })
         }
         continue
@@ -244,7 +283,7 @@ Product-level sales data is available from ${productDateRange ? `${productDateRa
 
     return NextResponse.json({ answer })
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('Ask AI request failed:', e)
+    return NextResponse.json({ error: 'Ask AI request failed' }, { status: 500 })
   }
 }

@@ -12,6 +12,14 @@ on:
       date_to:
         description: 'Backfill to (YYYY-MM-DD) — leave blank to match from'
         required: false
+      upload_debug_screenshot:
+        description: 'Upload a short-lived failure screenshot (may contain sensitive page content)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 # Avoid overlapping runs (e.g. a long backfill + the nightly schedule).
 concurrency:
@@ -21,29 +29,30 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Preflight — skip cleanly until secrets are set
         id: pre
         run: |
-          if [ -n "${{ secrets.KOUNTA_USER }}" ] && [ -n "${{ secrets.IMPORT_SECRET }}" ]; then
+          if [ -n "${{ secrets.KOUNTA_USER }}" ] && [ -n "${{ secrets.KOUNTA_PASS }}" ] && [ -n "${{ secrets.IMPORT_SECRET }}" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::KOUNTA_USER / IMPORT_SECRET not set yet — skipping. See kounta-sync/README.md."
+            echo "::notice::KOUNTA_USER / KOUNTA_PASS / IMPORT_SECRET not set yet — skipping. See kounta-sync/README.md."
           fi
 
       - if: steps.pre.outputs.ready == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - if: steps.pre.outputs.ready == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
 
       - name: Install deps
         if: steps.pre.outputs.ready == 'true'
         working-directory: kounta-sync
-        run: npm install
+        run: npm ci
 
       - name: Install Chromium
         if: steps.pre.outputs.ready == 'true'
@@ -61,11 +70,13 @@ jobs:
           APP_URL: https://ops.thebluepoppy.co
           SYNC_DATE_FROM: ${{ github.event.inputs.date_from }}
           SYNC_DATE_TO: ${{ github.event.inputs.date_to }}
+          UPLOAD_DEBUG_SCREENSHOT: ${{ github.event.inputs.upload_debug_screenshot }}
 
       - name: Upload error screenshot on failure
-        if: failure() && steps.pre.outputs.ready == 'true'
-        uses: actions/upload-artifact@v4
+        if: failure() && steps.pre.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.upload_debug_screenshot == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: kounta-sync-error
           path: kounta-sync/kounta-sync-error.png
           if-no-files-found: ignore
+          retention-days: 1

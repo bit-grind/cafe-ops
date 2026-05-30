@@ -1,6 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
+export type AppRole = 'staff' | 'kitchen' | 'guest'
+
+const APP_ROLES = new Set<AppRole>(['staff', 'kitchen', 'guest'])
+
+export function normalizeAppRole(role: unknown): AppRole {
+  if (role === 'admin') return 'staff'
+  return APP_ROLES.has(role as AppRole) ? role as AppRole : 'guest'
+}
+
 /**
  * Admin email lives in the ADMIN_EMAIL env var, never in source. Set it in
  * .env.local for local dev and in the Vercel project env for production.
@@ -56,7 +65,7 @@ export async function getSessionUser(req: Request): Promise<
   | {
       id: string
       email: string | null
-      role: string | null
+      role: AppRole
       isAdmin: boolean
       isGuest: boolean
       isKitchen: boolean
@@ -70,30 +79,25 @@ export async function getSessionUser(req: Request): Promise<
   const { data: { user } } = await anonClient.auth.getUser()
   if (!user) return null
   const email = user.email ?? null
+  const isAdmin = isAdminEmail(email)
 
-  // Resolve role from the server-controlled `user_role` table first. user_metadata
-  // is writable by the user themselves, so trusting it for role lets a guest
-  // self-escalate. We fall back to metadata only when there's no row yet (e.g. a
-  // user created before the table existed), which preserves old behaviour without
-  // ever weakening it.
-  let role = (user.user_metadata?.role as string) ?? null
-  try {
-    const { data: roleRow } = await adminClient()
-      .from('user_role')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle()
-    if (roleRow?.role) role = roleRow.role
-  } catch {
-    /* fall back to metadata role */
-  }
+  // user_metadata is user-writable and must never participate in authorization.
+  // Unknown users and lookup failures intentionally receive least privilege.
+  let role: AppRole = 'guest'
+  const { data: roleRow, error: roleError } = await adminClient()
+    .from('user_role')
+    .select('role')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (roleError) console.error('user_role lookup failed:', roleError.message)
+  if (roleRow?.role) role = normalizeAppRole(roleRow.role)
 
   return {
     id: user.id,
     email,
     role,
-    isAdmin: isAdminEmail(email),
-    isGuest: role === 'guest' || email === 'guest@thebluepoppy.co',
+    isAdmin,
+    isGuest: !isAdmin && (role === 'guest' || email === 'guest@thebluepoppy.co'),
     isKitchen: role === 'kitchen',
   }
 }
@@ -102,27 +106,28 @@ export async function getSessionUser(req: Request): Promise<
  * Upsert a user's role into the server-controlled `user_role` table. Call this
  * from admin user-management routes so the table stays the source of truth.
  */
-export async function setUserRole(userId: string, email: string | null, role: string): Promise<void> {
+export async function setUserRole(userId: string, email: string | null, role: AppRole): Promise<void> {
   const { error } = await adminClient()
     .from('user_role')
     .upsert(
       { user_id: userId, email, role, updated_at: new Date().toISOString() },
       { onConflict: 'user_id' },
     )
-  if (error) console.error('user_role upsert failed:', error.message)
+  if (error) throw new Error(`user_role upsert failed: ${error.message}`)
 }
 
 /** Remove a user's role row (e.g. when the account is deleted). */
 export async function deleteUserRole(userId: string): Promise<void> {
   const { error } = await adminClient().from('user_role').delete().eq('user_id', userId)
-  if (error) console.error('user_role delete failed:', error.message)
+  if (error) throw new Error(`user_role delete failed: ${error.message}`)
 }
 
 /** Fetch a map of user_id → role for the given user IDs (admin listings). */
-export async function getUserRoles(userIds: string[]): Promise<Record<string, string>> {
+export async function getUserRoles(userIds: string[]): Promise<Record<string, AppRole>> {
   if (userIds.length === 0) return {}
-  const { data } = await adminClient().from('user_role').select('user_id, role').in('user_id', userIds)
-  const map: Record<string, string> = {}
-  for (const row of data ?? []) map[row.user_id as string] = row.role as string
+  const { data, error } = await adminClient().from('user_role').select('user_id, role').in('user_id', userIds)
+  if (error) throw new Error(`user_role list failed: ${error.message}`)
+  const map: Record<string, AppRole> = {}
+  for (const row of data ?? []) map[row.user_id as string] = normalizeAppRole(row.role)
   return map
 }

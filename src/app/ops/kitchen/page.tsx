@@ -86,7 +86,6 @@ export default function KitchenHome() {
   useEffect(() => {
     if (!token || loading) return
     let cancelled = false
-    setChartLoading(true)
     fetch(`/api/food-cost?weeks=${selectedWeeks}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -258,7 +257,11 @@ export default function KitchenHome() {
                     key={r.label}
                     role="tab"
                     aria-selected={active}
-                    onClick={() => setRange(r.label)}
+                    onClick={() => {
+                      if (r.label === range) return
+                      setChartLoading(true)
+                      setRange(r.label)
+                    }}
                     style={{
                       padding: '6px 12px',
                       fontSize: 12,

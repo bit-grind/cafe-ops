@@ -56,11 +56,7 @@ export default function OpsHome() {
       const accessToken = sessionData.session.access_token
       const [meRes, daysRes] = await Promise.all([
         fetch('/api/me', { headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => null),
-        supabase
-          .from('sales_business_day')
-          .select('business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov')
-          .order('business_date', { ascending: false })
-          .limit(90),
+        fetch('/api/sales?limit=90', { headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => null),
       ])
 
       if (meRes?.ok) {
@@ -76,14 +72,17 @@ export default function OpsHome() {
       }
 
       // Morning brief loads independently so it never delays the metric cards.
-      // It may generate on demand server-side (one AI call) the first time each day.
+      // Generation is cron-owned; this read never triggers paid AI work.
       fetch('/api/brief', { headers: { Authorization: `Bearer ${accessToken}` } })
         .then(r => (r.ok ? r.json() : null))
         .then(d => { if (d?.brief) setBrief(d.brief as Brief) })
         .catch(() => { /* non-fatal — just hide the card */ })
         .finally(() => setBriefLoading(false))
 
-      setDays((daysRes.data as Day[] | null) ?? [])
+      if (daysRes?.ok) {
+        const body = await daysRes.json()
+        setDays((body.days as Day[] | null) ?? [])
+      }
       setLoading(false)
     }
 

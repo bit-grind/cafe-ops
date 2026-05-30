@@ -21,13 +21,15 @@ Internal operations dashboard for The Blue Poppy. This app combines sales report
 
 ## Roles
 
-The app uses Supabase-authenticated users with lightweight role handling:
+The app uses Supabase-authenticated users with server-controlled roles:
 
-- `admin`: full access including user management.
+- `staff`: normal operations access.
 - `kitchen`: kitchen costs and supplier-focused views.
-- `guest`: read-only access to selected dashboard, ask, and supplier views.
+- `guest`: read-only sales dashboard and sales-only Ask AI access.
 
-Role and tab resolution lives primarily in `src/lib/adminAuth.ts` and `src/app/api/me/route.ts`.
+The configured `ADMIN_EMAIL` receives admin access independently of its stored
+role. Stored roles live in `public.user_role`; user-editable auth metadata is
+never trusted for authorization.
 
 ## Key Data Sources
 
@@ -47,6 +49,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 OPENAI_API_KEY=...
 ADMIN_EMAIL=...
+APP_ORIGIN=https://ops.thebluepoppy.co
+CRON_SECRET=...
+IMPORT_SECRET=...
+RATE_LIMIT_KEY=...
 XERO_CLIENT_ID=...
 XERO_CLIENT_SECRET=...
 XERO_REDIRECT_URI=...
@@ -69,11 +75,14 @@ Then open [http://localhost:3000](http://localhost:3000).
 - Most authenticated client pages call `/api/me` to determine role-specific navigation and redirects.
 - The Ask AI route blends multiple data sources: sales totals, product sales, holiday/date parsing, Brisbane weather, Xero bills, and extracted invoice line items.
 - Xero bills support line-item drilldown and attachment viewing.
+- Guest users cannot read supplier costs, Xero bills, extracted invoice lines, recipes, or generated daily briefs.
+- Kounta imports require timestamped HMAC signatures and replay protection.
 
-## Recommended Cleanup Direction
+## Security Rollout
 
-The safest structural improvements are:
+Apply `supabase/migrations/202605300001_security_lockdown.sql` before deploying
+the matching app build. Then rotate `CRON_SECRET`, `IMPORT_SECRET`,
+`RATE_LIMIT_KEY`, and the Xero client secret, and update each caller at the same
+time. See `SECURITY.md` for the complete checklist.
 
-1. Keep shared clients and env access centralized.
-2. Continue extracting helper logic from large route files, especially `src/app/api/ask/route.ts`.
-3. Add focused tests around date parsing, role checks, and Xero bill mapping before deeper refactors.
+CI runs linting, tests, a production dependency audit, and a full Next.js build.

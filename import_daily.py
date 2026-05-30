@@ -3,6 +3,10 @@ import json
 import os
 import sys
 import urllib.request
+import hashlib
+import hmac
+import time
+import uuid
 
 ENDPOINT = "https://bluepoppy-ops.vercel.app/api/import-daily"
 IMPORT_SECRET = os.environ["IMPORT_SECRET"]
@@ -32,13 +36,22 @@ def main():
             })
 
     data = json.dumps(rows).encode("utf-8")
+    timestamp = str(int(time.time()))
+    nonce = str(uuid.uuid4())
+    signature = hmac.new(
+        IMPORT_SECRET.encode("utf-8"),
+        timestamp.encode("utf-8") + b"." + nonce.encode("utf-8") + b"." + data,
+        hashlib.sha256,
+    ).hexdigest()
 
     req = urllib.request.Request(
         ENDPOINT,
         data=data,
         headers={
             "Content-Type": "application/json",
-            "x-import-secret": IMPORT_SECRET,
+            "x-import-timestamp": timestamp,
+            "x-import-nonce": nonce,
+            "x-import-signature": signature,
         },
         method="POST"
     )

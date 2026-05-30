@@ -26,6 +26,7 @@ export type DailyBriefRow = {
   metrics: Record<string, unknown>
   narrative: string
   model: string | null
+  generation_status?: 'generating' | 'completed' | 'failed'
 }
 
 const DOW_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -113,7 +114,7 @@ async function narrate(m: Metrics, priceAlerts: PriceChange[]): Promise<{ narrat
   const model = 'gpt-4.1-mini'
   const system = `You are Blue Poppy Ops AI writing the cafe owner's short morning brief about the most recent trading day at a Brisbane cafe.
 Write 3-5 short sentences, warm but factual, no greeting, no sign-off, no headings.
-Lead with the day, date and gross sales. Compare fairly: this cafe is much busier on weekends, so judge the day against recent days of the SAME weekday, not the overall average. Call out anything notable (a clear beat/miss, the standout product, how the week is tracking). End with ONE concrete, practical prep or action tip for the upcoming days.
+Lead with the day, date and gross sales. Compare fairly: this cafe is much busier on weekends, so judge the day against recent days of the SAME weekday, not the overall average. Call out anything notable (a clear beat/miss, the standout product, how the week is tracking). Do NOT state that weekends are busier than weekdays or that weekday trade is slower — that is normal and well understood, so it adds nothing. End with ONE concrete, practical prep or action tip for the upcoming days.
 If "Notable supplier price changes" are provided, add one short sentence flagging the single most important one (name the ingredient, the % move and direction, and the supplier). If none are provided, do not mention costs.
 Format dates as DD/MM/YY and money with a $ prefix (AUD). Use ONLY the numbers provided; never invent figures.`
   const priceBlock = priceAlerts.length
@@ -131,7 +132,9 @@ Format dates as DD/MM/YY and money with a $ prefix (AUD). Use ONLY the numbers p
           { role: 'user', content: `Metrics for the brief:\n${JSON.stringify(m, null, 2)}${priceBlock}` },
         ],
       }),
+      signal: AbortSignal.timeout(20_000),
     })
+    if (!resp.ok) return { narrative: fallbackNarrative(m), model: null }
     const out = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> }
     const text = out?.choices?.[0]?.message?.content?.trim()
     return text ? { narrative: text, model } : { narrative: fallbackNarrative(m), model: null }
@@ -145,49 +148,74 @@ Format dates as DD/MM/YY and money with a $ prefix (AUD). Use ONLY the numbers p
  * Returns null only when there is no sales data at all.
  */
 export async function generateBrief(supabase: SupabaseClient): Promise<DailyBriefRow | null> {
-  const { data: days } = await supabase
+  const { data: days, error: daysError } = await supabase
     .from('sales_business_day')
     .select('business_date,gross_sales,net_sales,order_count,aov')
     .order('business_date', { ascending: false })
     .limit(70)
+  if (daysError) throw new Error(`daily brief sales lookup failed: ${daysError.message}`)
   if (!days || days.length === 0) return null
 
   const subjectDate = (days as Day[])[0].business_date
-  const { data: products } = await supabase
+  const { data: claimed, error: claimError } = await supabase.rpc('claim_daily_brief', { p_brief_date: subjectDate })
+  if (claimError) throw new Error(`daily brief claim failed: ${claimError.message}`)
+  if (!claimed) {
+    const { data: existing } = await supabase
+      .from('daily_brief')
+      .select('brief_date,generated_at,metrics,narrative,model,generation_status')
+      .eq('brief_date', subjectDate)
+      .eq('generation_status', 'completed')
+      .maybeSingle()
+    return existing as DailyBriefRow | null
+  }
+
+  try {
+    const { data: products, error: productsError } = await supabase
     .from('sales_by_product')
     .select('product,quantity,sale_amount')
     .eq('business_date', subjectDate)
     .order('position', { ascending: true })
+    if (productsError) throw new Error(`daily brief products lookup failed: ${productsError.message}`)
 
-  const metrics = computeMetrics(days as Day[], (products as ProductRow[]) ?? [])
+    const metrics = computeMetrics(days as Day[], (products as ProductRow[]) ?? [])
 
-  // Supplier price-watch is a bonus signal — never let it break the brief.
-  let priceAlerts: PriceChange[] = []
-  try {
-    priceAlerts = await getPriceWatch(supabase, { limit: 5 })
+    // Supplier price-watch is a bonus signal — never let it break the brief.
+    let priceAlerts: PriceChange[] = []
+    try {
+      priceAlerts = await getPriceWatch(supabase, { limit: 5 })
+    } catch (e) {
+      console.error('price-watch in brief failed:', e instanceof Error ? e.message : e)
+    }
+
+    const { narrative, model } = await narrate(metrics, priceAlerts)
+
+    const row: DailyBriefRow = {
+      brief_date: subjectDate,
+      generated_at: new Date().toISOString(),
+      metrics: { ...metrics, price_alerts: priceAlerts },
+      narrative,
+      model,
+      generation_status: 'completed',
+    }
+
+    const { error } = await supabase
+      .from('daily_brief')
+      .update({ ...row, generation_started_at: null })
+      .eq('brief_date', subjectDate)
+    if (error) throw new Error(`daily_brief update failed: ${error.message}`)
+    return row
   } catch (e) {
-    console.error('price-watch in brief failed:', e instanceof Error ? e.message : e)
+    await supabase
+      .from('daily_brief')
+      .update({ generation_status: 'failed', generation_started_at: null })
+      .eq('brief_date', subjectDate)
+    throw e
   }
-
-  const { narrative, model } = await narrate(metrics, priceAlerts)
-
-  const row: DailyBriefRow = {
-    brief_date: subjectDate,
-    generated_at: new Date().toISOString(),
-    metrics: { ...metrics, price_alerts: priceAlerts },
-    narrative,
-    model,
-  }
-
-  const { error } = await supabase.from('daily_brief').upsert(row, { onConflict: 'brief_date' })
-  if (error) console.error('daily_brief upsert failed:', error.message)
-  return row
 }
 
 /**
- * Return the brief for the latest business day, generating it on demand if it
- * hasn't been created yet (so the dashboard always has something to show even
- * if the cron hasn't run).
+ * Return the brief for the latest business day. Generation is cron-owned so a
+ * dashboard GET can never trigger paid work.
  */
 export async function getLatestBrief(supabase: SupabaseClient): Promise<DailyBriefRow | null> {
   const { data: latest } = await supabase
@@ -200,10 +228,11 @@ export async function getLatestBrief(supabase: SupabaseClient): Promise<DailyBri
 
   const { data: existing } = await supabase
     .from('daily_brief')
-    .select('brief_date,generated_at,metrics,narrative,model')
+    .select('brief_date,generated_at,metrics,narrative,model,generation_status')
     .eq('brief_date', latest.business_date)
+    .eq('generation_status', 'completed')
     .maybeSingle()
   if (existing) return existing as DailyBriefRow
 
-  return generateBrief(supabase)
+  return null
 }

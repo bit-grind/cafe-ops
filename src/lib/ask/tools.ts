@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { listBills, getXeroConnection } from '@/lib/xero'
 import { fetchBrisbaneWeather } from '@/lib/ask/weather'
+import type { AppRole } from '@/lib/adminAuth'
 
 /**
  * Tools exposed to the Ask AI agent. The model decides which to call and with
@@ -14,7 +15,7 @@ import { fetchBrisbaneWeather } from '@/lib/ask/weather'
  *  - Results are capped so a single tool call can't blow the context window.
  */
 
-export type AskToolContext = { supabase: SupabaseClient }
+export type AskToolContext = { supabase: SupabaseClient; allowedTools: ReadonlySet<string> }
 
 type OpenAITool = {
   type: 'function'
@@ -132,8 +133,31 @@ export const ASK_TOOLS: OpenAITool[] = [
 ]
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/
-const isIso = (s: unknown): s is string => typeof s === 'string' && ISO_RE.test(s)
+const isIso = (s: unknown): s is string => {
+  if (typeof s !== 'string' || !ISO_RE.test(s)) return false
+  const parsed = new Date(`${s}T00:00:00Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === s
+}
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
+const daysBetween = (from: string, to: string) =>
+  Math.floor((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 86_400_000) + 1
+const isValidRange = (from: unknown, to: unknown, maxDays: number): from is string =>
+  isIso(from) && isIso(to) && from <= to && daysBetween(from, to) <= maxDays
+
+const SALES_TOOLS = new Set(['get_daily_sales', 'get_top_products', 'get_products_for_date', 'get_weather'])
+
+export function getAskToolsForRole(role: AppRole, isAdmin = false): {
+  definitions: OpenAITool[]
+  allowedNames: ReadonlySet<string>
+} {
+  const allowedNames = role === 'guest' && !isAdmin
+    ? SALES_TOOLS
+    : new Set(ASK_TOOLS.map(tool => tool.function.name))
+  return {
+    definitions: ASK_TOOLS.filter(tool => allowedNames.has(tool.function.name)),
+    allowedNames,
+  }
+}
 
 type ExtractionRunRelation = { supplier_name: string | null; invoice_date: string | null }
 function pickRun(run: ExtractionRunRelation | ExtractionRunRelation[] | null): ExtractionRunRelation | null {
@@ -152,10 +176,11 @@ export async function executeAskTool(
 ): Promise<unknown> {
   const { supabase } = ctx
   try {
+    if (!ctx.allowedTools.has(name)) return { error: 'Tool not available for this role' }
     switch (name) {
       case 'get_daily_sales': {
         const { date_from, date_to } = args
-        if (!isIso(date_from) || !isIso(date_to)) return { error: 'date_from and date_to must be YYYY-MM-DD' }
+        if (!isValidRange(date_from, date_to, 400)) return { error: 'date range must be valid YYYY-MM-DD values spanning at most 400 days' }
         const { data, error } = await supabase
           .from('sales_business_day')
           .select('business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov')
@@ -169,7 +194,7 @@ export async function executeAskTool(
 
       case 'get_top_products': {
         const { date_from, date_to } = args
-        if (!isIso(date_from) || !isIso(date_to)) return { error: 'date_from and date_to must be YYYY-MM-DD' }
+        if (!isValidRange(date_from, date_to, 366)) return { error: 'date range must be valid YYYY-MM-DD values spanning at most 366 days' }
         const limit = clamp(Number(args.limit ?? 50) || 50, 1, 100)
         const { data, error } = await supabase.rpc('get_top_products', {
           date_from,
@@ -194,7 +219,10 @@ export async function executeAskTool(
 
       case 'search_purchase_line_items': {
         const terms = Array.isArray(args.terms)
-          ? args.terms.map(t => String(t).trim()).filter(Boolean).slice(0, 5)
+          ? args.terms
+            .map(t => String(t).trim().replace(/[%_,()]/g, '').slice(0, 64))
+            .filter(Boolean)
+            .slice(0, 5)
           : []
         if (terms.length === 0) return { rows: [], note: 'No search terms provided' }
         const pattern = terms.map(t => `%${t}%`)
@@ -225,10 +253,10 @@ export async function executeAskTool(
 
       case 'get_supplier_bills': {
         const { date_from, date_to } = args
-        if (!isIso(date_from) || !isIso(date_to)) return { error: 'date_from and date_to must be YYYY-MM-DD' }
+        if (!isValidRange(date_from, date_to, 366)) return { error: 'date range must be valid YYYY-MM-DD values spanning at most 366 days' }
         const conn = await getXeroConnection()
         if (!conn) return { connected: false, note: 'Xero is not connected. An admin needs to connect Xero on the Bills page.' }
-        let bills = await listBills({ dateFrom: date_from, dateTo: date_to }, { includeLineItems: true })
+        let bills = await listBills({ dateFrom: date_from, dateTo: date_to as string }, { includeLineItems: true })
         const supplier = typeof args.supplier === 'string' ? args.supplier.trim().toLowerCase() : ''
         if (supplier) bills = bills.filter(b => b.contactName.toLowerCase().includes(supplier))
         if (bills.length > 80) bills = bills.slice(0, 80)

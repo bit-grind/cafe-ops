@@ -9,6 +9,7 @@ import { getPriceWatch } from '@/lib/priceWatch'
 export async function GET(req: Request) {
   const session = await getSessionUser(req)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.isGuest) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   try {
     const changes = await getPriceWatch(adminClient())
     return NextResponse.json({ changes })

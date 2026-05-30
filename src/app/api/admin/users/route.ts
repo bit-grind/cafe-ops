@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin, adminClient, setUserRole, getUserRoles } from '@/lib/adminAuth'
+import { requireAdmin, adminClient, setUserRole, getUserRoles, normalizeAppRole } from '@/lib/adminAuth'
 
 export async function GET(req: Request) {
   const auth = await requireAdmin(req)
@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const users = data.users.map((u) => ({
     id: u.id,
     email: u.email ?? null,
-    role: roleMap[u.id] ?? ((u.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'admin',
+    role: roleMap[u.id] ?? 'guest',
     created_at: u.created_at,
     last_sign_in_at: u.last_sign_in_at ?? null,
   }))
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   }
   const email = (body.email || '').trim().toLowerCase()
   const password = body.password || ''
-  const role = ['guest', 'kitchen'].includes(body.role || '') ? body.role : 'admin'
+  const role = normalizeAppRole(body.role)
 
   if (!email || !password) {
     return NextResponse.json({ error: 'email and password are required' }, { status: 400 })
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Record the role in the server-controlled table (source of truth).
-  await setUserRole(data.user.id, data.user.email ?? email, role as string)
+  await setUserRole(data.user.id, data.user.email ?? email, role)
 
   return NextResponse.json({
     user: {

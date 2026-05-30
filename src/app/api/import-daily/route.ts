@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { consumeImportNonce, verifySignedImport } from '@/lib/serverAuth'
+import { parseDailySalesRows } from '@/lib/importValidation'
 
 export async function POST(req: Request) {
   try {
-    // Require a shared secret for imports (set IMPORT_SECRET in Vercel env)
-    const expected = process.env.IMPORT_SECRET
-    if (!expected) {
-      return NextResponse.json({ ok: false, error: 'Server not configured' }, { status: 500 })
-    }
-    const provided = req.headers.get('x-import-secret')
-    if (provided !== expected) {
+    const rawBody = await req.text()
+    if (rawBody.length > 200_000) return NextResponse.json({ ok: false, error: 'Payload too large' }, { status: 413 })
+    const signed = verifySignedImport(req, rawBody)
+    if (signed instanceof NextResponse) return signed
+    if (!await consumeImportNonce(signed.nonce)) {
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -18,11 +18,7 @@ export async function POST(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    const rows = await req.json()
-
-    if (!Array.isArray(rows)) {
-      return NextResponse.json({ ok: false, error: 'Body must be an array' }, { status: 400 })
-    }
+    const rows = parseDailySalesRows(JSON.parse(rawBody))
 
     const { error } = await supabase
       .from('sales_business_day')
@@ -33,6 +29,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, count: rows.length })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ ok: false, error: message }, { status: 500 })
+    const isInputError = message.includes('must') || message.includes('Too many') || message.includes('Duplicate')
+    if (!isInputError) console.error('Daily sales import failed:', e)
+    return NextResponse.json({ ok: false, error: isInputError ? message : 'Import failed' }, { status: isInputError ? 400 : 500 })
   }
 }
