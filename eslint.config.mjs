@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone Node/Playwright sync job — runs outside the Next app.
+    "kounta-sync/**",
   ]),
 ]);
 
