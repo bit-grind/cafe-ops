@@ -1,0 +1,10 @@
+{
+  "name": "kounta-sync",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Daily Kounta -> Blue Poppy Ops sales sync (runs in GitHub Actions)",
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

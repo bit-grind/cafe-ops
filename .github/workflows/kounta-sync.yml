@@ -1,0 +1,71 @@
+name: Kounta daily sync
+
+on:
+  schedule:
+    # 19:00 UTC = 05:00 Brisbane (UTC+10). Pulls "yesterday" once the day is closed.
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      date_from:
+        description: 'Backfill from (YYYY-MM-DD) — leave blank for yesterday'
+        required: false
+      date_to:
+        description: 'Backfill to (YYYY-MM-DD) — leave blank to match from'
+        required: false
+
+# Avoid overlapping runs (e.g. a long backfill + the nightly schedule).
+concurrency:
+  group: kounta-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preflight — skip cleanly until secrets are set
+        id: pre
+        run: |
+          if [ -n "${{ secrets.KOUNTA_USER }}" ] && [ -n "${{ secrets.IMPORT_SECRET }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::KOUNTA_USER / IMPORT_SECRET not set yet — skipping. See kounta-sync/README.md."
+          fi
+
+      - if: steps.pre.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.pre.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        if: steps.pre.outputs.ready == 'true'
+        working-directory: kounta-sync
+        run: npm install
+
+      - name: Install Chromium
+        if: steps.pre.outputs.ready == 'true'
+        working-directory: kounta-sync
+        run: npx playwright install --with-deps chromium
+
+      - name: Run sync
+        if: steps.pre.outputs.ready == 'true'
+        working-directory: kounta-sync
+        run: node sync.mjs
+        env:
+          KOUNTA_USER: ${{ secrets.KOUNTA_USER }}
+          KOUNTA_PASS: ${{ secrets.KOUNTA_PASS }}
+          IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
+          APP_URL: https://ops.thebluepoppy.co
+          SYNC_DATE_FROM: ${{ github.event.inputs.date_from }}
+          SYNC_DATE_TO: ${{ github.event.inputs.date_to }}
+
+      - name: Upload error screenshot on failure
+        if: failure() && steps.pre.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kounta-sync-error
+          path: kounta-sync/kounta-sync-error.png
+          if-no-files-found: ignore
