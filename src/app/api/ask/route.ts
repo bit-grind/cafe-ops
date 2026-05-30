@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getSessionUser } from '@/lib/adminAuth'
 import {
   extractDateFromQuestion,
   extractDateRangeFromQuestion,
@@ -59,15 +60,11 @@ export async function POST(req: Request) {
     const question = (body.question || '').trim()
     if (!question) return NextResponse.json({ error: 'Missing question' }, { status: 400 })
 
-    // Check auth and identify guest accounts (read-only).
-    const anonClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } },
-    )
-    const { data: { user: authUser } } = await anonClient.auth.getUser()
-    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const isGuest = authUser.user_metadata?.role === 'guest' || authUser.email === 'guest@thebluepoppy.co'
+    // Authenticate via the shared helper, which resolves the role from the
+    // server-controlled user_role table (not user-writable metadata).
+    const session = await getSessionUser(req)
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const isGuest = session.isGuest
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -236,8 +233,8 @@ Product-level sales data is available from ${productDateRange ? `${productDateRa
     void supabase
       .from('ask_queries')
       .insert({
-        user_id: authUser.id,
-        email: authUser.email ?? null,
+        user_id: session.id,
+        email: session.email ?? null,
         question,
         answer: answer.slice(0, 4000),
       })

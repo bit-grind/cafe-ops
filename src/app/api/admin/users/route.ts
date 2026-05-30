@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin, adminClient } from '@/lib/adminAuth'
+import { requireAdmin, adminClient, setUserRole, getUserRoles } from '@/lib/adminAuth'
 
 export async function GET(req: Request) {
   const auth = await requireAdmin(req)
@@ -9,10 +9,12 @@ export async function GET(req: Request) {
   const { data, error } = await supabase.auth.admin.listUsers({ perPage: 200 })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Prefer the server-controlled role over user_metadata.
+  const roleMap = await getUserRoles(data.users.map((u) => u.id))
   const users = data.users.map((u) => ({
     id: u.id,
     email: u.email ?? null,
-    role: ((u.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'admin',
+    role: roleMap[u.id] ?? ((u.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'admin',
     created_at: u.created_at,
     last_sign_in_at: u.last_sign_in_at ?? null,
   }))
@@ -48,6 +50,9 @@ export async function POST(req: Request) {
     user_metadata: { role },
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Record the role in the server-controlled table (source of truth).
+  await setUserRole(data.user.id, data.user.email ?? email, role as string)
 
   return NextResponse.json({
     user: {

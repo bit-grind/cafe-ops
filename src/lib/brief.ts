@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isoDate, mondayOf } from '@/lib/dates'
 import { fmtDate, money } from '@/lib/fmt'
+import { getPriceWatch, type PriceChange } from '@/lib/priceWatch'
 
 /**
  * Daily brief: a short, proactive "morning read" on the most recent completed
@@ -35,7 +36,7 @@ const round2 = (n: number) => Number(n.toFixed(2))
 const round1 = (n: number) => Number(n.toFixed(1))
 
 /** Build the metric pack the narrative is written from. */
-function computeMetrics(days: Day[], products: ProductRow[]) {
+export function computeMetrics(days: Day[], products: ProductRow[]) {
   const subject = days[0]
   const subjectDow = dowOf(subject.business_date)
 
@@ -106,14 +107,18 @@ function fallbackNarrative(m: Metrics): string {
   return `${m.day_of_week} ${fmtDate(m.subject_date)}: ${money(m.gross_sales)} gross from ${m.order_count} orders, AOV ${money(m.aov)}${dir}.${top}`
 }
 
-async function narrate(m: Metrics): Promise<{ narrative: string; model: string | null }> {
+async function narrate(m: Metrics, priceAlerts: PriceChange[]): Promise<{ narrative: string; model: string | null }> {
   const key = process.env.OPENAI_API_KEY
   if (!key) return { narrative: fallbackNarrative(m), model: null }
   const model = 'gpt-4.1-mini'
   const system = `You are Blue Poppy Ops AI writing the cafe owner's short morning brief about the most recent trading day at a Brisbane cafe.
 Write 3-5 short sentences, warm but factual, no greeting, no sign-off, no headings.
 Lead with the day, date and gross sales. Compare fairly: this cafe is much busier on weekends, so judge the day against recent days of the SAME weekday, not the overall average. Call out anything notable (a clear beat/miss, the standout product, how the week is tracking). End with ONE concrete, practical prep or action tip for the upcoming days.
+If "Notable supplier price changes" are provided, add one short sentence flagging the single most important one (name the ingredient, the % move and direction, and the supplier). If none are provided, do not mention costs.
 Format dates as DD/MM/YY and money with a $ prefix (AUD). Use ONLY the numbers provided; never invent figures.`
+  const priceBlock = priceAlerts.length
+    ? `\n\nNotable supplier price changes (most significant first):\n${JSON.stringify(priceAlerts, null, 2)}`
+    : ''
   try {
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -123,7 +128,7 @@ Format dates as DD/MM/YY and money with a $ prefix (AUD). Use ONLY the numbers p
         temperature: 0.3,
         messages: [
           { role: 'system', content: system },
-          { role: 'user', content: `Metrics for the brief:\n${JSON.stringify(m, null, 2)}` },
+          { role: 'user', content: `Metrics for the brief:\n${JSON.stringify(m, null, 2)}${priceBlock}` },
         ],
       }),
     })
@@ -155,12 +160,21 @@ export async function generateBrief(supabase: SupabaseClient): Promise<DailyBrie
     .order('position', { ascending: true })
 
   const metrics = computeMetrics(days as Day[], (products as ProductRow[]) ?? [])
-  const { narrative, model } = await narrate(metrics)
+
+  // Supplier price-watch is a bonus signal — never let it break the brief.
+  let priceAlerts: PriceChange[] = []
+  try {
+    priceAlerts = await getPriceWatch(supabase, { limit: 5 })
+  } catch (e) {
+    console.error('price-watch in brief failed:', e instanceof Error ? e.message : e)
+  }
+
+  const { narrative, model } = await narrate(metrics, priceAlerts)
 
   const row: DailyBriefRow = {
     brief_date: subjectDate,
     generated_at: new Date().toISOString(),
-    metrics,
+    metrics: { ...metrics, price_alerts: priceAlerts },
     narrative,
     model,
   }

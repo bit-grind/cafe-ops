@@ -54,6 +54,7 @@ export function adminClient() {
 export async function getSessionUser(req: Request): Promise<
   | null
   | {
+      id: string
       email: string | null
       role: string | null
       isAdmin: boolean
@@ -69,12 +70,59 @@ export async function getSessionUser(req: Request): Promise<
   const { data: { user } } = await anonClient.auth.getUser()
   if (!user) return null
   const email = user.email ?? null
-  const role = (user.user_metadata?.role as string) ?? null
+
+  // Resolve role from the server-controlled `user_role` table first. user_metadata
+  // is writable by the user themselves, so trusting it for role lets a guest
+  // self-escalate. We fall back to metadata only when there's no row yet (e.g. a
+  // user created before the table existed), which preserves old behaviour without
+  // ever weakening it.
+  let role = (user.user_metadata?.role as string) ?? null
+  try {
+    const { data: roleRow } = await adminClient()
+      .from('user_role')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (roleRow?.role) role = roleRow.role
+  } catch {
+    /* fall back to metadata role */
+  }
+
   return {
+    id: user.id,
     email,
     role,
     isAdmin: isAdminEmail(email),
     isGuest: role === 'guest' || email === 'guest@thebluepoppy.co',
     isKitchen: role === 'kitchen',
   }
+}
+
+/**
+ * Upsert a user's role into the server-controlled `user_role` table. Call this
+ * from admin user-management routes so the table stays the source of truth.
+ */
+export async function setUserRole(userId: string, email: string | null, role: string): Promise<void> {
+  const { error } = await adminClient()
+    .from('user_role')
+    .upsert(
+      { user_id: userId, email, role, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' },
+    )
+  if (error) console.error('user_role upsert failed:', error.message)
+}
+
+/** Remove a user's role row (e.g. when the account is deleted). */
+export async function deleteUserRole(userId: string): Promise<void> {
+  const { error } = await adminClient().from('user_role').delete().eq('user_id', userId)
+  if (error) console.error('user_role delete failed:', error.message)
+}
+
+/** Fetch a map of user_id → role for the given user IDs (admin listings). */
+export async function getUserRoles(userIds: string[]): Promise<Record<string, string>> {
+  if (userIds.length === 0) return {}
+  const { data } = await adminClient().from('user_role').select('user_id, role').in('user_id', userIds)
+  const map: Record<string, string> = {}
+  for (const row of data ?? []) map[row.user_id as string] = row.role as string
+  return map
 }
