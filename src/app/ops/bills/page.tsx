@@ -147,6 +147,7 @@ export default function BillsPage() {
         if (meRes?.ok) {
           try {
             const me = await meRes.json()
+            if (me.isGuest) { window.location.href = '/ops'; return }
             setIsAdmin(!!me.isAdmin)
             setAllowedTabs(me.allowedTabs ?? [])
           } catch { /* non-fatal */ }
@@ -452,11 +453,6 @@ export default function BillsPage() {
 
   const totalPages = Math.max(1, Math.ceil(allVisibleBills.length / PAGE_SIZE))
 
-  // Reset to page 1 when the filtered set changes
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [activeSupplier, dateFrom, dateTo])
-
   const visibleBills = useMemo(() => {
     const startIdx = (currentPage - 1) * PAGE_SIZE
     return allVisibleBills.slice(startIdx, startIdx + PAGE_SIZE)
@@ -523,10 +519,10 @@ export default function BillsPage() {
                     minWidth: 260,
                   }}>
                     <Field label="From">
-                      <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={inputStyle} />
+                      <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setCurrentPage(1) }} style={inputStyle} />
                     </Field>
                     <Field label="To">
-                      <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={inputStyle} />
+                      <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setCurrentPage(1) }} style={inputStyle} />
                     </Field>
                     <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                       <button
@@ -544,7 +540,7 @@ export default function BillsPage() {
                       {(dateFrom || dateTo) && (
                         <button
                           onClick={() => {
-                            setDateFrom(''); setDateTo('')
+                            setDateFrom(''); setDateTo(''); setCurrentPage(1)
                             setTimeout(() => {
                               loadBills()
                               if (searchActive) runSearch()
@@ -609,7 +605,7 @@ export default function BillsPage() {
                   return (
                     <Chip
                       active={activeSupplier === 'All'}
-                      onClick={() => setActiveSupplier('All')}
+                      onClick={() => { setActiveSupplier('All'); setCurrentPage(1) }}
                       count={allCount}
                     >
                       All
@@ -622,7 +618,7 @@ export default function BillsPage() {
                     <Chip
                       key={label}
                       active={label === activeSupplier}
-                      onClick={() => setActiveSupplier(label)}
+                      onClick={() => { setActiveSupplier(label); setCurrentPage(1) }}
                       count={count}
                     >
                       {label}

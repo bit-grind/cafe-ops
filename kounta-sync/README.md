@@ -13,8 +13,10 @@ Brisbane** daily. It:
 2. Exports the **sales summary** and **sales-by-product** reports via Kounta's
    report export endpoint:
    `…/report/<report>?export=true&DateFrom=YYYY-MM-DD&DateTo=YYYY-MM-DD&SiteID=0&TerminalID=0`
-3. Parses the CSVs and POSTs them to the app's import routes
-   (`/api/import-daily`, `/api/import-products`), which upsert into Supabase.
+3. Parses the CSVs and POSTs timestamped HMAC-signed requests to the app's
+   import routes (`/api/import-daily`, `/api/import-products`).
+4. Replaces each imported day's product rows transactionally, so removed
+   products do not leave stale rows behind.
 
 No data is stored on any local machine; everything runs in GitHub's cloud runner.
 
@@ -37,11 +39,12 @@ That's it — the nightly run starts automatically.
 sync yesterday, or set `date_from` / `date_to` (YYYY-MM-DD) to backfill a range.
 The summary pulls the whole range in one request; products are pulled per day.
 
-## If the first run fails
+## Debugging a failed run
 
-The login selectors are the only unverified part. On failure the job uploads a
-**`kounta-sync-error` screenshot artifact** (Actions run → Artifacts) showing
-where it stopped — usually a one-line selector tweak in `sync.mjs`'s `login()`.
+The login selectors are the only unverified part. For a failed manual run,
+re-run the workflow with `upload_debug_screenshot` enabled. That opt-in uploads
+a **`kounta-sync-error` screenshot artifact** for one day. Treat the screenshot
+as sensitive because it may contain account content.
 
 ## Run locally (optional)
 

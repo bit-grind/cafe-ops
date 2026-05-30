@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin, adminClient, isAdminEmail, setUserRole, deleteUserRole, getUserRoles } from '@/lib/adminAuth'
+import { requireAdmin, adminClient, isAdminEmail, setUserRole, deleteUserRole, getUserRoles, normalizeAppRole } from '@/lib/adminAuth'
 
 export async function GET(
   req: Request,
@@ -33,7 +33,7 @@ export async function GET(
     user: {
       id: u.id,
       email: u.email ?? null,
-      role: roleMap[id] ?? ((u.user_metadata as Record<string, unknown> | null)?.role as string) ?? 'admin',
+      role: roleMap[id] ?? 'guest',
       created_at: u.created_at,
       last_sign_in_at: u.last_sign_in_at ?? null,
       email_confirmed_at: u.email_confirmed_at ?? null,
@@ -55,7 +55,7 @@ export async function PATCH(
   const body = (await req.json().catch(() => ({}))) as {
     role?: string
   }
-  const newRole = ['guest', 'kitchen'].includes(body.role || '') ? body.role : 'admin'
+  const newRole = normalizeAppRole(body.role)
 
   const supabase = adminClient()
 
@@ -75,7 +75,7 @@ export async function PATCH(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Server-controlled role is the source of truth; keep it in sync.
-  await setUserRole(id, data.user.email ?? null, newRole as string)
+  await setUserRole(id, data.user.email ?? null, newRole)
 
   return NextResponse.json({
     user: {

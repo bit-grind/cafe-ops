@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { adminClient } from '@/lib/adminAuth'
+import { adminClient, getSessionUser } from '@/lib/adminAuth'
 import { getXeroConnection } from '@/lib/xero'
 
 /**
@@ -10,13 +9,9 @@ import { getXeroConnection } from '@/lib/xero'
  */
 export async function GET(req: Request) {
   try {
-    const anonClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } }
-    )
-    const { data: { user } } = await anonClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await getSessionUser(req)
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (session.isGuest) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const conn = await getXeroConnection()
     if (!conn) {

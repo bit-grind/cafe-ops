@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSessionUser } from '@/lib/adminAuth'
 import { fetchBillAttachment, getXeroConnection } from '@/lib/xero'
 
 /**
@@ -13,13 +13,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string; fileName: string }> }
 ) {
   try {
-    const anonClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } }
-    )
-    const { data: { user } } = await anonClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await getSessionUser(req)
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (session.isGuest) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const conn = await getXeroConnection()
     if (!conn) return NextResponse.json({ error: 'Xero not connected' }, { status: 400 })
@@ -31,13 +27,17 @@ export async function GET(
     const result = await fetchBillAttachment(id, fileName)
     if (!result) return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
 
+    const safeInlineTypes = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp'])
+    const inline = safeInlineTypes.has(result.contentType.toLowerCase())
+    const cleanFileName = fileName.replace(/[\r\n"]/g, '')
     return new NextResponse(result.buffer, {
       status: 200,
       headers: {
-        'Content-Type': result.contentType,
-        // inline so PDFs/images render in <iframe>/<img> rather than downloading.
-        'Content-Disposition': `inline; filename="${fileName.replace(/"/g, '')}"`,
+        'Content-Type': inline ? result.contentType : 'application/octet-stream',
+        'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${cleanFileName}"`,
         'Cache-Control': 'private, max-age=300',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "sandbox; default-src 'none'",
       },
     })
   } catch (e: unknown) {

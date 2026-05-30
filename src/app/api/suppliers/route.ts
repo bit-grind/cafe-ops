@@ -1,22 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSessionUser } from '@/lib/adminAuth'
 import { getKitchenSuppliers } from '@/lib/suppliers-db'
 
 /**
  * GET /api/suppliers
  *
  * The admin-managed kitchen supplier list. Open to any authenticated
- * user — the Suppliers page is available to admin, guest, and kitchen
- * roles, and all of them need the list to render supplier chips.
+ * non-guest user. Supplier data is intentionally hidden from guest accounts.
  */
 export async function GET(req: Request) {
-  const anon = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } },
-  )
-  const { data: { user } } = await anon.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await getSessionUser(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.isGuest) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const suppliers = await getKitchenSuppliers()
   return NextResponse.json({ suppliers })

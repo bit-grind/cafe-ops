@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { adminClient } from '@/lib/adminAuth'
 import { generateBrief } from '@/lib/brief'
+import { checkCronAuth } from '@/lib/serverAuth'
 
 export const maxDuration = 60
 
@@ -9,16 +10,6 @@ export const maxDuration = 60
  * which sends `Authorization: Bearer <CRON_SECRET>`. Also callable manually
  * with an `x-cron-secret` header. Same auth convention as the extract-lines cron.
  */
-function checkCronAuth(req: Request): NextResponse | null {
-  const secret = process.env.CRON_SECRET
-  if (!secret) return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 })
-  const provided =
-    req.headers.get('x-cron-secret') ??
-    req.headers.get('authorization')?.replace('Bearer ', '')
-  if (provided !== secret) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  return null
-}
-
 async function handle(req: Request) {
   const authError = checkCronAuth(req)
   if (authError) return authError

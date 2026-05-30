@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { adminClient } from '@/lib/adminAuth'
 import { listBills } from '@/lib/xero'
+import { checkCronAuth } from '@/lib/serverAuth'
 
 export const maxDuration = 60
 
@@ -17,16 +18,8 @@ export const maxDuration = 60
 export async function POST(req: Request) {
   const start = Date.now()
   try {
-    const secret = process.env.CRON_SECRET
-    if (!secret) {
-      return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 })
-    }
-    const provided =
-      req.headers.get('x-cron-secret') ??
-      req.headers.get('authorization')?.replace('Bearer ', '')
-    if (provided !== secret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const authError = checkCronAuth(req)
+    if (authError) return authError
 
     const url = new URL(req.url)
     const dateFrom = url.searchParams.get('dateFrom') ?? undefined

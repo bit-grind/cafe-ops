@@ -35,7 +35,7 @@ export default function AdminPage() {
 
   const [newEmail, setNewEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
-  const [newRole, setNewRole] = useState<'admin' | 'guest' | 'kitchen'>('admin')
+  const [newRole, setNewRole] = useState<'staff' | 'guest' | 'kitchen'>('staff')
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<UserDetail | null>(null)
@@ -148,7 +148,7 @@ export default function AdminPage() {
     setMsg(`Created ${json.user.email}`)
     setNewEmail('')
     setNewPassword('')
-    setNewRole('admin')
+    setNewRole('staff')
     await loadUsers()
   }
 
@@ -169,7 +169,7 @@ export default function AdminPage() {
     await loadUsers()
   }
 
-  async function updateUserRole(id: string, newRole: 'admin' | 'guest' | 'kitchen') {
+  async function updateUserRole(id: string, newRole: 'staff' | 'guest' | 'kitchen') {
     setBusy(true)
     setMsg(null)
     const res = await fetch(`/api/admin/users/${id}`, {
@@ -266,11 +266,11 @@ export default function AdminPage() {
             <select
               className="bp-input"
               value={newRole}
-              onChange={(e) => setNewRole(e.target.value as 'admin' | 'guest' | 'kitchen')}
+              onChange={(e) => setNewRole(e.target.value as 'staff' | 'guest' | 'kitchen')}
             >
-              <option value="admin">admin (full access)</option>
-              <option value="guest">guest (read-only Ask AI)</option>
-              <option value="kitchen">kitchen (Bills only)</option>
+              <option value="staff">staff (operational access)</option>
+              <option value="guest">guest (sales only)</option>
+              <option value="kitchen">kitchen (suppliers and recipes)</option>
             </select>
             <button type="submit" disabled={busy} className="bp-btn">
               {busy ? 'Working…' : 'Create user'}
@@ -374,14 +374,14 @@ export default function AdminPage() {
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                               <select
                                 value={detail.user.role}
-                                onChange={(e) => updateUserRole(detail.user.id, e.target.value as 'admin' | 'guest' | 'kitchen')}
+                                onChange={(e) => updateUserRole(detail.user.id, e.target.value as 'staff' | 'guest' | 'kitchen')}
                                 disabled={busy}
                                 className="bp-input"
                                 style={{ padding: '6px 10px', fontSize: 12, width: 'auto', cursor: busy ? 'not-allowed' : 'pointer' }}
                               >
-                                <option value="admin">admin (full access)</option>
-                                <option value="guest">guest (read-only Ask AI)</option>
-                                <option value="kitchen">kitchen (Bills only)</option>
+                                <option value="staff">staff (operational access)</option>
+                                <option value="guest">guest (sales only)</option>
+                                <option value="kitchen">kitchen (suppliers and recipes)</option>
                               </select>
                             </div>
                           </div>

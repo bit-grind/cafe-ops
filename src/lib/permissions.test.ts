@@ -12,8 +12,8 @@ describe('getAllowedTabs', () => {
     ])
   })
 
-  it('guest sees dashboard, ask and bills only', () => {
-    expect(getAllowedTabs({ isAdmin: false, isGuest: true, isKitchen: false })).toEqual(['dashboard', 'ask', 'bills'])
+  it('guest sees sales dashboard and sales-only ask', () => {
+    expect(getAllowedTabs({ isAdmin: false, isGuest: true, isKitchen: false })).toEqual(['dashboard', 'ask'])
   })
 
   it('a standard user sees the default set (no admin)', () => {

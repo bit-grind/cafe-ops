@@ -18,6 +18,6 @@ export const ALL_TABS: Array<{ label: string; tab: AppTab; href: string }> = [
 export function getAllowedTabs({ isAdmin, isGuest, isKitchen }: SessionFlags): AppTab[] {
   if (isKitchen) return ['kitchen', 'bills', 'recipes']
   if (isAdmin) return ['dashboard', 'kitchen', 'ask', 'bills', 'recipes', 'admin']
-  if (isGuest) return ['dashboard', 'ask', 'bills']
+  if (isGuest) return ['dashboard', 'ask']
   return ['dashboard', 'kitchen', 'ask', 'bills', 'recipes']
 }

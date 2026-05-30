@@ -4,6 +4,7 @@ import { extractLinesFromInvoice } from '@/lib/extractLines'
 import { listBills } from '@/lib/xero'
 import { isKitchenSupplierBill } from '@/lib/suppliers'
 import { getKitchenSuppliers } from '@/lib/suppliers-db'
+import { checkCronAuth } from '@/lib/serverAuth'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const maxDuration = 60
@@ -85,22 +86,6 @@ async function handleCron(req: Request) {
     const msg = e instanceof Error ? e.message : 'Unknown error'
     return NextResponse.json({ error: msg, elapsed: elapsedSec(start) }, { status: 500 })
   }
-}
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-
-function checkCronAuth(req: Request): NextResponse | null {
-  const secret = process.env.CRON_SECRET
-  if (!secret) {
-    return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 })
-  }
-  const provided =
-    req.headers.get('x-cron-secret') ??
-    req.headers.get('authorization')?.replace('Bearer ', '')
-  if (provided !== secret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  return null
 }
 
 // ── Candidate selection ───────────────────────────────────────────────────────
