@@ -52,5 +52,5 @@ as sensitive because it may contain account content.
 cd kounta-sync
 npm install
 npx playwright install chromium
-KOUNTA_USER=… KOUNTA_PASS=… IMPORT_SECRET=… APP_URL=https://ops.example.com node sync.mjs
+KOUNTA_USER=... KOUNTA_PASS=... IMPORT_SECRET=... APP_URL=https://your-app.example.invalid node sync.mjs
 ```

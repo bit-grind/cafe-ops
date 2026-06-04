@@ -97,7 +97,7 @@ export async function getSessionUser(req: Request): Promise<
     email,
     role,
     isAdmin,
-    isGuest: !isAdmin && (role === 'guest' || email === 'guest@example.com'),
+    isGuest: !isAdmin && role === 'guest',
     isKitchen: role === 'kitchen',
   }
 }

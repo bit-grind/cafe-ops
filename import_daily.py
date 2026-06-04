@@ -8,7 +8,8 @@ import hmac
 import time
 import uuid
 
-ENDPOINT = "https://cafe-ops.vercel.app/api/import-daily"
+APP_URL = os.environ["APP_URL"].rstrip("/")
+ENDPOINT = f"{APP_URL}/api/import-daily"
 IMPORT_SECRET = os.environ["IMPORT_SECRET"]
 
 def main():

@@ -68,7 +68,7 @@ SUPABASE_SERVICE_KEY=<your-service-role-key>
 
 # Lightspeed portal (for browser automation)
 LIGHTSPEED_URL=https://your-site.lightspeedhq.com
-LIGHTSPEED_USER=your-email@example.com
+LIGHTSPEED_USER=<your-login-id>
 LIGHTSPEED_PASS=your-password
 ```
 

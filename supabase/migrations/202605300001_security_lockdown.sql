@@ -1,4 +1,4 @@
--- Cafe Ops security foundation.
+-- Operations security foundation.
 -- Apply this migration before deploying the matching application code.
 
 create table if not exists public.user_role (
@@ -25,7 +25,7 @@ $$;
 update public.user_role
 set role = case
   when role = 'kitchen' then 'kitchen'
-  when role = 'guest' or email = 'guest@example.com' then 'guest'
+  when role = 'guest' then 'guest'
   else 'staff'
 end;
 
@@ -34,7 +34,7 @@ select
   id,
   email,
   case
-    when email = 'guest@example.com' or raw_user_meta_data ->> 'role' = 'guest' then 'guest'
+    when raw_user_meta_data ->> 'role' = 'guest' then 'guest'
     when raw_user_meta_data ->> 'role' = 'kitchen' then 'kitchen'
     else 'staff'
   end

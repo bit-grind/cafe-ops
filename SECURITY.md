@@ -25,7 +25,7 @@ Rotate these after applying the migration:
 | `RATE_LIMIT_KEY` | Vercel app only |
 | `XERO_CLIENT_SECRET` | Vercel app and Xero OAuth app |
 
-Set `APP_ORIGIN=https://ops.example.com` in production so OAuth redirects
+Set `APP_ORIGIN` to your production app origin so OAuth redirects
 never derive their destination from an inbound request host.
 
 Keep `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, Xero secrets, and Kounta

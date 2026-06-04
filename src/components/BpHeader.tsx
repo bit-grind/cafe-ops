@@ -35,10 +35,10 @@ export default function BpHeader({
         }}
       >
         <Link href={homeHref} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <Image src="/brand/logo.png" alt="The Cafe" width={52} height={52} priority />
+          <Image src="/brand/logo.svg" alt="Cafe Ops" width={52} height={52} priority />
           <div>
             <div style={{ fontWeight: 700, letterSpacing: "0.1em", fontSize: 14 }}>
-              The Cafe
+              CAFE OPS
             </div>
             <div style={{ fontSize: 11, letterSpacing: "0.1em", color: "var(--muted-strong)", marginTop: 2 }}>
               OPS DASHBOARD

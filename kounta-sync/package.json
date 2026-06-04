@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "1.0.0",
-  "description": "Daily Kounta -> Cafe Ops sales sync (runs in GitHub Actions)",
+  "description": "Daily Kounta sales sync (runs in GitHub Actions)",
   "dependencies": {
     "playwright": "1.60.0"
   }

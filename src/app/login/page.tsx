@@ -13,7 +13,14 @@ export default function LoginPage() {
     e.preventDefault()
     setBusy(true)
     setMsg(null)
-    const resolvedEmail = email.trim() === 'guest' ? 'guest@example.com' : email
+    const trimmedEmail = email.trim()
+    const guestEmail = process.env.NEXT_PUBLIC_GUEST_LOGIN_EMAIL
+    if (trimmedEmail === 'guest' && !guestEmail) {
+      setBusy(false)
+      setMsg('Guest login is not configured.')
+      return
+    }
+    const resolvedEmail = trimmedEmail === 'guest' ? guestEmail! : trimmedEmail
     const { error } = await supabase.auth.signInWithPassword({ email: resolvedEmail, password })
     setBusy(false)
     if (error) setMsg('Invalid email or password.')
@@ -39,7 +46,7 @@ export default function LoginPage() {
             textAlign: 'center',
           }}
         >
-          The Cafe
+          CAFE OPS
         </div>
         <div
           style={{

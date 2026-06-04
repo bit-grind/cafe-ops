@@ -34,11 +34,11 @@ jobs:
       - name: Preflight — skip cleanly until secrets are set
         id: pre
         run: |
-          if [ -n "${{ secrets.KOUNTA_USER }}" ] && [ -n "${{ secrets.KOUNTA_PASS }}" ] && [ -n "${{ secrets.IMPORT_SECRET }}" ]; then
+          if [ -n "${{ secrets.KOUNTA_USER }}" ] && [ -n "${{ secrets.KOUNTA_PASS }}" ] && [ -n "${{ secrets.IMPORT_SECRET }}" ] && [ -n "${{ vars.APP_URL }}" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::KOUNTA_USER / KOUNTA_PASS / IMPORT_SECRET not set yet — skipping. See kounta-sync/README.md."
+            echo "::notice::KOUNTA_USER / KOUNTA_PASS / IMPORT_SECRET secrets or APP_URL variable not set yet; skipping. See kounta-sync/README.md."
           fi
 
       - if: steps.pre.outputs.ready == 'true'
@@ -67,7 +67,7 @@ jobs:
           KOUNTA_USER: ${{ secrets.KOUNTA_USER }}
           KOUNTA_PASS: ${{ secrets.KOUNTA_PASS }}
           IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
-          APP_URL: https://ops.example.com
+          APP_URL: ${{ vars.APP_URL }}
           SYNC_DATE_FROM: ${{ github.event.inputs.date_from }}
           SYNC_DATE_TO: ${{ github.event.inputs.date_to }}
           UPLOAD_DEBUG_SCREENSHOT: ${{ github.event.inputs.upload_debug_screenshot }}

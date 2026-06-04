@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Cafe base palette (always dark) */
+/* App base palette (always dark) */
 :root {
   --background: #0b0b0b;
   --foreground: #f5f5f5;

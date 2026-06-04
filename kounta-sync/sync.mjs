@@ -1,5 +1,5 @@
 /**
- * Kounta → Cafe Ops daily sync.
+ * Kounta daily sync.
  *
  * Headless-logs into my.kounta.com, exports the sales summary + by-product
  * reports via Kounta's report export endpoint, and POSTs them to the app's
@@ -13,19 +13,20 @@
  * Env:
  *   KOUNTA_USER, KOUNTA_PASS   Kounta login (set as repo secrets)
  *   IMPORT_SECRET              shared secret for the app's import endpoints
- *   APP_URL                    e.g. https://ops.example.com
+ *   APP_URL                    deployed app base URL
  *   SYNC_DATE_FROM/TO          optional override (YYYY-MM-DD) for backfills;
  *                              defaults to "yesterday" in Brisbane
  */
 import { chromium } from 'playwright'
 import { createHmac, randomUUID } from 'crypto'
 
-const APP_URL = (process.env.APP_URL || 'https://ops.example.com').replace(/\/$/, '')
-const { KOUNTA_USER, KOUNTA_PASS, IMPORT_SECRET } = process.env
+const { APP_URL: rawAppUrl, KOUNTA_USER, KOUNTA_PASS, IMPORT_SECRET } = process.env
 
-for (const [k, v] of Object.entries({ KOUNTA_USER, KOUNTA_PASS, IMPORT_SECRET })) {
+for (const [k, v] of Object.entries({ APP_URL: rawAppUrl, KOUNTA_USER, KOUNTA_PASS, IMPORT_SECRET })) {
   if (!v) { console.error(`Missing required env: ${k}`); process.exit(1) }
 }
+
+const APP_URL = rawAppUrl.replace(/\/$/, '')
 
 // ── helpers ────────────────────────────────────────────────────────────────
 const num = (s) => {

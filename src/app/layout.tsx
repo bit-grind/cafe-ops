@@ -8,8 +8,8 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "The Cafe — Ops",
-  description: "Internal operations dashboard for The Cafe",
+  title: "Cafe Ops",
+  description: "Internal operations dashboard for cafe teams",
 };
 
 export default function RootLayout({
