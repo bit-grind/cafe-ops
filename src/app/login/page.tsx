@@ -64,10 +64,12 @@ export default function LoginPage() {
         <div
           style={{
             fontSize: 11,
+            fontWeight: 700,
             letterSpacing: '0.1em',
             color: 'var(--muted-strong)',
             textAlign: 'center',
             marginTop: 4,
+            textTransform: 'uppercase',
           }}
         >
           {branding.subtitle}
