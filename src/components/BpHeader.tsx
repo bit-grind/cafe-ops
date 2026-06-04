@@ -48,7 +48,16 @@ export default function BpHeader({
             <div style={{ fontWeight: 700, letterSpacing: "0.1em", fontSize: 14, textTransform: 'uppercase' }}>
               {branding.displayName}
             </div>
-            <div style={{ fontSize: 11, letterSpacing: "0.1em", color: "var(--muted-strong)", marginTop: 2 }}>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                color: "var(--muted-strong)",
+                marginTop: 2,
+                textTransform: 'uppercase',
+              }}
+            >
               {branding.subtitle}
             </div>
             {email ? <div className="bp-hdr-email--mobile">{email}</div> : null}
