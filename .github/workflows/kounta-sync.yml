@@ -2,12 +2,12 @@ name: Kounta daily sync
 
 on:
   schedule:
-    # 19:00 UTC = 05:00 Brisbane (UTC+10). Pulls "yesterday" once the day is closed.
-    - cron: '0 19 * * *'
+    # 04:30 UTC = 14:30 Brisbane (UTC+10). Pulls today's trade right after close.
+    - cron: '30 4 * * *'
   workflow_dispatch:
     inputs:
       date_from:
-        description: 'Backfill from (YYYY-MM-DD) — leave blank for yesterday'
+        description: 'Backfill from (YYYY-MM-DD) — leave blank for today'
         required: false
       date_to:
         description: 'Backfill to (YYYY-MM-DD) — leave blank to match from'
@@ -21,7 +21,7 @@ on:
 permissions:
   contents: read
 
-# Avoid overlapping runs (e.g. a long backfill + the nightly schedule).
+# Avoid overlapping runs (e.g. a long backfill + the daily schedule).
 concurrency:
   group: kounta-sync
   cancel-in-progress: false

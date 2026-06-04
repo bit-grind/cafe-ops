@@ -7,7 +7,7 @@ import { getPriceWatch, type PriceChange } from '@/lib/priceWatch'
  * Daily brief: a short, proactive "morning read" on the most recent completed
  * business day, computed deterministically and then narrated by the AI. Stored
  * one-row-per-day in public.daily_brief so the dashboard can show it instantly
- * and a cron can pre-generate it each morning.
+ * and a cron can pre-generate it on schedule.
  */
 
 type Day = {

@@ -6,8 +6,8 @@ without anyone running a script.
 
 ## How it works
 
-A scheduled GitHub Action (`.github/workflows/kounta-sync.yml`) runs at **05:00
-Brisbane** daily. It:
+A scheduled GitHub Action (`.github/workflows/kounta-sync.yml`) runs at **14:30
+Brisbane** daily, right after the shop closes. It:
 
 1. Headless-logs into `my.kounta.com` with stored credentials.
 2. Exports the **sales summary** and **sales-by-product** reports via Kounta's
@@ -18,12 +18,12 @@ Brisbane** daily. It:
 4. Replaces each imported day's product rows transactionally, so removed
    products do not leave stale rows behind.
 5. Generates the dashboard morning brief as soon as product rows for the newest
-   sales day finish importing. Vercel also runs a later morning cron as a
+   sales day finish importing. Vercel also runs a scheduled brief cron as a
    backup if sales data is inserted another way.
 
 No data is stored on any local machine; everything runs in GitHub's cloud runner.
 
-## One-time setup — add these repo secrets
+## One-time setup — add these repo secrets and variable
 
 In GitHub: **Settings → Secrets and variables → Actions → New repository secret**.
 Add each yourself (so the password is never handled by anyone else):
@@ -34,12 +34,18 @@ Add each yourself (so the password is never handled by anyone else):
 | `KOUNTA_PASS` | your Kounta password |
 | `IMPORT_SECRET` | **the same value** as `IMPORT_SECRET` in the Vercel project env (the app uses it to authenticate imports) |
 
-That's it — the nightly run starts automatically.
+Then open the **Variables** tab in the same screen and add:
+
+| Variable | Value |
+|----------|-------|
+| `APP_URL` | the deployed Cafe Ops app URL, for example `https://your-app.example.invalid` |
+
+That's it — the daily run starts automatically.
 
 ## Backfill / manual run
 
 **Actions → "Kounta daily sync" → Run workflow.** Leave the date fields blank to
-sync yesterday, or set `date_from` / `date_to` (YYYY-MM-DD) to backfill a range.
+sync today's Brisbane business date, or set `date_from` / `date_to` (YYYY-MM-DD) to backfill a range.
 The summary pulls the whole range in one request; products are pulled per day.
 
 ## Debugging a failed run

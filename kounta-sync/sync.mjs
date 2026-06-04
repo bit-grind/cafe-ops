@@ -15,7 +15,7 @@
  *   IMPORT_SECRET              shared secret for the app's import endpoints
  *   APP_URL                    deployed app base URL
  *   SYNC_DATE_FROM/TO          optional override (YYYY-MM-DD) for backfills;
- *                              defaults to "yesterday" in Brisbane
+ *                              defaults to today's Brisbane business date
  */
 import { chromium } from 'playwright'
 import { createHmac, randomUUID } from 'crypto'
@@ -34,16 +34,14 @@ const num = (s) => {
   return Number.isFinite(n) ? n : 0
 }
 
-function brisbaneYesterdayISO() {
+function brisbaneTodayISO() {
   const p = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Australia/Brisbane', year: 'numeric', month: '2-digit', day: '2-digit',
   }).formatToParts(new Date())
   const y = +p.find(x => x.type === 'year').value
   const m = +p.find(x => x.type === 'month').value
   const d = +p.find(x => x.type === 'day').value
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  dt.setUTCDate(dt.getUTCDate() - 1)
-  return dt.toISOString().slice(0, 10)
+  return new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10)
 }
 
 function eachDay(from, to) {
@@ -179,7 +177,7 @@ async function login(page) {
 }
 
 // ── run ──────────────────────────────────────────────────────────────────
-const from = process.env.SYNC_DATE_FROM || brisbaneYesterdayISO()
+const from = process.env.SYNC_DATE_FROM || brisbaneTodayISO()
 const to = process.env.SYNC_DATE_TO || from
 const syncDays = eachDay(from, to)
 console.log(`Kounta sync: ${from} → ${to} (app: ${APP_URL})`)
