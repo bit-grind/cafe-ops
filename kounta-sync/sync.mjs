@@ -16,6 +16,10 @@
  *   APP_URL                    deployed app base URL
  *   SYNC_PRODUCTS              optional; set to "false" for summary-only live
  *                              sales refreshes
+ *   LIVE_MONITOR_MINUTES       optional; when set, polls the summary every
+ *                              LIVE_POLL_SECONDS and imports each sample
+ *   LIVE_POLL_SECONDS          optional; defaults to 60 for live monitors
+ *   LIVE_STOP_BRISBANE         optional HH:MM cutoff for scheduled live monitors
  *   SYNC_DATE_FROM/TO          optional override (YYYY-MM-DD) for backfills;
  *                              defaults to today's Brisbane business date
  */
@@ -30,6 +34,9 @@ for (const [k, v] of Object.entries({ APP_URL: rawAppUrl, KOUNTA_USER, KOUNTA_PA
 
 const APP_URL = rawAppUrl.replace(/\/$/, '')
 const SYNC_PRODUCTS = process.env.SYNC_PRODUCTS !== 'false'
+const LIVE_MONITOR_MINUTES = Number.parseInt(process.env.LIVE_MONITOR_MINUTES || '', 10)
+const LIVE_POLL_SECONDS = Math.max(15, Number.parseInt(process.env.LIVE_POLL_SECONDS || '60', 10) || 60)
+const LIVE_STOP_BRISBANE = process.env.LIVE_STOP_BRISBANE || ''
 
 // ── helpers ────────────────────────────────────────────────────────────────
 const num = (s) => {
@@ -46,6 +53,30 @@ function brisbaneTodayISO() {
   const d = +p.find(x => x.type === 'day').value
   return new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10)
 }
+
+function brisbaneMinuteOfDay() {
+  const p = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Australia/Brisbane',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date())
+  const h = +p.find(x => x.type === 'hour').value
+  const m = +p.find(x => x.type === 'minute').value
+  return h * 60 + m
+}
+
+function parseStopMinute(value) {
+  if (!value) return null
+  const m = value.match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) throw new Error('LIVE_STOP_BRISBANE must be HH:MM')
+  const hour = Number(m[1])
+  const minute = Number(m[2])
+  if (hour > 23 || minute > 59) throw new Error('LIVE_STOP_BRISBANE must be HH:MM')
+  return hour * 60 + minute
+}
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 function eachDay(from, to) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
@@ -179,11 +210,55 @@ async function login(page) {
   }
 }
 
+async function importSummary(page, from, to) {
+  const summary = mapSummary(parseCsv(await exportCsv(page, 'salesummary', from, to)))
+  const summaryByDate = new Map(summary.map(day => [day.business_date, day]))
+  for (const day of eachDay(from, to)) {
+    if (!summaryByDate.has(day)) throw new Error(`Summary export did not include ${day}`)
+  }
+  await postJson('/api/import-daily', summary)
+  return { summary, summaryByDate }
+}
+
+async function runLiveMonitor(page, from, to) {
+  const stopMinute = parseStopMinute(LIVE_STOP_BRISBANE)
+  const deadline = Date.now() + LIVE_MONITOR_MINUTES * 60_000
+  let lastKey = ''
+  let sample = 0
+
+  while (Date.now() < deadline) {
+    if (stopMinute != null && brisbaneMinuteOfDay() > stopMinute) {
+      console.log(`Live monitor stopping at Brisbane cutoff ${LIVE_STOP_BRISBANE}.`)
+      break
+    }
+
+    sample += 1
+    const sampledAt = new Date().toISOString()
+    const { summary, summaryByDate } = await importSummary(page, from, to)
+    const subject = summaryByDate.get(to) ?? summary[summary.length - 1]
+    const key = subject
+      ? `${subject.business_date}:${subject.gross_sales}:${subject.order_count}:${subject.aov}`
+      : ''
+    const changed = sample === 1 ? 'initial' : key === lastKey ? 'no' : 'yes'
+    lastKey = key
+    console.log(
+      `Live sample ${sample} @ ${sampledAt}: date=${subject?.business_date ?? 'n/a'} ` +
+      `gross=${subject?.gross_sales ?? 'n/a'} orders=${subject?.order_count ?? 'n/a'} ` +
+      `aov=${subject?.aov ?? 'n/a'} changed=${changed}`,
+    )
+
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) break
+    await sleep(Math.min(LIVE_POLL_SECONDS * 1000, remaining))
+  }
+}
+
 // ── run ──────────────────────────────────────────────────────────────────
 const from = process.env.SYNC_DATE_FROM || brisbaneTodayISO()
 const to = process.env.SYNC_DATE_TO || from
 const syncDays = eachDay(from, to)
-console.log(`Kounta ${SYNC_PRODUCTS ? 'sync' : 'summary sync'}: ${from} → ${to} (app: ${APP_URL})`)
+const liveMonitor = Number.isFinite(LIVE_MONITOR_MINUTES) && LIVE_MONITOR_MINUTES > 0
+console.log(`Kounta ${liveMonitor ? 'live monitor' : SYNC_PRODUCTS ? 'sync' : 'summary sync'}: ${from} → ${to} (app: ${APP_URL})`)
 
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage()
@@ -191,29 +266,28 @@ try {
   await login(page)
   console.log('Logged in.')
 
-  // Summary report accepts a date range in one request.
-  const summary = mapSummary(parseCsv(await exportCsv(page, 'salesummary', from, to)))
-  const summaryByDate = new Map(summary.map(day => [day.business_date, day]))
-  for (const day of syncDays) {
-    if (!summaryByDate.has(day)) throw new Error(`Summary export did not include ${day}`)
-  }
-  await postJson('/api/import-daily', summary)
-  console.log(`Summary: imported ${summary.length} day(s).`)
-
-  if (SYNC_PRODUCTS) {
-    // By-product report aggregates over a range, so pull one day at a time.
-    let productTotal = 0
-    for (const day of syncDays) {
-      const products = mapProducts(parseCsv(await exportCsv(page, 'salesummarybyproduct', day, day)), day)
-      const totals = summaryByDate.get(day)
-      const allowEmpty = totals.order_count === 0 && totals.gross_sales === 0
-      await postJson('/api/import-products', { business_date: day, rows: products, allow_empty: allowEmpty })
-      productTotal += products.length
-      console.log(`Products ${day}: imported ${products.length}.`)
-    }
-    console.log(`Done. ${summary.length} summary day(s), ${productTotal} product rows.`)
+  if (liveMonitor) {
+    await runLiveMonitor(page, from, to)
   } else {
-    console.log(`Done. ${summary.length} summary day(s).`)
+    // Summary report accepts a date range in one request.
+    const { summary, summaryByDate } = await importSummary(page, from, to)
+    console.log(`Summary: imported ${summary.length} day(s).`)
+
+    if (SYNC_PRODUCTS) {
+      // By-product report aggregates over a range, so pull one day at a time.
+      let productTotal = 0
+      for (const day of syncDays) {
+        const products = mapProducts(parseCsv(await exportCsv(page, 'salesummarybyproduct', day, day)), day)
+        const totals = summaryByDate.get(day)
+        const allowEmpty = totals.order_count === 0 && totals.gross_sales === 0
+        await postJson('/api/import-products', { business_date: day, rows: products, allow_empty: allowEmpty })
+        productTotal += products.length
+        console.log(`Products ${day}: imported ${products.length}.`)
+      }
+      console.log(`Done. ${summary.length} summary day(s), ${productTotal} product rows.`)
+    } else {
+      console.log(`Done. ${summary.length} summary day(s).`)
+    }
   }
 } catch (e) {
   if (process.env.UPLOAD_DEBUG_SCREENSHOT === 'true') {

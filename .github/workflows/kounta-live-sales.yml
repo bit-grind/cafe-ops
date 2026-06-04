@@ -2,11 +2,11 @@ name: Kounta live sales
 
 on:
   schedule:
-    # 19:00-04:20 UTC = 05:00-14:20 Brisbane (UTC+10), every 10 minutes.
-    # The full product sync runs at 14:30 Brisbane and imports the final summary.
-    - cron: '*/10 19-23 * * *'
-    - cron: '*/10 0-3 * * *'
-    - cron: '0,10,20 4 * * *'
+    # Starts a runner 5 minutes before each trading hour, then polls Kounta
+    # every minute. 18:55-03:55 UTC = 04:55-13:55 Brisbane (UTC+10).
+    # The script stops at 14:20 Brisbane; the full product sync runs at 14:30.
+    - cron: '55 18-23 * * *'
+    - cron: '55 0-3 * * *'
   workflow_dispatch:
     inputs:
       date_from:
@@ -20,18 +20,24 @@ on:
         required: false
         type: boolean
         default: false
+      monitor_minutes:
+        description: 'Poll duration in minutes — leave blank for 60, set 0 for one-shot summary refresh'
+        required: false
+      poll_seconds:
+        description: 'Seconds between live samples — leave blank for 60'
+        required: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: kounta-live-sales
+  group: kounta-live-sales-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
   live-summary:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 75
     steps:
       - name: Preflight — skip cleanly until secrets are set
         id: pre
@@ -74,6 +80,9 @@ jobs:
           SYNC_DATE_FROM: ${{ github.event.inputs.date_from }}
           SYNC_DATE_TO: ${{ github.event.inputs.date_to }}
           UPLOAD_DEBUG_SCREENSHOT: ${{ github.event.inputs.upload_debug_screenshot }}
+          LIVE_MONITOR_MINUTES: ${{ github.event.inputs.monitor_minutes || '60' }}
+          LIVE_POLL_SECONDS: ${{ github.event.inputs.poll_seconds || '60' }}
+          LIVE_STOP_BRISBANE: '14:20'
 
       - name: Upload error screenshot on failure
         if: failure() && steps.pre.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.upload_debug_screenshot == 'true'
