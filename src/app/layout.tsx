@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
-import { APP_DISPLAY_NAME } from "@/lib/branding";
+import { getServerBranding } from "@/lib/brandingServer";
 import "./globals.css";
 
 const geist = Geist({
@@ -8,16 +8,29 @@ const geist = Geist({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: APP_DISPLAY_NAME,
-  description: "Internal operations dashboard for cafe teams",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = await getServerBranding()
+  return {
+    title: branding.displayName,
+    description: "Internal operations dashboard for cafe teams",
+  };
+}
 
-export default function RootLayout({
+function serializeForScript(value: unknown) {
+  return JSON.stringify(value).replace(/[<>&]/g, (char) => {
+    if (char === '<') return '\\u003c'
+    if (char === '>') return '\\u003e'
+    return '\\u0026'
+  })
+}
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const branding = await getServerBranding()
+
   return (
     <html lang="en">
       <body
@@ -28,6 +41,11 @@ export default function RootLayout({
           minHeight: "100vh",
         }}
       >
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__APP_BRANDING__=${serializeForScript(branding)};`,
+          }}
+        />
         {children}
       </body>
     </html>

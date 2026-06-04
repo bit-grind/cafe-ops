@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { APP_DISPLAY_NAME, APP_LOGO_SRC, APP_SUBTITLE } from '@/lib/branding'
 import { supabase } from '@/lib/supabaseClient'
+import { useBranding } from '@/lib/useBranding'
 
 export default function LoginPage() {
+  const branding = useBranding()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
@@ -42,8 +43,8 @@ export default function LoginPage() {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={APP_LOGO_SRC}
-            alt={`${APP_DISPLAY_NAME} logo`}
+            src={branding.logoSrc}
+            alt={`${branding.displayName} logo`}
             width={72}
             height={72}
             style={{ width: 72, height: 72, objectFit: 'contain', borderRadius: 20 }}
@@ -58,7 +59,7 @@ export default function LoginPage() {
             textTransform: 'uppercase',
           }}
         >
-          {APP_DISPLAY_NAME}
+          {branding.displayName}
         </div>
         <div
           style={{
@@ -69,7 +70,7 @@ export default function LoginPage() {
             marginTop: 4,
           }}
         >
-          {APP_SUBTITLE}
+          {branding.subtitle}
         </div>
 
         <h1

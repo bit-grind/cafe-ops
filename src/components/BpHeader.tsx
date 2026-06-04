@@ -1,6 +1,6 @@
 import Link from "next/link"
-import { APP_DISPLAY_NAME, APP_LOGO_SRC, APP_SUBTITLE } from '@/lib/branding'
 import { ALL_TABS, type AppTab } from '@/lib/permissions'
+import { useBranding } from '@/lib/useBranding'
 
 export default function BpHeader({
   email,
@@ -13,6 +13,7 @@ export default function BpHeader({
   activeTab?: AppTab
   allowedTabs?: AppTab[]
 }) {
+  const branding = useBranding()
   const visible = allowedTabs
     ? ALL_TABS.filter(t => allowedTabs.includes(t.tab))
     : ALL_TABS.filter(t => t.tab !== 'admin')
@@ -37,18 +38,18 @@ export default function BpHeader({
         <Link href={homeHref} style={{ display: "flex", alignItems: "center", gap: 14 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={APP_LOGO_SRC}
-            alt={`${APP_DISPLAY_NAME} logo`}
+            src={branding.logoSrc}
+            alt={`${branding.displayName} logo`}
             width={52}
             height={52}
             style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 18, flex: '0 0 auto' }}
           />
           <div>
             <div style={{ fontWeight: 700, letterSpacing: "0.1em", fontSize: 14, textTransform: 'uppercase' }}>
-              {APP_DISPLAY_NAME}
+              {branding.displayName}
             </div>
             <div style={{ fontSize: 11, letterSpacing: "0.1em", color: "var(--muted-strong)", marginTop: 2 }}>
-              {APP_SUBTITLE}
+              {branding.subtitle}
             </div>
             {email ? <div className="bp-hdr-email--mobile">{email}</div> : null}
           </div>
