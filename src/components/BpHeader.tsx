@@ -1,5 +1,5 @@
-import Image from "next/image"
 import Link from "next/link"
+import { APP_DISPLAY_NAME, APP_LOGO_SRC, APP_SUBTITLE } from '@/lib/branding'
 import { ALL_TABS, type AppTab } from '@/lib/permissions'
 
 export default function BpHeader({
@@ -35,13 +35,20 @@ export default function BpHeader({
         }}
       >
         <Link href={homeHref} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <Image src="/brand/logo.svg" alt="Cafe Ops" width={52} height={52} priority />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={APP_LOGO_SRC}
+            alt={`${APP_DISPLAY_NAME} logo`}
+            width={52}
+            height={52}
+            style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 18, flex: '0 0 auto' }}
+          />
           <div>
-            <div style={{ fontWeight: 700, letterSpacing: "0.1em", fontSize: 14 }}>
-              CAFE OPS
+            <div style={{ fontWeight: 700, letterSpacing: "0.1em", fontSize: 14, textTransform: 'uppercase' }}>
+              {APP_DISPLAY_NAME}
             </div>
             <div style={{ fontSize: 11, letterSpacing: "0.1em", color: "var(--muted-strong)", marginTop: 2 }}>
-              OPS DASHBOARD
+              {APP_SUBTITLE}
             </div>
             {email ? <div className="bp-hdr-email--mobile">{email}</div> : null}
           </div>

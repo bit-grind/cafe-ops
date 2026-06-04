@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { APP_DISPLAY_NAME } from "@/lib/branding";
 import "./globals.css";
 
 const geist = Geist({
@@ -8,7 +9,7 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Cafe Ops",
+  title: APP_DISPLAY_NAME,
   description: "Internal operations dashboard for cafe teams",
 };
 

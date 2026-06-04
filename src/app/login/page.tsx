@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { APP_DISPLAY_NAME, APP_LOGO_SRC, APP_SUBTITLE } from '@/lib/branding'
 import { supabase } from '@/lib/supabaseClient'
 
 export default function LoginPage() {
@@ -38,15 +39,26 @@ export default function LoginPage() {
       }}
     >
       <div className="bp-card" style={{ width: '100%', maxWidth: 380, padding: 28 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={APP_LOGO_SRC}
+            alt={`${APP_DISPLAY_NAME} logo`}
+            width={72}
+            height={72}
+            style={{ width: 72, height: 72, objectFit: 'contain', borderRadius: 20 }}
+          />
+        </div>
         <div
           style={{
             fontWeight: 700,
             letterSpacing: '0.1em',
             fontSize: 13,
             textAlign: 'center',
+            textTransform: 'uppercase',
           }}
         >
-          CAFE OPS
+          {APP_DISPLAY_NAME}
         </div>
         <div
           style={{
@@ -57,7 +69,7 @@ export default function LoginPage() {
             marginTop: 4,
           }}
         >
-          OPS DASHBOARD
+          {APP_SUBTITLE}
         </div>
 
         <h1
