@@ -31,6 +31,14 @@ type MeResponse = {
   isKitchen?: boolean
 }
 
+type LiveSalesResponse = {
+  business_date: string
+  day: Day | null
+  fetched_at: string
+}
+
+const LIVE_SALES_INTERVAL_MS = 10 * 60 * 1000
+
 function startOfWeekMon(d: Date) {
   const x = new Date(d)
   const day = x.getDay()
@@ -40,17 +48,60 @@ function startOfWeekMon(d: Date) {
   return x
 }
 
+function mergeDay(days: Day[], day: Day) {
+  return [day, ...days.filter(d => d.business_date !== day.business_date)]
+    .sort((a, b) => b.business_date.localeCompare(a.business_date))
+}
+
+function fmtBrisbaneTime(value: string) {
+  return new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Brisbane',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
 export default function OpsHome() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
   const [allowedTabs, setAllowedTabs] = useState<AppTab[]>([])
   const [days, setDays] = useState<Day[]>([])
+  const [liveBusinessDate, setLiveBusinessDate] = useState<string | null>(null)
+  const [liveSalesUpdatedAt, setLiveSalesUpdatedAt] = useState<string | null>(null)
   const [brief, setBrief] = useState<Brief | null>(null)
   const [briefLoading, setBriefLoading] = useState(true)
   const [briefError, setBriefError] = useState(false)
   const [showBrief, setShowBrief] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
+    let liveSalesTimer: number | undefined
+
+    async function loadSales(accessToken: string) {
+      const res = await fetch('/api/sales?limit=90', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+      }).catch(() => null)
+      if (!res?.ok) return
+      const body = await res.json()
+      if (!cancelled) setDays((body.days as Day[] | null) ?? [])
+    }
+
+    async function loadLiveSales(accessToken?: string) {
+      const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token
+      if (!token) return
+      const res = await fetch('/api/sales/live', {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      }).catch(() => null)
+      if (!res?.ok) return
+      const body = await res.json() as LiveSalesResponse
+      if (cancelled) return
+      setLiveBusinessDate(body.business_date)
+      setLiveSalesUpdatedAt(body.fetched_at)
+      if (body.day) setDays(prev => mergeDay(prev, body.day as Day))
+    }
+
     async function load() {
       const { data: sessionData } = await supabase.auth.getSession()
       if (!sessionData.session) {
@@ -62,9 +113,10 @@ export default function OpsHome() {
 
       // Fire /api/me and the sales query in parallel — they're independent.
       const accessToken = sessionData.session.access_token
-      const [meRes, daysRes] = await Promise.all([
+      const [meRes] = await Promise.all([
         fetch('/api/me', { headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => null),
-        fetch('/api/sales?limit=90', { headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => null),
+        loadSales(accessToken),
+        loadLiveSales(accessToken),
       ])
 
       let canLoadBrief = true
@@ -103,14 +155,18 @@ export default function OpsHome() {
         setBriefLoading(false)
       }
 
-      if (daysRes?.ok) {
-        const body = await daysRes.json()
-        setDays((body.days as Day[] | null) ?? [])
+      if (!cancelled) {
+        liveSalesTimer = window.setInterval(() => { void loadLiveSales() }, LIVE_SALES_INTERVAL_MS)
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     load()
+
+    return () => {
+      cancelled = true
+      if (liveSalesTimer) window.clearInterval(liveSalesTimer)
+    }
   }, [])
 
   async function signOut() {
@@ -121,6 +177,9 @@ export default function OpsHome() {
   const computed = useMemo(() => {
     const today = days[0] ?? null
     if (!today) return null
+    const liveDay = liveBusinessDate
+      ? days.find(x => x.business_date === liveBusinessDate) ?? null
+      : today
 
     const total = (arr: Day[]) => arr.reduce((s, x) => s + Number(x.gross_sales || 0), 0)
     const orders = (arr: Day[]) => arr.reduce((s, x) => s + Number(x.order_count || 0), 0)
@@ -158,6 +217,8 @@ export default function OpsHome() {
 
     return {
       today,
+      liveDay,
+      liveBusinessDate: liveBusinessDate ?? today.business_date,
       wtdSales, wowPct,
       wtdFrom: iso(mon), weekSun: iso(sun),
       lastWeekSales, lastWeekOrders,
@@ -165,7 +226,7 @@ export default function OpsHome() {
       mtdSales, mtdFrom,
       lastMonthSales, lmFrom, lmTo, momPct,
     }
-  }, [days])
+  }, [days, liveBusinessDate])
 
   const pctTone = (p: number | null) => {
     if (p === null) return 'var(--muted-strong)'
@@ -208,7 +269,7 @@ export default function OpsHome() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))',
             gap: 14,
             marginTop: 18,
           }}
@@ -224,14 +285,35 @@ export default function OpsHome() {
             <>
               <MetricCard
                 primary
-                label={`Today · ${fmtDate(computed.today.business_date)}`}
-                value={money(computed.today.gross_sales)}
+                label="Live takings"
+                sub={fmtDate(computed.liveBusinessDate)}
+                value={computed.liveDay ? money(computed.liveDay.gross_sales) : '—'}
                 foot={
-                  <>
-                    Orders: {fmtNum(computed.today.order_count)} &nbsp;·&nbsp; AOV: {money(computed.today.aov)}
-                  </>
+                  computed.liveDay ? (
+                    <>
+                      Orders: {fmtNum(computed.liveDay.order_count)} &nbsp;·&nbsp; AOV: {money(computed.liveDay.aov)}
+                      {liveSalesUpdatedAt && <> &nbsp;·&nbsp; Updated {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
+                    </>
+                  ) : (
+                    <>
+                      No sales imported yet
+                      {liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
+                    </>
+                  )
                 }
               />
+
+              {computed.today.business_date !== computed.liveBusinessDate && (
+                <MetricCard
+                  label={`Latest day · ${fmtDate(computed.today.business_date)}`}
+                  value={money(computed.today.gross_sales)}
+                  foot={
+                    <>
+                      Orders: {fmtNum(computed.today.order_count)} &nbsp;·&nbsp; AOV: {money(computed.today.aov)}
+                    </>
+                  }
+                />
+              )}
 
               <MetricCard
                 label="This week"

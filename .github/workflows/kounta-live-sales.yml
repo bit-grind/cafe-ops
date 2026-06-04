@@ -1,0 +1,85 @@
+name: Kounta live sales
+
+on:
+  schedule:
+    # 19:00-04:20 UTC = 05:00-14:20 Brisbane (UTC+10), every 10 minutes.
+    # The full product sync runs at 14:30 Brisbane and imports the final summary.
+    - cron: '*/10 19-23 * * *'
+    - cron: '*/10 0-3 * * *'
+    - cron: '0,10,20 4 * * *'
+  workflow_dispatch:
+    inputs:
+      date_from:
+        description: 'Summary date from (YYYY-MM-DD) — leave blank for today'
+        required: false
+      date_to:
+        description: 'Summary date to (YYYY-MM-DD) — leave blank to match from'
+        required: false
+      upload_debug_screenshot:
+        description: 'Upload a short-lived failure screenshot (may contain sensitive page content)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kounta-live-sales
+  cancel-in-progress: true
+
+jobs:
+  live-summary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Preflight — skip cleanly until secrets are set
+        id: pre
+        run: |
+          if [ -n "${{ secrets.KOUNTA_USER }}" ] && [ -n "${{ secrets.KOUNTA_PASS }}" ] && [ -n "${{ secrets.IMPORT_SECRET }}" ] && [ -n "${{ vars.APP_URL }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::KOUNTA_USER / KOUNTA_PASS / IMPORT_SECRET secrets or APP_URL variable not set yet; skipping. See kounta-sync/README.md."
+          fi
+
+      - if: steps.pre.outputs.ready == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - if: steps.pre.outputs.ready == 'true'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+
+      - name: Install deps
+        if: steps.pre.outputs.ready == 'true'
+        working-directory: kounta-sync
+        run: npm ci
+
+      - name: Install Chromium
+        if: steps.pre.outputs.ready == 'true'
+        working-directory: kounta-sync
+        run: npx playwright install --with-deps chromium
+
+      - name: Run summary sync
+        if: steps.pre.outputs.ready == 'true'
+        working-directory: kounta-sync
+        run: node sync.mjs
+        env:
+          KOUNTA_USER: ${{ secrets.KOUNTA_USER }}
+          KOUNTA_PASS: ${{ secrets.KOUNTA_PASS }}
+          IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
+          APP_URL: ${{ vars.APP_URL }}
+          SYNC_PRODUCTS: 'false'
+          SYNC_DATE_FROM: ${{ github.event.inputs.date_from }}
+          SYNC_DATE_TO: ${{ github.event.inputs.date_to }}
+          UPLOAD_DEBUG_SCREENSHOT: ${{ github.event.inputs.upload_debug_screenshot }}
+
+      - name: Upload error screenshot on failure
+        if: failure() && steps.pre.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.upload_debug_screenshot == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kounta-live-sales-error
+          path: kounta-sync/kounta-sync-error.png
+          if-no-files-found: ignore
+          retention-days: 1

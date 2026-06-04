@@ -14,6 +14,8 @@
  *   KOUNTA_USER, KOUNTA_PASS   Kounta login (set as repo secrets)
  *   IMPORT_SECRET              shared secret for the app's import endpoints
  *   APP_URL                    deployed app base URL
+ *   SYNC_PRODUCTS              optional; set to "false" for summary-only live
+ *                              sales refreshes
  *   SYNC_DATE_FROM/TO          optional override (YYYY-MM-DD) for backfills;
  *                              defaults to today's Brisbane business date
  */
@@ -27,6 +29,7 @@ for (const [k, v] of Object.entries({ APP_URL: rawAppUrl, KOUNTA_USER, KOUNTA_PA
 }
 
 const APP_URL = rawAppUrl.replace(/\/$/, '')
+const SYNC_PRODUCTS = process.env.SYNC_PRODUCTS !== 'false'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 const num = (s) => {
@@ -180,7 +183,7 @@ async function login(page) {
 const from = process.env.SYNC_DATE_FROM || brisbaneTodayISO()
 const to = process.env.SYNC_DATE_TO || from
 const syncDays = eachDay(from, to)
-console.log(`Kounta sync: ${from} → ${to} (app: ${APP_URL})`)
+console.log(`Kounta ${SYNC_PRODUCTS ? 'sync' : 'summary sync'}: ${from} → ${to} (app: ${APP_URL})`)
 
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage()
@@ -197,17 +200,21 @@ try {
   await postJson('/api/import-daily', summary)
   console.log(`Summary: imported ${summary.length} day(s).`)
 
-  // By-product report aggregates over a range, so pull one day at a time.
-  let productTotal = 0
-  for (const day of syncDays) {
-    const products = mapProducts(parseCsv(await exportCsv(page, 'salesummarybyproduct', day, day)), day)
-    const totals = summaryByDate.get(day)
-    const allowEmpty = totals.order_count === 0 && totals.gross_sales === 0
-    await postJson('/api/import-products', { business_date: day, rows: products, allow_empty: allowEmpty })
-    productTotal += products.length
-    console.log(`Products ${day}: imported ${products.length}.`)
+  if (SYNC_PRODUCTS) {
+    // By-product report aggregates over a range, so pull one day at a time.
+    let productTotal = 0
+    for (const day of syncDays) {
+      const products = mapProducts(parseCsv(await exportCsv(page, 'salesummarybyproduct', day, day)), day)
+      const totals = summaryByDate.get(day)
+      const allowEmpty = totals.order_count === 0 && totals.gross_sales === 0
+      await postJson('/api/import-products', { business_date: day, rows: products, allow_empty: allowEmpty })
+      productTotal += products.length
+      console.log(`Products ${day}: imported ${products.length}.`)
+    }
+    console.log(`Done. ${summary.length} summary day(s), ${productTotal} product rows.`)
+  } else {
+    console.log(`Done. ${summary.length} summary day(s).`)
   }
-  console.log(`Done. ${summary.length} summary day(s), ${productTotal} product rows.`)
 } catch (e) {
   if (process.env.UPLOAD_DEBUG_SCREENSHOT === 'true') {
     await page.screenshot({ path: 'kounta-sync-error.png', fullPage: true }).catch(() => {})

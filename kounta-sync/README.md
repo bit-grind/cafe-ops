@@ -6,8 +6,15 @@ without anyone running a script.
 
 ## How it works
 
-A scheduled GitHub Action (`.github/workflows/kounta-sync.yml`) runs at **14:30
-Brisbane** daily, right after the shop closes. It:
+Two scheduled GitHub Actions keep sales current:
+
+- `.github/workflows/kounta-live-sales.yml` runs every 10 minutes from **05:00
+  to 14:20 Brisbane**. It imports only the sales summary for today's live
+  takings card.
+- `.github/workflows/kounta-sync.yml` runs at **14:30 Brisbane** daily, right
+  after the shop closes. It imports the final sales summary and product rows.
+
+The full daily sync:
 
 1. Headless-logs into `my.kounta.com` with stored credentials.
 2. Exports the **sales summary** and **sales-by-product** reports via Kounta's
@@ -47,6 +54,9 @@ That's it — the daily run starts automatically.
 **Actions → "Kounta daily sync" → Run workflow.** Leave the date fields blank to
 sync today's Brisbane business date, or set `date_from` / `date_to` (YYYY-MM-DD) to backfill a range.
 The summary pulls the whole range in one request; products are pulled per day.
+
+For a summary-only refresh, run **Actions → "Kounta live sales" → Run workflow**.
+It uses the same date inputs but skips product export/import.
 
 ## Debugging a failed run
 
