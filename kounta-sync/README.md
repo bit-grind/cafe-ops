@@ -17,6 +17,9 @@ Brisbane** daily. It:
    import routes (`/api/import-daily`, `/api/import-products`).
 4. Replaces each imported day's product rows transactionally, so removed
    products do not leave stale rows behind.
+5. Generates the dashboard morning brief as soon as product rows for the newest
+   sales day finish importing. Vercel also runs a later morning cron as a
+   backup if sales data is inserted another way.
 
 No data is stored on any local machine; everything runs in GitHub's cloud runner.
 

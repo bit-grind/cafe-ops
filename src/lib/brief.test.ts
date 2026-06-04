@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { computeMetrics, getLatestBrief } from '@/lib/brief'
+import { computeMetrics, generateBriefIfLatestSalesDay, getLatestBrief } from '@/lib/brief'
 
 type Day = { business_date: string; gross_sales: number; net_sales: number; order_count: number; aov: number }
 const day = (business_date: string, gross_sales: number): Day =>
@@ -106,5 +106,19 @@ describe('getLatestBrief', () => {
     expect(calls[1]).toContainEqual(['eq', 'generation_status', 'completed'])
     expect(calls[1]).toContainEqual(['order', 'brief_date', { ascending: false }])
     expect(calls[1]).toContainEqual(['limit', 1])
+  })
+})
+
+describe('generateBriefIfLatestSalesDay', () => {
+  it('skips older product imports so backfills do not regenerate the current brief', async () => {
+    const { client, calls } = mockSupabase([
+      { data: { business_date: '2026-06-03' }, error: null },
+    ])
+
+    await expect(generateBriefIfLatestSalesDay(client, '2026-06-02')).resolves.toBeNull()
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toContainEqual(['from', 'sales_business_day'])
+    expect(calls[0]).toContainEqual(['order', 'business_date', { ascending: false }])
+    expect(calls[0]).toContainEqual(['limit', 1])
   })
 })

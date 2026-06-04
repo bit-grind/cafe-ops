@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server'
 import { adminClient } from '@/lib/adminAuth'
+import { generateBriefIfLatestSalesDay } from '@/lib/brief'
 import { consumeImportNonce, verifySignedImport } from '@/lib/serverAuth'
 import { parseProductImport } from '@/lib/importValidation'
+
+export const maxDuration = 60
 
 /**
  * Bulk-import product-level sales rows into sales_by_product. Mirrors
  * /api/import-daily: timestamped HMAC auth and replay protection. Each accepted
- * request transactionally replaces one business day's rows.
+ * request transactionally replaces one business day's rows. When the imported
+ * day is the newest sales day, this also pre-generates the dashboard brief now
+ * that both summary and product-level sales data are available.
  * Used by the Kounta sync job (see /kounta-sync).
  */
 export async function POST(req: Request) {
@@ -20,15 +25,24 @@ export async function POST(req: Request) {
     }
 
     const { businessDate, rows } = parseProductImport(JSON.parse(rawBody))
+    const supabase = adminClient()
 
-    const { data: count, error } = await adminClient().rpc('replace_sales_by_product', {
+    const { data: count, error } = await supabase.rpc('replace_sales_by_product', {
       p_business_date: businessDate,
       p_rows: rows,
     })
 
     if (error) throw error
 
-    return NextResponse.json({ ok: true, count: Number(count ?? 0) })
+    let briefDate: string | null = null
+    try {
+      const brief = await generateBriefIfLatestSalesDay(supabase, businessDate)
+      briefDate = brief?.brief_date ?? null
+    } catch (briefError) {
+      console.error('Daily brief generation after product import failed:', briefError)
+    }
+
+    return NextResponse.json({ ok: true, count: Number(count ?? 0), brief_date: briefDate })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
     const isInputError = message.includes('must') || message.includes('Too many') || message.includes('Duplicate') || message.includes('Empty')
