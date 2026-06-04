@@ -29,6 +29,7 @@ export type DailyBriefRow = {
   generation_status?: 'generating' | 'completed' | 'failed'
 }
 
+const BRIEF_SELECT = 'brief_date,generated_at,metrics,narrative,model,generation_status'
 const DOW_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 // Weekday of a 'YYYY-MM-DD' calendar date, TZ-independent (0=Sun … 6=Sat).
 const dowOf = (d: string) => new Date(d + 'T00:00:00Z').getUTCDay()
@@ -162,7 +163,7 @@ export async function generateBrief(supabase: SupabaseClient): Promise<DailyBrie
   if (!claimed) {
     const { data: existing } = await supabase
       .from('daily_brief')
-      .select('brief_date,generated_at,metrics,narrative,model,generation_status')
+      .select(BRIEF_SELECT)
       .eq('brief_date', subjectDate)
       .eq('generation_status', 'completed')
       .maybeSingle()
@@ -215,7 +216,9 @@ export async function generateBrief(supabase: SupabaseClient): Promise<DailyBrie
 
 /**
  * Return the brief for the latest business day. Generation is cron-owned so a
- * dashboard GET can never trigger paid work.
+ * dashboard GET can never trigger paid work. If the cron has not completed for
+ * the newest sales date yet, reuse the most recent completed brief instead of
+ * making the dashboard card disappear.
  */
 export async function getLatestBrief(supabase: SupabaseClient): Promise<DailyBriefRow | null> {
   const { data: latest } = await supabase
@@ -228,9 +231,11 @@ export async function getLatestBrief(supabase: SupabaseClient): Promise<DailyBri
 
   const { data: existing } = await supabase
     .from('daily_brief')
-    .select('brief_date,generated_at,metrics,narrative,model,generation_status')
-    .eq('brief_date', latest.business_date)
+    .select(BRIEF_SELECT)
+    .lte('brief_date', latest.business_date)
     .eq('generation_status', 'completed')
+    .order('brief_date', { ascending: false })
+    .limit(1)
     .maybeSingle()
   if (existing) return existing as DailyBriefRow
 

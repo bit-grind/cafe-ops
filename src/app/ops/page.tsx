@@ -25,6 +25,12 @@ type Brief = {
   metrics?: { day_of_week?: string; vs_same_weekday_avg_pct?: number | null }
 }
 
+type MeResponse = {
+  allowedTabs?: AppTab[]
+  isGuest?: boolean
+  isKitchen?: boolean
+}
+
 function startOfWeekMon(d: Date) {
   const x = new Date(d)
   const day = x.getDay()
@@ -41,6 +47,8 @@ export default function OpsHome() {
   const [days, setDays] = useState<Day[]>([])
   const [brief, setBrief] = useState<Brief | null>(null)
   const [briefLoading, setBriefLoading] = useState(true)
+  const [briefError, setBriefError] = useState(false)
+  const [showBrief, setShowBrief] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -59,25 +67,41 @@ export default function OpsHome() {
         fetch('/api/sales?limit=90', { headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => null),
       ])
 
+      let canLoadBrief = true
       if (meRes?.ok) {
         try {
-          const me = await meRes.json()
+          const me = await meRes.json() as MeResponse
           // Kitchen users land on their own dashboard, not the sales one.
           if (me.isKitchen) {
             window.location.replace('/ops/kitchen')
             return
           }
           setAllowedTabs(me.allowedTabs ?? [])
+          canLoadBrief = !me.isGuest
         } catch { /* non-fatal */ }
       }
+      setShowBrief(canLoadBrief)
 
       // Morning brief loads independently so it never delays the metric cards.
       // Generation is cron-owned; this read never triggers paid AI work.
-      fetch('/api/brief', { headers: { Authorization: `Bearer ${accessToken}` } })
-        .then(r => (r.ok ? r.json() : null))
-        .then(d => { if (d?.brief) setBrief(d.brief as Brief) })
-        .catch(() => { /* non-fatal — just hide the card */ })
-        .finally(() => setBriefLoading(false))
+      if (canLoadBrief) {
+        fetch('/api/brief', { headers: { Authorization: `Bearer ${accessToken}` } })
+          .then(r => {
+            if (!r.ok) throw new Error('Brief request failed')
+            return r.json()
+          })
+          .then(d => {
+            setBrief((d?.brief as Brief | null | undefined) ?? null)
+            setBriefError(false)
+          })
+          .catch(() => {
+            setBrief(null)
+            setBriefError(true)
+          })
+          .finally(() => setBriefLoading(false))
+      } else {
+        setBriefLoading(false)
+      }
 
       if (daysRes?.ok) {
         const body = await daysRes.json()
@@ -153,7 +177,7 @@ export default function OpsHome() {
       <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" allowedTabs={allowedTabs} />
 
       <div className="bp-container">
-        {(briefLoading || brief) && (
+        {showBrief && (
           <div className="bp-card" style={{ marginTop: 18 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: brief ? 8 : 0, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted-strong)' }}>
@@ -170,7 +194,13 @@ export default function OpsHome() {
                 {brief.narrative}
               </div>
             ) : (
-              <div style={{ fontSize: 13, color: 'var(--muted-strong)' }}>Preparing your morning brief…</div>
+              <div style={{ fontSize: 13, color: 'var(--muted-strong)' }}>
+                {briefLoading
+                  ? 'Preparing your morning brief…'
+                  : briefError
+                    ? 'Morning brief could not be loaded.'
+                    : 'No morning brief is ready yet.'}
+              </div>
             )}
           </div>
         )}
