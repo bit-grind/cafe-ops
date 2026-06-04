@@ -241,3 +241,24 @@ export async function getLatestBrief(supabase: SupabaseClient): Promise<DailyBri
 
   return null
 }
+
+/**
+ * Generate a brief only when the just-imported product day is the newest sales
+ * day. Product import is the first point where both day totals and product
+ * rows are available, so it is the most reliable trigger for the morning card.
+ */
+export async function generateBriefIfLatestSalesDay(
+  supabase: SupabaseClient,
+  businessDate: string,
+): Promise<DailyBriefRow | null> {
+  const { data: latest, error } = await supabase
+    .from('sales_business_day')
+    .select('business_date')
+    .order('business_date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(`latest sales lookup failed: ${error.message}`)
+  if (!latest || latest.business_date !== businessDate) return null
+
+  return generateBrief(supabase)
+}
