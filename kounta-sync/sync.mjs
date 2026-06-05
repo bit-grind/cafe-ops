@@ -180,7 +180,64 @@ function parseHourCell(value) {
   return Number.isInteger(bare) && bare >= 0 && bare <= 23 ? bare : null
 }
 
+function parseKountaDateCell(value) {
+  const text = String(value ?? '').trim()
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (iso) return text
+  const named = text.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/)
+  if (!named) return null
+  const months = new Map([
+    ['jan', '01'], ['january', '01'],
+    ['feb', '02'], ['february', '02'],
+    ['mar', '03'], ['march', '03'],
+    ['apr', '04'], ['april', '04'],
+    ['may', '05'],
+    ['jun', '06'], ['june', '06'],
+    ['jul', '07'], ['july', '07'],
+    ['aug', '08'], ['august', '08'],
+    ['sep', '09'], ['sept', '09'], ['september', '09'],
+    ['oct', '10'], ['october', '10'],
+    ['nov', '11'], ['november', '11'],
+    ['dec', '12'], ['december', '12'],
+  ])
+  const month = months.get(named[2].toLowerCase())
+  if (!month) return null
+  return `${named[3]}-${month}-${named[1].padStart(2, '0')}`
+}
+
+function mapPivotHours(rows, businessDate) {
+  const headerIndex = rows.findIndex(row => {
+    const hours = row.slice(1).map(parseHourCell).filter(hour => hour != null)
+    return hours.length >= 12
+  })
+  if (headerIndex < 0) return []
+
+  const header = rows[headerIndex]
+  const dayRow = rows.slice(headerIndex + 1).find(row => parseKountaDateCell(row[0]) === businessDate)
+  if (!dayRow) return []
+
+  return header
+    .map((cell, index) => ({ hour: parseHourCell(cell), value: dayRow[index] }))
+    .filter(({ hour }) => hour != null)
+    .map(({ hour, value }) => {
+      const grossSales = num(value)
+      return {
+        business_date: businessDate,
+        hour,
+        gross_sales: grossSales,
+        net_sales: grossSales,
+        tax: 0,
+        order_count: 0,
+        aov: 0,
+      }
+    })
+    .sort((a, b) => a.hour - b.hour)
+}
+
 function mapHours(rows, businessDate) {
+  const pivotHours = mapPivotHours(rows, businessDate)
+  if (pivotHours.length) return pivotHours
+
   const headerIndex = rows.findIndex(row => {
     const normalized = row.map(normalizeHeader)
     const hasHour = normalized.some(h => ['salehour', 'salehourid', 'salehourname', 'hour', 'time', 'timeperiod', 'period', 'starttime'].includes(h))
