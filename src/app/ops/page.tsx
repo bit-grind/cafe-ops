@@ -498,6 +498,15 @@ export default function OpsHome() {
                   <button
                     type="button"
                     className="bp-btn"
+                    onClick={() => void loadBrief(null)}
+                    disabled={briefLoading || !hasNewerBrief}
+                    style={{ padding: '7px 10px', borderRadius: 8, fontSize: 12 }}
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    className="bp-btn"
                     onClick={() => hasNewerBrief && void loadBrief(briefDates[selectedBriefIndex - 1])}
                     disabled={briefLoading || !hasNewerBrief}
                     aria-label="Next date"
