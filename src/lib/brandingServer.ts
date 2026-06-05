@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { cache } from 'react'
 import { adminClient } from '@/lib/adminAuth'
 import { DEFAULT_BRANDING, normalizeBranding, type Branding } from '@/lib/branding'
 
@@ -24,7 +25,7 @@ function getEnvBranding(): Branding | null {
   return normalizeBranding({ displayName, subtitle, logoSrc })
 }
 
-export async function getServerBranding(): Promise<Branding> {
+export const getServerBranding = cache(async function getServerBranding(): Promise<Branding> {
   const envBranding = getEnvBranding()
   if (envBranding) return envBranding
 
@@ -44,4 +45,4 @@ export async function getServerBranding(): Promise<Branding> {
   } catch {
     return DEFAULT_BRANDING
   }
-}
+})

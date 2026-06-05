@@ -27,9 +27,17 @@ type Brief = {
 }
 
 type MeResponse = {
+  email?: string | null
   allowedTabs?: AppTab[]
   isGuest?: boolean
   isKitchen?: boolean
+}
+
+type DashboardResponse = {
+  profile: MeResponse
+  days: Day[]
+  live_business_date: string
+  fetched_at: string
 }
 
 type LiveSalesResponse = {
@@ -78,16 +86,6 @@ export default function OpsHome() {
     let cancelled = false
     let liveSalesTimer: number | undefined
 
-    async function loadSales(accessToken: string) {
-      const res = await fetch('/api/sales?limit=90', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        cache: 'no-store',
-      }).catch(() => null)
-      if (!res?.ok) return
-      const body = await res.json()
-      if (!cancelled) setDays((body.days as Day[] | null) ?? [])
-    }
-
     async function loadLiveSales(accessToken?: string) {
       const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token
       if (!token) return
@@ -111,28 +109,34 @@ export default function OpsHome() {
       }
 
       setEmail(sessionData.session.user.email ?? null)
-
-      // Fire /api/me and the sales query in parallel — they're independent.
       const accessToken = sessionData.session.access_token
-      const [meRes] = await Promise.all([
-        fetch('/api/me', { headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => null),
-        loadSales(accessToken),
-        loadLiveSales(accessToken),
-      ])
+
+      const dashboardRes = await fetch('/api/dashboard?limit=90', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+      }).catch(() => null)
+
+      if (!dashboardRes?.ok) {
+        if (!cancelled) setLoading(false)
+        return
+      }
+
+      const dashboard = await dashboardRes.json() as DashboardResponse
+      if (cancelled) return
 
       let canLoadBrief = true
-      if (meRes?.ok) {
-        try {
-          const me = await meRes.json() as MeResponse
-          // Kitchen users land on their own dashboard, not the sales one.
-          if (me.isKitchen) {
-            window.location.replace('/ops/kitchen')
-            return
-          }
-          setAllowedTabs(me.allowedTabs ?? [])
-          canLoadBrief = !me.isGuest
-        } catch { /* non-fatal */ }
+      const profile = dashboard.profile
+      // Kitchen users land on their own dashboard, not the sales one.
+      if (profile.isKitchen) {
+        window.location.replace('/ops/kitchen')
+        return
       }
+      setEmail(profile.email ?? sessionData.session.user.email ?? null)
+      setAllowedTabs(profile.allowedTabs ?? [])
+      setDays(dashboard.days ?? [])
+      setLiveBusinessDate(dashboard.live_business_date)
+      setLiveSalesUpdatedAt(dashboard.fetched_at)
+      canLoadBrief = !profile.isGuest
       setShowBrief(canLoadBrief)
 
       // Morning brief loads independently so it never delays the metric cards.
