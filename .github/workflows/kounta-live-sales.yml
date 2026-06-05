@@ -1,6 +1,11 @@
 name: Kounta live sales
 
 on:
+  schedule:
+    # Keep one browser session alive for each trading hour and sample Kounta
+    # every minute. 19:03-04:03 UTC = 05:03-14:03 Brisbane (UTC+10).
+    - cron: '3 19-23 * * *'
+    - cron: '3 0-4 * * *'
   workflow_dispatch:
     inputs:
       date_from:
@@ -25,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: kounta-live-sales-${{ github.event_name }}
+  group: kounta-live-sales
   cancel-in-progress: true
 
 jobs:
