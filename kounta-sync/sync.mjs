@@ -111,6 +111,19 @@ function parseCsv(text) {
   return rows
 }
 
+function sanitizedRowsForLog(rows) {
+  return rows
+    .slice(0, 10)
+    .map(row => row.slice(0, 12).map(cell => {
+      const text = String(cell ?? '').trim()
+      if (!text) return ''
+      if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return '<date>'
+      if (/^\$?[\d,]+(?:\.\d+)?$/.test(text)) return '<num>'
+      if (/^\d{1,2}(?::\d{2})?\s*(?:am|pm)?(?:\s*[-–—]\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?$/i.test(text)) return '<time>'
+      return text.slice(0, 80)
+    }))
+}
+
 // summary CSV cols: saledateid, saledate, salecount, saleamount, saleexamount, saletaxamount, averageamount
 function mapSummary(rows) {
   const byDate = new Map()
@@ -287,7 +300,12 @@ async function importSummary(page, from, to) {
 }
 
 async function importHours(page, day, allowEmpty = false) {
-  const hours = mapHours(parseCsv(await exportCsv(page, 'salesummarybyhour', day, day)), day)
+  const rows = parseCsv(await exportCsv(page, 'salesummarybyhour', day, day))
+  const hours = mapHours(rows, day)
+  if (hours.length === 0 && !allowEmpty) {
+    console.log(`Hourly export shape ${day}: ${rows.length} row(s), first row ${rows[0]?.length ?? 0} col(s).`)
+    console.log(`Hourly export sample ${day}: ${JSON.stringify(sanitizedRowsForLog(rows))}`)
+  }
   await postJson('/api/import-hours', { business_date: day, rows: hours, allow_empty: allowEmpty })
   return hours
 }
