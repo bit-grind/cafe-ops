@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isRosterShift, isUnavailableRecord, normalizeAvailability, normalizeRoster } from '@/lib/deputyCalendar'
+import { isRosterShift, isUnavailableRecord, normalizeAvailability, normalizeEmployeeBirthdays, normalizeRoster } from '@/lib/deputyCalendar'
 
 describe('Deputy roster calendar normalization', () => {
   it('keeps early Brisbane shifts on their rostered local day', () => {
@@ -48,5 +48,50 @@ describe('Deputy roster calendar normalization', () => {
     expect(isUnavailableRecord({ Type: 2 })).toBe(true)
     expect(isUnavailableRecord({ Type: 5 })).toBe(false)
     expect(isUnavailableRecord({ Type: 7 })).toBe(false)
+  })
+
+  it('creates birthday events for active employees in the requested range', () => {
+    const events = normalizeEmployeeBirthdays([
+      {
+        Id: 12,
+        FirstName: 'June',
+        LastName: 'Vale',
+        Active: true,
+        DateOfBirth: '1994-06-12T00:00:00+10:00',
+      },
+      {
+        Id: 13,
+        FirstName: 'Inactive',
+        LastName: 'Person',
+        Active: false,
+        DateOfBirth: '1990-06-12T00:00:00+10:00',
+      },
+    ], '2026-06-01', '2026-06-30')
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      id: 'deputy-birthday-12-2026-06-12',
+      employeeId: 12,
+      employeeName: 'June Vale',
+      type: 'birthday',
+      dateStart: '2026-06-12',
+      dateEnd: '2026-06-12',
+      start: '2026-06-12T00:00:00+10:00',
+      end: '2026-06-12T23:59:00+10:00',
+    })
+  })
+
+  it('shows leap-day birthdays on February 28 in non-leap years', () => {
+    const events = normalizeEmployeeBirthdays([
+      {
+        Id: 18,
+        DisplayName: 'Leap Day',
+        Active: true,
+        DateOfBirth: '2000-02-29',
+      },
+    ], '2025-02-01', '2025-02-28')
+
+    expect(events).toHaveLength(1)
+    expect(events[0].dateStart).toBe('2025-02-28')
   })
 })

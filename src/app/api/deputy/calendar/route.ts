@@ -5,6 +5,7 @@ import {
   employeeMap,
   eventOverlapsRange,
   normalizeAvailability,
+  normalizeEmployeeBirthdays,
   normalizeLeave,
   normalizeRoster,
   isRosterShift,
@@ -108,7 +109,7 @@ async function loadDeputyEvents(from: string, to: string) {
     const names = employeeMap(employees)
     const areas = operationalUnitMap(operationalUnits)
     const activeIds = activeEmployeeIds(employees)
-    const events = [
+    const calendarEvents = [
       ...leave.map(row => normalizeLeave(row, names)),
       ...availability.filter(isUnavailableRecord).map(row => normalizeAvailability(row, names)),
       ...roster.filter(isRosterShift).map(row => normalizeRoster(row, names, areas)),
@@ -118,6 +119,10 @@ async function loadDeputyEvents(from: string, to: string) {
         && activeIds.has(event.employeeId)
         && eventOverlapsRange(event, from, to)
     })
+    const events = [
+      ...calendarEvents,
+      ...normalizeEmployeeBirthdays(employees, from, to),
+    ]
 
     return { status: 'connected' as const, events, error: null }
   } catch (error) {

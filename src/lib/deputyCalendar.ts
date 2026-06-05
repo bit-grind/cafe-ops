@@ -1,4 +1,4 @@
-export type DeputyCalendarEventType = 'leave' | 'unavailable' | 'available' | 'shift'
+export type DeputyCalendarEventType = 'leave' | 'unavailable' | 'available' | 'shift' | 'birthday'
 
 export type DeputyCalendarEvent = {
   id: string
@@ -56,6 +56,40 @@ function dateOnly(value: string): string {
   }).formatToParts(date)
   const byType = new Map(parts.map(part => [part.type, part.value]))
   return `${byType.get('year')}-${byType.get('month')}-${byType.get('day')}`
+}
+
+function datePartsValue(value: unknown): { year: number, month: number, day: number } | null {
+  const raw = stringValue(value)
+  if (!raw) return null
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(year, month - 1, day)
+  if (
+    date.getFullYear() !== year
+    || date.getMonth() !== month - 1
+    || date.getDate() !== day
+  ) {
+    return null
+  }
+  return { year, month, day }
+}
+
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+}
+
+function birthdayDateForYear(birthday: { month: number, day: number }, year: number): string {
+  const day = birthday.month === 2 && birthday.day === 29 && !isLeapYear(year)
+    ? 28
+    : birthday.day
+  return [
+    year,
+    String(birthday.month).padStart(2, '0'),
+    String(day).padStart(2, '0'),
+  ].join('-')
 }
 
 function localTimeParts(value: string): { hour: number, minute: number, second: number } | null {
@@ -262,6 +296,46 @@ export function normalizeRoster(row: DeputyRecord, employees: Map<number, string
     dateEnd: dateEnd < dateStart ? dateStart : dateEnd,
     comment: stringValue(row.Comment),
   }
+}
+
+export function normalizeEmployeeBirthdays(rows: DeputyRecord[], from: string, to: string): DeputyCalendarEvent[] {
+  const events: DeputyCalendarEvent[] = []
+  const fromYear = Number(from.slice(0, 4))
+  const toYear = Number(to.slice(0, 4))
+  if (!Number.isInteger(fromYear) || !Number.isInteger(toYear)) return events
+
+  const names = employeeMap(rows)
+  for (const row of rows) {
+    if (row.Active === false) continue
+    const employeeId = numberValue(row.Id)
+    if (!employeeId) continue
+    const birthday = datePartsValue(row.DateOfBirth)
+    if (!birthday) continue
+
+    for (let year = fromYear; year <= toYear; year += 1) {
+      const date = birthdayDateForYear(birthday, year)
+      if (date < from || date > to) continue
+      events.push({
+        id: `deputy-birthday-${employeeId}-${date}`,
+        source: 'deputy',
+        externalId: `birthday-${employeeId}`,
+        employeeId,
+        employeeName: names.get(employeeId) ?? employeeName(row, names),
+        type: 'birthday',
+        status: null,
+        areaId: null,
+        areaName: null,
+        areaColor: null,
+        start: `${date}T00:00:00+10:00`,
+        end: `${date}T23:59:00+10:00`,
+        dateStart: date,
+        dateEnd: date,
+        comment: null,
+      })
+    }
+  }
+
+  return events.sort((a, b) => a.dateStart.localeCompare(b.dateStart) || a.employeeName.localeCompare(b.employeeName))
 }
 
 export function normalizeZapierEvent(payload: DeputyRecord): DeputyCalendarEvent {
