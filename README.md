@@ -34,6 +34,7 @@ never trusted for authorization.
 ## Key Data Sources
 
 - `sales_business_day`: daily sales totals and KPI inputs.
+- `sales_by_hour`: hourly sales buckets from Kounta's Sales Summary by Hour report.
 - `sales_by_product`: product-level sales results.
 - `ask_queries`: logged Ask AI prompts and responses.
 - `xero_connection`: stored Xero OAuth connection metadata.

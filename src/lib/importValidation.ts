@@ -38,6 +38,16 @@ export type ProductSalesRow = {
   gross_profit_pct: number
 }
 
+export type HourlySalesRow = {
+  business_date: string
+  hour: number
+  gross_sales: number
+  net_sales: number
+  tax: number
+  order_count: number
+  aov: number
+}
+
 export function parseDailySalesRows(input: unknown): DailySalesRow[] {
   if (!Array.isArray(input)) throw new Error('Body must be an array')
   if (input.length > 400) throw new Error('Too many daily rows')
@@ -95,6 +105,42 @@ export function parseProductImport(input: unknown): {
       sale_pct: finiteNumber(value.sale_pct, 'sale_pct'),
       cost: finiteNumber(value.cost, 'cost'),
       gross_profit_pct: finiteNumber(value.gross_profit_pct, 'gross_profit_pct'),
+    }
+  })
+  return { businessDate, rows, allowEmpty: body.allow_empty === true }
+}
+
+export function parseHourlyImport(input: unknown): {
+  businessDate: string
+  rows: HourlySalesRow[]
+  allowEmpty: boolean
+} {
+  if (!input || typeof input !== 'object') throw new Error('Body must be an object')
+  const body = input as Record<string, unknown>
+  const businessDate = isoDate(body.business_date)
+  if (!Array.isArray(body.rows)) throw new Error('rows must be an array')
+  if (body.rows.length > 48) throw new Error('Too many hourly rows')
+  if (body.rows.length === 0 && body.allow_empty !== true) {
+    throw new Error('Empty hourly imports require allow_empty=true')
+  }
+
+  const seen = new Set<number>()
+  const rows = body.rows.map((row, index) => {
+    if (!row || typeof row !== 'object') throw new Error(`Row ${index} must be an object`)
+    const value = row as Record<string, unknown>
+    if (isoDate(value.business_date) !== businessDate) throw new Error('All hourly rows must match business_date')
+    const hour = finiteNumber(value.hour, 'hour')
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new Error('hour must be an integer from 0 to 23')
+    if (seen.has(hour)) throw new Error(`Duplicate hour: ${hour}`)
+    seen.add(hour)
+    return {
+      business_date: businessDate,
+      hour,
+      gross_sales: finiteNumber(value.gross_sales, 'gross_sales'),
+      net_sales: finiteNumber(value.net_sales, 'net_sales'),
+      tax: finiteNumber(value.tax, 'tax'),
+      order_count: finiteNumber(value.order_count, 'order_count'),
+      aov: finiteNumber(value.aov, 'aov'),
     }
   })
   return { businessDate, rows, allowEmpty: body.allow_empty === true }

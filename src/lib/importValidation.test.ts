@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseDailySalesRows, parseProductImport } from '@/lib/importValidation'
+import { parseDailySalesRows, parseHourlyImport, parseProductImport } from '@/lib/importValidation'
 
 const dailyRow = {
   business_date: '2026-05-29',
@@ -22,6 +22,16 @@ const productRow = {
   sale_pct: 24,
   cost: 6,
   gross_profit_pct: 75,
+}
+
+const hourlyRow = {
+  business_date: '2026-05-29',
+  hour: 8,
+  gross_sales: 120,
+  net_sales: 109.09,
+  tax: 10.91,
+  order_count: 12,
+  aov: 10,
 }
 
 describe('parseDailySalesRows', () => {
@@ -50,6 +60,24 @@ describe('parseProductImport', () => {
     expect(() => parseProductImport({
       business_date: '2026-05-29',
       rows: [{ ...productRow, business_date: '2026-05-28' }],
+    })).toThrow('must match business_date')
+  })
+})
+
+describe('parseHourlyImport', () => {
+  it('accepts valid hourly buckets for one business day', () => {
+    expect(parseHourlyImport({ business_date: '2026-05-29', rows: [hourlyRow] })).toEqual({
+      businessDate: '2026-05-29',
+      rows: [hourlyRow],
+      allowEmpty: false,
+    })
+  })
+
+  it('rejects duplicate hours and rows for a different day', () => {
+    expect(() => parseHourlyImport({ business_date: '2026-05-29', rows: [hourlyRow, hourlyRow] })).toThrow('Duplicate hour')
+    expect(() => parseHourlyImport({
+      business_date: '2026-05-29',
+      rows: [{ ...hourlyRow, business_date: '2026-05-28' }],
     })).toThrow('must match business_date')
   })
 })

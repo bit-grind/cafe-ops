@@ -19,6 +19,17 @@ type Day = {
   updated_at?: string
 }
 
+type HourlySale = {
+  business_date: string
+  hour: number
+  gross_sales: number
+  net_sales: number
+  tax: number
+  order_count: number
+  aov: number
+  updated_at?: string
+}
+
 type Brief = {
   brief_date: string
   narrative: string
@@ -36,6 +47,7 @@ type MeResponse = {
 type DashboardResponse = {
   profile: MeResponse
   days: Day[]
+  live_hours?: HourlySale[]
   live_business_date: string
   fetched_at: string
 }
@@ -43,6 +55,7 @@ type DashboardResponse = {
 type LiveSalesResponse = {
   business_date: string
   day: Day | null
+  hours?: HourlySale[]
   fetched_at: string
 }
 
@@ -70,17 +83,129 @@ function fmtBrisbaneTime(value: string) {
   }).format(new Date(value))
 }
 
+function briefDateLabel(date: string) {
+  const formatted = fmtDate(date)
+  const day = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Brisbane',
+    weekday: 'short',
+  }).format(new Date(date + 'T00:00:00'))
+  return `${day} ${formatted}`
+}
+
+function hourLabel(hour: number) {
+  const suffix = hour < 12 ? 'am' : 'pm'
+  const displayHour = hour % 12 || 12
+  return `${displayHour}${suffix}`
+}
+
+function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
+  const buckets = hours.map(row => ({
+    hour: row.hour,
+    label: hourLabel(row.hour),
+    sales: Number(row.gross_sales || 0),
+  }))
+  const max = Math.max(...buckets.map(bucket => bucket.sales), 1)
+
+  if (!buckets.length) {
+    return (
+      <div
+        style={{
+          minHeight: 126,
+          marginTop: 18,
+          border: '1px dashed rgba(255,255,255,0.18)',
+          borderRadius: 8,
+          display: 'grid',
+          placeItems: 'center',
+          color: 'var(--muted-strong)',
+          fontSize: 12,
+          textAlign: 'center',
+          padding: 16,
+        }}
+      >
+        Waiting for Kounta hourly sales import
+      </div>
+    )
+  }
+
+  return (
+    <div
+      aria-label="Hourly sales bar chart"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${buckets.length}, minmax(18px, 1fr))`,
+        alignItems: 'end',
+        gap: 8,
+        minHeight: 126,
+        marginTop: 18,
+      }}
+    >
+      {buckets.map(bucket => (
+        <div key={bucket.hour} style={{ minWidth: 0 }}>
+          <div
+            title={`${bucket.label}: ${money(bucket.sales)}`}
+            style={{
+              height: 92,
+              display: 'flex',
+              alignItems: 'end',
+              borderBottom: '1px solid rgba(255,255,255,0.12)',
+            }}
+          >
+            <div
+              style={{
+                width: '100%',
+                minHeight: bucket.sales > 0 ? 6 : 2,
+                height: `${Math.max(2, (bucket.sales / max) * 92)}px`,
+                borderRadius: '6px 6px 0 0',
+                background: bucket.sales > 0
+                  ? 'linear-gradient(180deg, #78d7a8 0%, #2f9e70 100%)'
+                  : 'rgba(255,255,255,0.08)',
+              }}
+            />
+          </div>
+          <div style={{ marginTop: 7, fontSize: 10, color: 'var(--muted-strong)', textAlign: 'center' }}>
+            {bucket.hour}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function OpsHome() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
   const [allowedTabs, setAllowedTabs] = useState<AppTab[]>([])
   const [days, setDays] = useState<Day[]>([])
+  const [liveHours, setLiveHours] = useState<HourlySale[]>([])
   const [liveBusinessDate, setLiveBusinessDate] = useState<string | null>(null)
   const [liveSalesUpdatedAt, setLiveSalesUpdatedAt] = useState<string | null>(null)
   const [brief, setBrief] = useState<Brief | null>(null)
+  const [briefDates, setBriefDates] = useState<string[]>([])
+  const [selectedBriefDate, setSelectedBriefDate] = useState<string | null>(null)
   const [briefLoading, setBriefLoading] = useState(true)
   const [briefError, setBriefError] = useState(false)
   const [showBrief, setShowBrief] = useState(false)
+
+  async function loadBrief(date?: string | null, accessToken?: string) {
+    const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token
+    if (!token) return
+    setBriefLoading(true)
+    setBriefError(false)
+    try {
+      const query = date ? `?date=${encodeURIComponent(date)}` : ''
+      const res = await fetch(`/api/brief${query}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error('Brief request failed')
+      const d = await res.json() as { brief?: Brief | null; dates?: string[] }
+      setBrief((d?.brief as Brief | null | undefined) ?? null)
+      setBriefDates(d?.dates ?? [])
+      setSelectedBriefDate(d?.brief?.brief_date ?? date ?? null)
+    } catch {
+      setBrief(null)
+      setBriefError(true)
+    } finally {
+      setBriefLoading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -98,6 +223,7 @@ export default function OpsHome() {
       if (cancelled) return
       setLiveBusinessDate(body.business_date)
       setLiveSalesUpdatedAt(body.fetched_at)
+      setLiveHours(body.hours ?? [])
       if (body.day) setDays(prev => mergeDay(prev, body.day as Day))
     }
 
@@ -134,6 +260,7 @@ export default function OpsHome() {
       setEmail(profile.email ?? sessionData.session.user.email ?? null)
       setAllowedTabs(profile.allowedTabs ?? [])
       setDays(dashboard.days ?? [])
+      setLiveHours(dashboard.live_hours ?? [])
       setLiveBusinessDate(dashboard.live_business_date)
       setLiveSalesUpdatedAt(dashboard.fetched_at)
       canLoadBrief = !profile.isGuest
@@ -142,20 +269,7 @@ export default function OpsHome() {
       // Morning brief loads independently so it never delays the metric cards.
       // Generation is cron-owned; this read never triggers paid AI work.
       if (canLoadBrief) {
-        fetch('/api/brief', { headers: { Authorization: `Bearer ${accessToken}` } })
-          .then(r => {
-            if (!r.ok) throw new Error('Brief request failed')
-            return r.json()
-          })
-          .then(d => {
-            setBrief((d?.brief as Brief | null | undefined) ?? null)
-            setBriefError(false)
-          })
-          .catch(() => {
-            setBrief(null)
-            setBriefError(true)
-          })
-          .finally(() => setBriefLoading(false))
+        void loadBrief(null, accessToken)
       } else {
         setBriefLoading(false)
       }
@@ -238,6 +352,10 @@ export default function OpsHome() {
     return p >= 0 ? '#5bd38b' : '#e58080'
   }
 
+  const selectedBriefIndex = selectedBriefDate ? briefDates.indexOf(selectedBriefDate) : -1
+  const hasNewerBrief = selectedBriefIndex > 0
+  const hasOlderBrief = selectedBriefIndex >= 0 && selectedBriefIndex < briefDates.length - 1
+
   return (
     <div>
       <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" allowedTabs={allowedTabs} />
@@ -245,14 +363,50 @@ export default function OpsHome() {
       <div className="bp-container">
         {showBrief && (
           <div className="bp-card" style={{ marginTop: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: brief ? 8 : 0, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted-strong)' }}>
-                Morning brief
-              </span>
-              {brief?.metrics?.day_of_week && (
-                <span style={{ fontSize: 11, color: 'var(--muted-strong)' }}>
-                  {brief.metrics.day_of_week} · {fmtDate(brief.brief_date)}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: brief ? 8 : 0, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted-strong)' }}>
+                  Morning brief
                 </span>
+                {brief?.metrics?.day_of_week && (
+                  <span style={{ fontSize: 11, color: 'var(--muted-strong)' }}>
+                    {brief.metrics.day_of_week} · {fmtDate(brief.brief_date)}
+                  </span>
+                )}
+              </div>
+              {briefDates.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="bp-btn"
+                    onClick={() => hasNewerBrief && void loadBrief(briefDates[selectedBriefIndex - 1])}
+                    disabled={briefLoading || !hasNewerBrief}
+                    style={{ padding: '7px 10px', borderRadius: 8, fontSize: 12 }}
+                  >
+                    Newer
+                  </button>
+                  <select
+                    className="bp-input"
+                    value={selectedBriefDate ?? ''}
+                    onChange={event => void loadBrief(event.target.value)}
+                    disabled={briefLoading}
+                    aria-label="Select morning brief date"
+                    style={{ width: 'auto', minWidth: 138, padding: '7px 10px', borderRadius: 8, fontSize: 12 }}
+                  >
+                    {briefDates.map(date => (
+                      <option key={date} value={date}>{briefDateLabel(date)}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="bp-btn"
+                    onClick={() => hasOlderBrief && void loadBrief(briefDates[selectedBriefIndex + 1])}
+                    disabled={briefLoading || !hasOlderBrief}
+                    style={{ padding: '7px 10px', borderRadius: 8, fontSize: 12 }}
+                  >
+                    Older
+                  </button>
+                </div>
               )}
             </div>
             {brief ? (
@@ -271,6 +425,52 @@ export default function OpsHome() {
           </div>
         )}
 
+        <div style={{ marginTop: 18 }}>
+          {loading || !computed ? (
+            <div className="bp-metric bp-metric--primary">
+              <div className="bp-skel" style={{ width: 90, height: 11 }} />
+              <div className="bp-skel" style={{ width: 160, height: 36, marginTop: 14 }} />
+              <div className="bp-skel" style={{ width: '100%', height: 110, marginTop: 18 }} />
+            </div>
+          ) : (
+            <div className="bp-metric bp-metric--primary" style={{ padding: 20 }}>
+              <div className="live-takings-layout">
+                <div>
+                  <div className="bp-metric__label">Live takings</div>
+                  <div className="bp-metric__sub">{fmtDate(computed.liveBusinessDate)}</div>
+                  <div className="bp-metric__value">{computed.liveDay ? money(computed.liveDay.gross_sales) : '—'}</div>
+                  <div className="bp-metric__foot">
+                    {computed.liveDay ? (
+                      <>
+                        Orders: {fmtNum(computed.liveDay.order_count)} &nbsp;·&nbsp; AOV: {money(computed.liveDay.aov)}
+                        {computed.liveDay.updated_at
+                          ? <> &nbsp;·&nbsp; Imported {fmtBrisbaneTime(computed.liveDay.updated_at)}</>
+                          : liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
+                      </>
+                    ) : (
+                      <>
+                        No sales imported yet
+                        {liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 11, color: 'var(--muted-strong)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+                      Hourly sales
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--muted-strong)' }}>
+                      From Kounta
+                    </span>
+                  </div>
+                  <HourlySalesChart hours={liveHours} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div
           style={{
             display: 'grid',
@@ -288,28 +488,6 @@ export default function OpsHome() {
             </>
           ) : (
             <>
-              <MetricCard
-                primary
-                label="Live takings"
-                sub={fmtDate(computed.liveBusinessDate)}
-                value={computed.liveDay ? money(computed.liveDay.gross_sales) : '—'}
-                foot={
-                  computed.liveDay ? (
-                    <>
-                      Orders: {fmtNum(computed.liveDay.order_count)} &nbsp;·&nbsp; AOV: {money(computed.liveDay.aov)}
-                      {computed.liveDay.updated_at
-                        ? <> &nbsp;·&nbsp; Imported {fmtBrisbaneTime(computed.liveDay.updated_at)}</>
-                        : liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
-                    </>
-                  ) : (
-                    <>
-                      No sales imported yet
-                      {liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
-                    </>
-                  )
-                }
-              />
-
               {computed.today.business_date !== computed.liveBusinessDate && (
                 <MetricCard
                   label={`Latest day · ${fmtDate(computed.today.business_date)}`}

@@ -3,6 +3,7 @@ import { adminClient, getSessionUser } from '@/lib/adminAuth'
 import { getAllowedTabs } from '@/lib/permissions'
 
 const SALES_SELECT = 'business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov,updated_at'
+const HOURS_SELECT = 'business_date,hour,gross_sales,net_sales,tax,order_count,aov,updated_at'
 
 function brisbaneTodayISO() {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -44,7 +45,8 @@ export async function GET(req: Request) {
   const requested = Number.parseInt(url.searchParams.get('limit') ?? '', 10)
   const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 365) : 90
 
-  const { data, error } = await adminClient()
+  const supabase = adminClient()
+  const { data, error } = await supabase
     .from('sales_business_day')
     .select(SALES_SELECT)
     .order('business_date', { ascending: false })
@@ -52,9 +54,17 @@ export async function GET(req: Request) {
 
   if (error) return NextResponse.json({ error: 'Failed to load dashboard data' }, { status: 500 })
 
+  const { data: hours, error: hoursError } = await supabase
+    .from('sales_by_hour')
+    .select(HOURS_SELECT)
+    .eq('business_date', liveBusinessDate)
+    .order('hour', { ascending: true })
+  if (hoursError) console.error('Hourly sales lookup failed:', hoursError.message)
+
   return NextResponse.json({
     profile,
     days: data ?? [],
+    live_hours: hoursError ? [] : hours ?? [],
     live_business_date: liveBusinessDate,
     fetched_at: new Date().toISOString(),
   })

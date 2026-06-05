@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { adminClient, getSessionUser } from '@/lib/adminAuth'
 
+const DAY_SELECT = 'business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov,updated_at'
+const HOURS_SELECT = 'business_date,hour,gross_sales,net_sales,tax,order_count,aov,updated_at'
+
 function brisbaneTodayISO() {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Australia/Brisbane',
@@ -19,12 +22,26 @@ export async function GET(req: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const businessDate = brisbaneTodayISO()
-  const { data, error } = await adminClient()
+  const supabase = adminClient()
+  const { data, error } = await supabase
     .from('sales_business_day')
-    .select('business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov,updated_at')
+    .select(DAY_SELECT)
     .eq('business_date', businessDate)
     .maybeSingle()
 
   if (error) return NextResponse.json({ error: 'Failed to load live sales data' }, { status: 500 })
-  return NextResponse.json({ business_date: businessDate, day: data ?? null, fetched_at: new Date().toISOString() })
+
+  const { data: hours, error: hoursError } = await supabase
+    .from('sales_by_hour')
+    .select(HOURS_SELECT)
+    .eq('business_date', businessDate)
+    .order('hour', { ascending: true })
+  if (hoursError) console.error('Hourly sales lookup failed:', hoursError.message)
+
+  return NextResponse.json({
+    business_date: businessDate,
+    day: data ?? null,
+    hours: hoursError ? [] : hours ?? [],
+    fetched_at: new Date().toISOString(),
+  })
 }

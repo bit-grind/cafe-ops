@@ -242,6 +242,32 @@ export async function getLatestBrief(supabase: SupabaseClient): Promise<DailyBri
   return null
 }
 
+export async function getBriefByDate(
+  supabase: SupabaseClient,
+  briefDate: string,
+): Promise<DailyBriefRow | null> {
+  const { data } = await supabase
+    .from('daily_brief')
+    .select(BRIEF_SELECT)
+    .eq('brief_date', briefDate)
+    .eq('generation_status', 'completed')
+    .maybeSingle()
+
+  return (data as DailyBriefRow | null) ?? null
+}
+
+export async function getBriefDates(supabase: SupabaseClient): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('daily_brief')
+    .select('brief_date')
+    .eq('generation_status', 'completed')
+    .order('brief_date', { ascending: false })
+    .limit(90)
+
+  if (error) throw new Error(`daily brief dates lookup failed: ${error.message}`)
+  return ((data as Array<{ brief_date: string }> | null) ?? []).map(row => row.brief_date)
+}
+
 /**
  * Generate a brief only when the just-imported product day is the newest sales
  * day. Product import is the first point where both day totals and product

@@ -1,7 +1,7 @@
 /**
  * Kounta daily sync.
  *
- * Headless-logs into my.kounta.com, exports the sales summary + by-product
+ * Headless-logs into my.kounta.com, exports the sales summary, by-hour, and by-product
  * reports via Kounta's report export endpoint, and POSTs them to the app's
  * import routes. Designed to run from GitHub Actions (see
  * .github/workflows/kounta-sync.yml).
@@ -14,8 +14,9 @@
  *   KOUNTA_USER, KOUNTA_PASS   Kounta login (set as repo secrets)
  *   IMPORT_SECRET              shared secret for the app's import endpoints
  *   APP_URL                    deployed app base URL
- *   SYNC_PRODUCTS              optional; set to "false" for summary-only live
+ *   SYNC_PRODUCTS              optional; set to "false" for summary/hour-only live
  *                              sales refreshes
+ *   SYNC_HOURS                 optional; set to "false" to skip hourly buckets
  *   LIVE_MONITOR_MINUTES       optional; when set, polls the summary every
  *                              LIVE_POLL_SECONDS and imports each sample
  *   LIVE_POLL_SECONDS          optional; defaults to 60 for live monitors
@@ -34,6 +35,7 @@ for (const [k, v] of Object.entries({ APP_URL: rawAppUrl, KOUNTA_USER, KOUNTA_PA
 
 const APP_URL = rawAppUrl.replace(/\/$/, '')
 const SYNC_PRODUCTS = process.env.SYNC_PRODUCTS !== 'false'
+const SYNC_HOURS = process.env.SYNC_HOURS !== 'false'
 const LIVE_MONITOR_MINUTES = Number.parseInt(process.env.LIVE_MONITOR_MINUTES || '', 10)
 const LIVE_POLL_SECONDS = Math.max(15, Number.parseInt(process.env.LIVE_POLL_SECONDS || '60', 10) || 60)
 const LIVE_STOP_BRISBANE = process.env.LIVE_STOP_BRISBANE || ''
@@ -77,6 +79,7 @@ function parseStopMinute(value) {
 }
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+const normalizeHeader = s => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
 function eachDay(from, to) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
@@ -146,6 +149,60 @@ function mapProducts(rows, businessDate) {
     })
   }
   return [...byProduct.values()]
+}
+
+function parseHourCell(value) {
+  const text = String(value ?? '').trim().toLowerCase()
+  if (!text || text === 'total') return null
+  const time = text.match(/^(\d{1,2})(?::\d{2})?\s*(am|pm)?$/)
+  if (time) {
+    let hour = Number(time[1])
+    const meridiem = time[2]
+    if (meridiem === 'pm' && hour < 12) hour += 12
+    if (meridiem === 'am' && hour === 12) hour = 0
+    return hour >= 0 && hour <= 23 ? hour : null
+  }
+  const bare = Number.parseInt(text, 10)
+  return Number.isInteger(bare) && bare >= 0 && bare <= 23 ? bare : null
+}
+
+function mapHours(rows, businessDate) {
+  const header = rows[0]?.map(normalizeHeader) ?? []
+  const findCol = (...names) => {
+    const normalized = names.map(normalizeHeader)
+    return header.findIndex(h => normalized.includes(h))
+  }
+  const hourCol = findCol('salehour', 'hour', 'time', 'salehourid')
+  const countCol = findCol('salecount', 'sale count', 'number of sales', 'sales')
+  const grossCol = findCol('saleamount', 'sale amount', 'gross sales', 'total inc tax', 'total')
+  const netCol = findCol('saleexamount', 'sale ex amount', 'net sales', 'net amount')
+  const taxCol = findCol('saletaxamount', 'sale tax amount', 'tax amount', 'tax')
+  const aovCol = findCol('averageamount', 'average amount', 'sale average', 'aov')
+
+  const byHour = new Map()
+  for (const r of rows.slice(1)) {
+    const fallbackHourCol = parseHourCell(r[1]) == null ? 0 : 1
+    const hour = parseHourCell(r[hourCol >= 0 ? hourCol : fallbackHourCol])
+    if (hour == null) continue
+
+    const offset = fallbackHourCol === 1 ? 1 : 0
+    const orderCount = Math.round(num(r[countCol >= 0 ? countCol : 1 + offset]))
+    const grossSales = num(r[grossCol >= 0 ? grossCol : 2 + offset])
+    const netSales = num(r[netCol >= 0 ? netCol : 3 + offset])
+    const tax = num(r[taxCol >= 0 ? taxCol : 4 + offset])
+    const aov = aovCol >= 0 ? num(r[aovCol]) : orderCount > 0 ? grossSales / orderCount : 0
+
+    byHour.set(hour, {
+      business_date: businessDate,
+      hour,
+      gross_sales: grossSales,
+      net_sales: netSales,
+      tax,
+      order_count: orderCount,
+      aov,
+    })
+  }
+  return [...byHour.values()].sort((a, b) => a.hour - b.hour)
 }
 
 async function exportCsv(page, report, from, to) {
@@ -220,6 +277,12 @@ async function importSummary(page, from, to) {
   return { summary, summaryByDate }
 }
 
+async function importHours(page, day, allowEmpty = false) {
+  const hours = mapHours(parseCsv(await exportCsv(page, 'salesummarybyhour', day, day)), day)
+  await postJson('/api/import-hours', { business_date: day, rows: hours, allow_empty: allowEmpty })
+  return hours
+}
+
 async function runLiveMonitor(page, from, to) {
   const stopMinute = parseStopMinute(LIVE_STOP_BRISBANE)
   const deadline = Date.now() + LIVE_MONITOR_MINUTES * 60_000
@@ -236,6 +299,8 @@ async function runLiveMonitor(page, from, to) {
     const sampledAt = new Date().toISOString()
     const { summary, summaryByDate } = await importSummary(page, from, to)
     const subject = summaryByDate.get(to) ?? summary[summary.length - 1]
+    const allowEmptyHours = !subject || (subject.order_count === 0 && subject.gross_sales === 0)
+    const hours = SYNC_HOURS ? await importHours(page, to, allowEmptyHours) : []
     const key = subject
       ? `${subject.business_date}:${subject.gross_sales}:${subject.order_count}:${subject.aov}`
       : ''
@@ -244,7 +309,7 @@ async function runLiveMonitor(page, from, to) {
     console.log(
       `Live sample ${sample} @ ${sampledAt}: date=${subject?.business_date ?? 'n/a'} ` +
       `gross=${subject?.gross_sales ?? 'n/a'} orders=${subject?.order_count ?? 'n/a'} ` +
-      `aov=${subject?.aov ?? 'n/a'} changed=${changed}`,
+      `aov=${subject?.aov ?? 'n/a'} hours=${hours.length} changed=${changed}`,
     )
 
     const remaining = deadline - Date.now()
@@ -272,6 +337,18 @@ try {
     // Summary report accepts a date range in one request.
     const { summary, summaryByDate } = await importSummary(page, from, to)
     console.log(`Summary: imported ${summary.length} day(s).`)
+
+    if (SYNC_HOURS) {
+      let hourTotal = 0
+      for (const day of syncDays) {
+        const totals = summaryByDate.get(day)
+        const allowEmpty = totals.order_count === 0 && totals.gross_sales === 0
+        const hours = await importHours(page, day, allowEmpty)
+        hourTotal += hours.length
+        console.log(`Hours ${day}: imported ${hours.length}.`)
+      }
+      console.log(`Hours: imported ${hourTotal} bucket(s).`)
+    }
 
     if (SYNC_PRODUCTS) {
       // By-product report aggregates over a range, so pull one day at a time.

@@ -1,7 +1,7 @@
 # Kounta daily sync
 
 Automatically pulls daily sales from Kounta (Lightspeed Restaurant K-Series) into
-Cafe Ops, so `sales_business_day` and `sales_by_product` stay current
+Cafe Ops, so `sales_business_day`, `sales_by_hour`, and `sales_by_product` stay current
 without anyone running a script.
 
 ## How it works
@@ -10,21 +10,22 @@ Two scheduled GitHub Actions keep sales current:
 
 - `.github/workflows/kounta-sync.yml` runs a lightweight live refresh every 10
   minutes from **05:02 to 14:22 Brisbane**. Each live refresh logs into Kounta,
-  imports only the sales summary, and skips product rows so today's live takings
-  card can follow Kounta's own dashboard cadence.
+  imports the sales summary and Sales Summary by Hour buckets, and skips product
+  rows so today's live takings card can follow Kounta's own dashboard cadence.
 - The same workflow runs the full daily sync at **14:30 Brisbane**, right after
-  the shop closes. It imports the final sales summary and product rows.
+  the shop closes. It imports the final sales summary, hourly buckets, and
+  product rows.
 
 The full daily sync:
 
 1. Headless-logs into `my.kounta.com` with stored credentials.
-2. Exports the **sales summary** and **sales-by-product** reports via Kounta's
+2. Exports the **sales summary**, **sales-by-hour**, and **sales-by-product** reports via Kounta's
    report export endpoint:
    `…/report/<report>?export=true&DateFrom=YYYY-MM-DD&DateTo=YYYY-MM-DD&SiteID=0&TerminalID=0`
 3. Parses the CSVs and POSTs timestamped HMAC-signed requests to the app's
-   import routes (`/api/import-daily`, `/api/import-products`).
-4. Replaces each imported day's product rows transactionally, so removed
-   products do not leave stale rows behind.
+   import routes (`/api/import-daily`, `/api/import-hours`, `/api/import-products`).
+4. Replaces each imported day's hourly/product rows transactionally, so removed
+   buckets and products do not leave stale rows behind.
 5. Generates the dashboard morning brief as soon as product rows for the newest
    sales day finish importing. Vercel also runs a scheduled brief cron as a
    backup if sales data is inserted another way.
@@ -50,6 +51,9 @@ Then open the **Variables** tab in the same screen and add:
 
 That's it — the daily run starts automatically.
 
+Optional script controls: `SYNC_HOURS=false` skips Sales Summary by Hour imports,
+and `SYNC_PRODUCTS=false` skips product rows.
+
 ## Backfill / manual run
 
 **Actions → "Kounta daily sync" → Run workflow.** Leave the date fields blank to
@@ -57,9 +61,10 @@ sync today's Brisbane business date, or set `date_from` / `date_to` (YYYY-MM-DD)
 The summary pulls the whole range in one request; products are pulled per day.
 
 For a live summary monitor, run **Actions → "Kounta live sales" → Run workflow**.
-It uses the same date inputs, skips product export/import, and polls once per
-minute for 60 minutes by default. Set `monitor_minutes` to `0` for a one-shot
-summary refresh. Scheduled live refreshes run from **Kounta daily sync**;
+It uses the same date inputs, imports hourly buckets, skips product
+export/import, and polls once per minute for 60 minutes by default. Set
+`monitor_minutes` to `0` for a one-shot summary/hourly refresh. Scheduled live
+refreshes run from **Kounta daily sync**;
 `Kounta live sales` is for manual diagnostics.
 
 ## Debugging a failed run

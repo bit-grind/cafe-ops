@@ -145,6 +145,20 @@ button.bp-metric:hover {
   margin-top: 8px;
 }
 
+.live-takings-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .live-takings-layout {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
 /* Skeleton shimmer */
 .bp-skel {
   background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%);
