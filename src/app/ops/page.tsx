@@ -98,15 +98,26 @@ function hourLabel(hour: number) {
   return `${displayHour}${suffix}`
 }
 
-function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
-  const buckets = hours.map(row => ({
-    hour: row.hour,
-    label: hourLabel(row.hour),
-    sales: Number(row.gross_sales || 0),
-  }))
-  const max = Math.max(...buckets.map(bucket => bucket.sales), 1)
+function hourRangeLabel(hour: number) {
+  return `${hourLabel(hour)}-${hourLabel((hour + 1) % 24)}`
+}
 
-  if (!buckets.length) {
+function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
+  const salesByHour = new Map(hours.map(row => [row.hour, Number(row.gross_sales || 0)]))
+  const buckets = Array.from({ length: 10 }, (_, index) => {
+    const hour = index + 5
+    return {
+      hour,
+      label: hourLabel(hour),
+      range: hourRangeLabel(hour),
+      sales: salesByHour.get(hour) ?? 0,
+    }
+  })
+  const maxSales = Math.max(...buckets.map(bucket => bucket.sales), 1)
+  const guideMax = Math.max(500, Math.ceil(maxSales / 500) * 500)
+  const guides = Array.from({ length: guideMax / 500 }, (_, index) => (index + 1) * 500)
+
+  if (!hours.length) {
     return (
       <div
         style={{
@@ -131,42 +142,78 @@ function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
     <div
       aria-label="Hourly sales bar chart"
       style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${buckets.length}, minmax(18px, 1fr))`,
-        alignItems: 'end',
-        gap: 8,
+        position: 'relative',
         minHeight: 126,
         marginTop: 18,
+        paddingTop: 4,
       }}
     >
-      {buckets.map(bucket => (
-        <div key={bucket.hour} style={{ minWidth: 0 }}>
+      <div aria-hidden="true" style={{ position: 'absolute', inset: '4px 0 28px 0' }}>
+        {guides.map(value => (
           <div
-            title={`${bucket.label}: ${money(bucket.sales)}`}
+            key={value}
             style={{
-              height: 92,
-              display: 'flex',
-              alignItems: 'end',
-              borderBottom: '1px solid rgba(255,255,255,0.12)',
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: `${(value / guideMax) * 100}%`,
+              borderTop: '1px solid rgba(255,255,255,0.11)',
             }}
           >
             <div
               style={{
-                width: '100%',
-                minHeight: bucket.sales > 0 ? 6 : 2,
-                height: `${Math.max(2, (bucket.sales / max) * 92)}px`,
-                borderRadius: '6px 6px 0 0',
-                background: bucket.sales > 0
-                  ? 'linear-gradient(180deg, #78d7a8 0%, #2f9e70 100%)'
-                  : 'rgba(255,255,255,0.08)',
+                position: 'absolute',
+                right: 0,
+                top: -7,
+                paddingLeft: 6,
+                background: 'var(--panel)',
+                color: 'var(--muted-strong)',
+                fontSize: 9,
               }}
-            />
+            >
+              {money(value)}
+            </div>
           </div>
-          <div style={{ marginTop: 7, fontSize: 10, color: 'var(--muted-strong)', textAlign: 'center' }}>
-            {bucket.hour}
+        ))}
+      </div>
+      <div
+        style={{
+          position: 'relative',
+          display: 'grid',
+          gridTemplateColumns: `repeat(${buckets.length}, minmax(18px, 1fr))`,
+          alignItems: 'end',
+          gap: 8,
+        }}
+      >
+        {buckets.map(bucket => (
+          <div key={bucket.hour} style={{ minWidth: 0 }}>
+            <div
+              title={`${bucket.range}: ${money(bucket.sales)} total`}
+              style={{
+                height: 92,
+                display: 'flex',
+                alignItems: 'end',
+                borderBottom: '1px solid rgba(255,255,255,0.12)',
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  minHeight: bucket.sales > 0 ? 6 : 2,
+                  height: `${Math.max(2, (bucket.sales / guideMax) * 92)}px`,
+                  borderRadius: '6px 6px 0 0',
+                  background: bucket.sales > 0
+                    ? 'linear-gradient(180deg, #78d7a8 0%, #2f9e70 100%)'
+                    : 'rgba(255,255,255,0.08)',
+                }}
+              />
+            </div>
+            <div style={{ marginTop: 7, fontSize: 10, color: 'var(--muted-strong)', textAlign: 'center' }}>
+              {bucket.label}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }
