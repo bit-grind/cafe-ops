@@ -25,7 +25,7 @@ export default function BpHeader({
   return (
     <header style={{ borderBottom: "1px solid var(--border)" }}>
       <div
-        className="bp-container"
+        className="bp-container bp-hdr-main"
         style={{
           paddingTop: 22,
           paddingBottom: activeTab ? 0 : 22,
@@ -35,9 +35,10 @@ export default function BpHeader({
           gap: 14,
         }}
       >
-        <Link href={homeHref} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <Link href={homeHref} className="bp-hdr-brand" style={{ display: "flex", alignItems: "center", gap: 14 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            className="bp-hdr-logo"
             src={branding.logoSrc}
             alt={`${branding.displayName} logo`}
             width={52}
@@ -45,7 +46,7 @@ export default function BpHeader({
             style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 18, flex: '0 0 auto' }}
           />
           <div>
-            <div style={{ fontWeight: 700, letterSpacing: "0.1em", fontSize: 14, textTransform: 'uppercase' }}>
+            <div className="bp-hdr-title" style={{ fontWeight: 700, letterSpacing: "0.1em", fontSize: 14, textTransform: 'uppercase' }}>
               {branding.displayName}
             </div>
             <div
@@ -64,7 +65,7 @@ export default function BpHeader({
           </div>
         </Link>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div className="bp-hdr-actions" style={{ display: "flex", alignItems: "center", gap: 16 }}>
           {email ? (
             <div className="bp-hdr-email--desktop" style={{ fontSize: 13, color: "var(--muted-strong)" }}>
               {email}
@@ -80,7 +81,7 @@ export default function BpHeader({
 
       {activeTab && (
         <nav
-          className="bp-container"
+          className="bp-container bp-hdr-nav"
           aria-label="Primary"
           style={{ paddingTop: 0, paddingBottom: 0, display: 'flex', gap: 4 }}
         >
@@ -90,6 +91,7 @@ export default function BpHeader({
               <Link
                 key={tab}
                 href={href}
+                className="bp-hdr-nav__link"
                 aria-current={active ? 'page' : undefined}
                 style={{
                   padding: '10px 16px',

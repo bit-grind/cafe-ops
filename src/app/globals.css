@@ -23,11 +23,39 @@ html, body {
   height: 100%;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
 }
 
 a {
@@ -106,7 +134,7 @@ button.bp-metric:hover {
   font-size: 30px;
   font-weight: 600;
   margin-top: 10px;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 .bp-metric--primary .bp-metric__value {
   font-size: 36px;
@@ -257,6 +285,67 @@ button.bp-metric:hover {
   font-size: 12px;
 }
 
+.bp-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bp-hdr-main,
+.bp-hdr-brand,
+.bp-hdr-title {
+  min-width: 0;
+}
+
+.bp-hdr-brand {
+  max-width: 100%;
+}
+
+.bp-hdr-title {
+  overflow-wrap: anywhere;
+}
+
+.bp-hdr-actions {
+  flex-shrink: 0;
+}
+
+.bp-hdr-nav {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.bp-hdr-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.bp-hdr-nav__link {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.bp-chip-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+.bp-admin-user-row,
+.bp-admin-detail-grid,
+.bp-supplier-row,
+.bp-recipes-layout {
+  min-width: 0;
+}
+
+.bp-bill-modal-lines {
+  -webkit-overflow-scrolling: touch;
+}
+
+.bp-mobile-supplier-filter {
+  display: none;
+}
+
 /* Header brand/right split. Email appears in the brand-title stack on
    mobile (under OPS DASHBOARD) and on the right next to sign-out on
    desktop — two copies, one hidden via media query. */
@@ -269,5 +358,409 @@ button.bp-metric:hover {
     font-size: 12px;
     color: var(--muted-strong);
     word-break: break-all;
+  }
+}
+
+@media (max-width: 760px) {
+  .bp-container {
+    width: 100%;
+    max-width: 100%;
+    padding: 20px max(14px, env(safe-area-inset-right)) 20px max(14px, env(safe-area-inset-left));
+  }
+
+  .bp-card,
+  .bp-metric {
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .bp-metric__value {
+    font-size: 26px;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .bp-metric--primary .bp-metric__value {
+    font-size: 30px;
+  }
+
+  .bp-metric__foot {
+    line-height: 1.45;
+  }
+
+  .bp-btn {
+    min-height: 44px;
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+
+  .bp-input {
+    min-height: 44px;
+    border-radius: 10px;
+    font-size: 16px;
+  }
+
+  .bp-chip {
+    min-height: 38px;
+    max-width: 100%;
+  }
+
+  .bp-table th,
+  .bp-table td {
+    padding: 10px 12px;
+  }
+
+  .bp-table {
+    min-width: 620px;
+  }
+
+  .bp-table-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bp-table--recipe-edit {
+    min-width: 720px;
+  }
+
+  .bp-table--recipe-cost {
+    min-width: 820px;
+  }
+
+  .bp-table--line-items {
+    min-width: 680px;
+  }
+
+  .bp-mobile-stack {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .bp-mobile-grid-one {
+    grid-template-columns: 1fr !important;
+  }
+
+  .bp-hdr-main {
+    gap: 10px !important;
+    align-items: flex-start !important;
+    padding-top: 16px !important;
+  }
+
+  .bp-hdr-brand {
+    gap: 10px !important;
+  }
+
+  .bp-hdr-logo {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 14px !important;
+  }
+
+  .bp-hdr-actions {
+    gap: 8px !important;
+  }
+
+  .bp-hdr-actions .bp-btn {
+    min-height: 40px;
+    padding: 8px 10px;
+  }
+
+  .bp-hdr-nav {
+    gap: 0 !important;
+    margin-inline: calc(-1 * max(14px, env(safe-area-inset-left))) calc(-1 * max(14px, env(safe-area-inset-right)));
+    padding-left: max(14px, env(safe-area-inset-left)) !important;
+    padding-right: max(14px, env(safe-area-inset-right)) !important;
+  }
+
+  .bp-hdr-nav__link {
+    padding: 12px 14px !important;
+  }
+
+  .bp-section-toolbar,
+  .bp-page-toolbar,
+  .bp-pagination {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .bp-search-row {
+    flex-wrap: wrap;
+  }
+
+  .bp-search-row .bp-input {
+    flex: 1 1 100%;
+  }
+
+  .bp-search-row .bp-btn {
+    flex: 1 1 0;
+  }
+
+  .bp-chip-scroll {
+    flex-wrap: wrap !important;
+    overflow-x: visible;
+    margin-inline: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .bp-chip-scroll .bp-chip {
+    flex: 0 1 auto;
+  }
+
+  .bp-supplier-chips {
+    display: none !important;
+  }
+
+  .bp-mobile-supplier-filter {
+    display: grid;
+    gap: 7px;
+    margin-bottom: 14px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.03);
+    position: relative;
+  }
+
+  .bp-mobile-supplier-filter__label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted-strong);
+  }
+
+  .bp-mobile-supplier-filter__meta {
+    font-size: 12px;
+    color: var(--muted-strong);
+  }
+
+  .bp-mobile-supplier-trigger {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .bp-mobile-supplier-trigger__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bp-mobile-supplier-trigger__count {
+    min-width: 28px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .bp-mobile-supplier-menu {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: calc(100% - 8px);
+    z-index: 150;
+    max-height: min(330px, 48dvh);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #121212;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 10px;
+    box-shadow: 0 14px 34px rgba(0,0,0,0.62);
+  }
+
+  .bp-mobile-supplier-option {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    color: var(--muted);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .bp-mobile-supplier-option:first-child {
+    border-top: none;
+  }
+
+  .bp-mobile-supplier-option:hover,
+  .bp-mobile-supplier-option:focus-visible {
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+  }
+
+  .bp-mobile-supplier-option[aria-selected="true"] {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  .bp-pagination__controls {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bp-recipes-layout {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  .bp-recipes-sidebar {
+    position: static !important;
+    top: auto !important;
+  }
+
+  .bp-recipes-list {
+    max-height: 34dvh !important;
+  }
+
+  .bp-recipe-save-row {
+    justify-content: stretch !important;
+  }
+
+  .bp-recipe-save-row .bp-btn {
+    width: 100%;
+  }
+
+  .bp-floating-panel {
+    max-width: calc(100vw - 28px) !important;
+  }
+
+  .bp-ask-shell {
+    padding: 14px max(14px, env(safe-area-inset-right)) 14px max(14px, env(safe-area-inset-left)) !important;
+  }
+
+  .bp-quick-prompts {
+    flex-wrap: wrap !important;
+    overflow-x: visible;
+    margin-inline: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+  }
+
+  .bp-quick-prompts .bp-chip {
+    flex: 0 1 auto;
+  }
+
+  .bp-chat-bubble {
+    max-width: 92% !important;
+  }
+
+  .bp-ask-input-row {
+    gap: 6px !important;
+  }
+
+  .bp-ask-input-row .bp-input {
+    min-width: 0;
+  }
+
+  .bp-holiday-menu {
+    max-height: 55dvh;
+    overflow-y: auto;
+  }
+
+  .bp-bill-modal-overlay {
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    padding: 0 !important;
+  }
+
+  .bp-bill-modal-panel {
+    height: 100dvh !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+  }
+
+  .bp-bill-modal-header {
+    flex-direction: column;
+    align-items: stretch !important;
+    padding: 14px !important;
+  }
+
+  .bp-bill-modal-actions {
+    width: 100%;
+  }
+
+  .bp-bill-modal-actions .bp-btn:first-child {
+    flex: 1;
+  }
+
+  .bp-bill-modal-footer {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 8px;
+    padding: 10px 14px !important;
+  }
+
+  .bp-bill-modal-downloads {
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+
+  .bp-admin-main {
+    padding: 20px max(14px, env(safe-area-inset-right)) 20px max(14px, env(safe-area-inset-left)) !important;
+  }
+
+  .bp-admin-user-row {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    align-items: stretch !important;
+  }
+
+  .bp-admin-user-row .bp-btn {
+    width: 100%;
+  }
+
+  .bp-admin-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .bp-supplier-row {
+    grid-template-columns: 20px 1fr !important;
+    align-items: start !important;
+  }
+
+  .bp-supplier-count {
+    grid-column: 2;
+    white-space: normal !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .bp-hdr-main {
+    flex-wrap: wrap;
+  }
+
+  .bp-hdr-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .bp-search-row .bp-btn {
+    flex-basis: 100%;
+  }
+
+  .bp-ask-input-row {
+    display: grid !important;
+    grid-template-columns: 1fr auto;
   }
 }

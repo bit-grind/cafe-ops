@@ -28,7 +28,7 @@ function fmtUnit(n: number) {
 
 function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; onPick: (match: SuggestionMatch, price: number) => void }) {
   const [open, setOpen] = useState(false)
-  const [coords, setCoords] = useState<{ left: number; top?: number; bottom?: number } | null>(null)
+  const [coords, setCoords] = useState<{ left: number; top?: number; bottom?: number; width: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
@@ -58,13 +58,13 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
     const el = ref.current
     if (!el) return
     const rect = el.getBoundingClientRect()
-    const width = 280
+    const width = Math.min(280, window.innerWidth - 16)
     const estHeight = Math.min(matches.length, 5) * 84 + 4
     const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
     if (window.innerHeight - rect.bottom < estHeight && rect.top > estHeight) {
-      setCoords({ left, bottom: window.innerHeight - rect.top + 4 })
+      setCoords({ left, bottom: window.innerHeight - rect.top + 4, width })
     } else {
-      setCoords({ left, top: rect.bottom + 4 })
+      setCoords({ left, top: rect.bottom + 4, width })
     }
     setOpen(true)
   }
@@ -89,7 +89,7 @@ function SuggestionDropdown({ matches, onPick }: { matches: SuggestionMatch[]; o
         {top.supplier ? top.supplier.split(' ').slice(0, 3).join(' ') : ''}{top.invoice_date ? ` · ${fmtDate(top.invoice_date)}` : ''}
       </div>
       {open && coords && (
-        <div style={{ position: 'fixed', left: coords.left, top: coords.top, bottom: coords.bottom, zIndex: 1000, width: 280, maxHeight: '60vh', overflowY: 'auto', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+        <div className="bp-floating-panel" style={{ position: 'fixed', left: coords.left, top: coords.top, bottom: coords.bottom, zIndex: 1000, width: coords.width, maxHeight: '60vh', overflowY: 'auto', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
           {[top, ...rest].map((m, i) => {
             const mGood = m.can_apply && m.converted_price != null
             return (
@@ -173,7 +173,7 @@ function ManualProductSearch({
             </button>
             <button className="bp-btn" onClick={() => onState({ open: false })} style={{ fontSize: 11, padding: '5px 7px' }}>x</button>
           </div>
-          <div style={{ position: 'absolute', right: 0, top: 34, zIndex: 20, width: 360, maxHeight: 280, overflowY: 'auto', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+          <div className="bp-floating-panel" style={{ position: 'absolute', right: 0, top: 34, zIndex: 20, width: 360, maxHeight: 280, overflowY: 'auto', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
             {loading && <div className="bp-skel" style={{ height: 34, margin: 8, borderRadius: 6 }} />}
             {!loading && error && <div style={{ padding: 10, fontSize: 12, color: '#e58080' }}>{error}</div>}
             {!loading && !error && results.length === 0 && <div style={{ padding: 10, fontSize: 12, color: 'var(--muted-strong)' }}>No invoice products found</div>}
@@ -425,10 +425,10 @@ export default function RecipesPage() {
       <div className="bp-container" style={{ paddingTop: 28 }}>
         <div style={{ fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-strong)', marginBottom: 18 }}>Recipe costing</div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 18, alignItems: 'start' }}>
+        <div className="bp-recipes-layout" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 18, alignItems: 'start' }}>
 
           {/* ── Left: list ── */}
-          <div className="bp-card" style={{ padding: 0, position: 'sticky', top: 20 }}>
+          <div className="bp-card bp-recipes-sidebar" style={{ padding: 0, position: 'sticky', top: 20 }}>
             <div style={{ padding: '12px 12px 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
               <input className="bp-input" placeholder="Search recipes…" value={search} onChange={e => setSearch(e.target.value)} style={{ fontSize: 13, padding: '8px 10px' }} />
               <button className="bp-btn bp-btn--primary" onClick={startNewRecipe} style={{ fontSize: 13, padding: '8px 10px' }}>+ New recipe</button>
@@ -436,7 +436,7 @@ export default function RecipesPage() {
             {loading ? (
               <div style={{ padding: '12px 14px' }}>{[...Array(6)].map((_, i) => <div key={i} className="bp-skel" style={{ height: 36, marginBottom: 6, borderRadius: 8 }} />)}</div>
             ) : (
-              <div style={{ maxHeight: 'calc(100vh - 230px)', overflowY: 'auto' }}>
+              <div className="bp-recipes-list" style={{ maxHeight: 'calc(100vh - 230px)', overflowY: 'auto' }}>
                 {filtered.map(r => {
                   const active = r.id === selectedId
                   return (
@@ -490,8 +490,8 @@ export default function RecipesPage() {
                 </div>
               </div>
 
-              <div className="bp-card" style={{ padding: 0, overflow: 'visible' }}>
-                <table className="bp-table" style={{ tableLayout: 'fixed' }}>
+              <div className="bp-card bp-table-wrap" style={{ padding: 0, overflow: 'visible' }}>
+                <table className="bp-table bp-table--recipe-edit" style={{ tableLayout: 'fixed' }}>
                   <colgroup>
                     <col style={{ width: 36 }} />
                     <col />
@@ -546,7 +546,7 @@ export default function RecipesPage() {
               <div className="bp-card" style={{ marginBottom: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
                   <div>
-                    <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em' }}>{selectedRecipe.name}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 0 }}>{selectedRecipe.name}</div>
                     <div style={{ fontSize: 13, color: 'var(--muted-strong)', marginTop: 4 }}>
                       Yields {selectedRecipe.yield_qty} {selectedRecipe.yield_unit}{selectedRecipe.yield_qty !== 1 ? 's' : ''}
                       {suggestionsLoading && <span style={{ marginLeft: 10, fontSize: 11 }}>· finding invoice prices…</span>}
@@ -570,8 +570,8 @@ export default function RecipesPage() {
                 </div>
               </div>
 
-              <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
-                <table className="bp-table" style={{ tableLayout: 'fixed' }}>
+              <div className="bp-card bp-table-wrap" style={{ padding: 0, overflow: 'visible' }}>
+                <table className="bp-table bp-table--recipe-cost" style={{ tableLayout: 'fixed' }}>
                   <colgroup>
                     <col style={{ width: '30%' }} /><col style={{ width: '10%' }} /><col style={{ width: '8%' }} /><col style={{ width: '16%' }} /><col style={{ width: '22%' }} /><col style={{ width: '14%' }} />
                   </colgroup>
@@ -647,7 +647,7 @@ export default function RecipesPage() {
                 </table>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, justifyContent: 'flex-end' }}>
+              <div className="bp-recipe-save-row" style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, justifyContent: 'flex-end' }}>
                 {savedMsg && <span style={{ fontSize: 13, color: savedMsg === 'Saved' ? '#7dd3a8' : '#e58080' }}>{savedMsg}</span>}
                 <button className="bp-btn bp-btn--primary" onClick={saveCosts} disabled={costSaving} style={{ minWidth: 100 }}>
                   {costSaving ? 'Saving…' : 'Save costs'}

@@ -83,7 +83,7 @@ function HolidayDropdown({ onSelect, disabled }: { onSelect: (q: string, display
       </Chip>
 
       {open && (
-        <div style={{
+        <div className="bp-holiday-menu bp-floating-panel" style={{
           position: 'absolute',
           top: 'calc(100% + 6px)',
           left: 0,
@@ -201,7 +201,7 @@ export default function AskPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
       <BpHeader email={email} onSignOut={signOut} activeTab="ask" allowedTabs={allowedTabs} />
 
-      <div style={{
+      <div className="bp-ask-shell" style={{
         flex: 1,
         minHeight: 0,
         maxWidth: 860,
@@ -214,7 +214,7 @@ export default function AskPage() {
       }}>
 
       {/* Quick prompts */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+      <div className="bp-quick-prompts" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
         {QUICK_PROMPTS.map(p => (
           <Chip key={p.label} disabled={busy} onClick={() => ask(p.q, p.label)}>
             {p.label}
@@ -255,7 +255,7 @@ export default function AskPage() {
               display: 'flex',
               justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
             }}>
-              <div style={{
+              <div className="bp-chat-bubble" style={{
                 maxWidth: '78%',
                 padding: '10px 14px',
                 borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
@@ -300,7 +300,7 @@ export default function AskPage() {
       </div>
 
       {/* Input row */}
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div className="bp-ask-input-row" style={{ display: 'flex', gap: 8 }}>
         <input
           ref={inputRef}
           className="bp-input"

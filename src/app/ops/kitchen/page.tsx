@@ -166,6 +166,7 @@ export default function KitchenHome() {
           Kitchen costs
         </div>
         <div
+          className="bp-mobile-grid-one"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
@@ -223,6 +224,7 @@ export default function KitchenHome() {
 
         <div style={{ marginTop: 28 }}>
           <div
+            className="bp-section-toolbar"
             style={{
               display: 'flex',
               justifyContent: 'space-between',

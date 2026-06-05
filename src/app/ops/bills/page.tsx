@@ -91,7 +91,9 @@ export default function BillsPage() {
   const [dateTo, setDateTo] = useState<string>('')
   const [activeSupplier, setActiveSupplier] = useState<string>('All')
   const [dateOpen, setDateOpen] = useState(false)
+  const [supplierOpen, setSupplierOpen] = useState(false)
   const dateRef = useRef<HTMLDivElement>(null)
+  const supplierRef = useRef<HTMLDivElement>(null)
 
   // Pagination
   const PAGE_SIZE = 20
@@ -312,17 +314,20 @@ export default function BillsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBill])
 
-  // Close date popover on outside click
+  // Close popovers on outside click
   useEffect(() => {
-    if (!dateOpen) return
+    if (!dateOpen && !supplierOpen) return
     function onClick(e: MouseEvent) {
       if (dateRef.current && !dateRef.current.contains(e.target as Node)) {
         setDateOpen(false)
       }
+      if (supplierRef.current && !supplierRef.current.contains(e.target as Node)) {
+        setSupplierOpen(false)
+      }
     }
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
-  }, [dateOpen])
+  }, [dateOpen, supplierOpen])
 
   // Fetch every attachment's bytes as a blob URL in parallel so the viewer
   // can render each one stacked (like pages of a single invoice).
@@ -451,6 +456,20 @@ export default function BillsPage() {
     return bySupplier.get(activeSupplier) ?? []
   }, [bySupplier, activeSupplier])
 
+  const supplierFilterOptions = useMemo(() => {
+    const allCount = Array.from(bySupplier.values()).reduce((n, list) => n + list.length, 0)
+    return [
+      { value: 'All', label: 'All suppliers', count: allCount },
+      ...supplierLabels.map(label => ({
+        value: label,
+        label,
+        count: bySupplier.get(label)?.length ?? 0,
+      })),
+    ]
+  }, [bySupplier, supplierLabels])
+  const selectedSupplierOption =
+    supplierFilterOptions.find(option => option.value === activeSupplier) ?? supplierFilterOptions[0]
+
   const totalPages = Math.max(1, Math.ceil(allVisibleBills.length / PAGE_SIZE))
 
   const visibleBills = useMemo(() => {
@@ -483,7 +502,7 @@ export default function BillsPage() {
         ) : (
           <>
             {/* Header */}
-            <div style={{
+            <div className="bp-page-toolbar" style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -503,7 +522,7 @@ export default function BillsPage() {
                 </Chip>
 
                 {dateOpen && (
-                  <div style={{
+                  <div className="bp-floating-panel" style={{
                     position: 'absolute',
                     top: 'calc(100% + 8px)',
                     right: 0,
@@ -562,7 +581,7 @@ export default function BillsPage() {
             </div>
 
             {/* Search bar */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <div className="bp-search-row" style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
               <input
                 className="bp-input"
                 value={searchQuery}
@@ -588,44 +607,88 @@ export default function BillsPage() {
 
             {/* Supplier tabs */}
             {!searchActive && (
-              <div
-                role="tablist"
-                aria-label="Filter by supplier"
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 6,
-                  marginBottom: 14,
-                  paddingBottom: 10,
-                  borderBottom: '1px solid var(--border)',
-                }}
-              >
-                {(() => {
-                  const allCount = Array.from(bySupplier.values()).reduce((n, list) => n + list.length, 0)
-                  return (
-                    <Chip
-                      active={activeSupplier === 'All'}
-                      onClick={() => { setActiveSupplier('All'); setCurrentPage(1) }}
-                      count={allCount}
+              <>
+                <div className="bp-mobile-supplier-filter" ref={supplierRef}>
+                  <div id="supplier-filter-label" className="bp-mobile-supplier-filter__label">
+                    Supplier
+                  </div>
+                  <button
+                    id="supplier-filter-trigger"
+                    type="button"
+                    className="bp-input bp-mobile-supplier-trigger"
+                    aria-haspopup="listbox"
+                    aria-expanded={supplierOpen}
+                    aria-labelledby="supplier-filter-label supplier-filter-trigger"
+                    onClick={() => setSupplierOpen(open => !open)}
+                  >
+                    <span className="bp-mobile-supplier-trigger__name">
+                      {selectedSupplierOption?.label ?? 'All suppliers'}
+                    </span>
+                    <span className="bp-mobile-supplier-trigger__count">
+                      {selectedSupplierOption?.count ?? 0}
+                    </span>
+                    <span aria-hidden style={{ fontSize: 10, color: 'var(--muted-strong)' }}>
+                      ▾
+                    </span>
+                  </button>
+                  {supplierOpen && (
+                    <div
+                      className="bp-mobile-supplier-menu"
+                      role="listbox"
+                      aria-labelledby="supplier-filter-label"
                     >
-                      All
-                    </Chip>
-                  )
-                })()}
-                {supplierLabels.map(label => {
-                  const count = bySupplier.get(label)?.length ?? 0
-                  return (
+                      {supplierFilterOptions.map(option => {
+                        const selected = activeSupplier === option.value
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            role="option"
+                            aria-selected={selected}
+                            className="bp-mobile-supplier-option"
+                            onClick={() => {
+                              setActiveSupplier(option.value)
+                              setCurrentPage(1)
+                              setSupplierOpen(false)
+                            }}
+                          >
+                            <span>{option.label}</span>
+                            <span>{option.count}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <div className="bp-mobile-supplier-filter__meta">
+                    {allVisibleBills.length} invoice{allVisibleBills.length === 1 ? '' : 's'} in view
+                  </div>
+                </div>
+
+                <div
+                  className="bp-supplier-chips bp-chip-scroll"
+                  role="tablist"
+                  aria-label="Filter by supplier"
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                    marginBottom: 14,
+                    paddingBottom: 10,
+                    borderBottom: '1px solid var(--border)',
+                  }}
+                >
+                  {supplierFilterOptions.map(option => (
                     <Chip
-                      key={label}
-                      active={label === activeSupplier}
-                      onClick={() => { setActiveSupplier(label); setCurrentPage(1) }}
-                      count={count}
+                      key={option.value}
+                      active={activeSupplier === option.value}
+                      onClick={() => { setActiveSupplier(option.value); setCurrentPage(1) }}
+                      count={option.count}
                     >
-                      {label}
+                      {option.value === 'All' ? 'All' : option.label}
                     </Chip>
-                  )
-                })}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
 
             {flash && <div style={{ color: '#4cc77d', fontSize: 12, marginBottom: 10 }}>{flash}</div>}
@@ -638,8 +701,8 @@ export default function BillsPage() {
                   {searchBusy ? 'Searching…' : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${searchQuery}"`}
                 </div>
                 {searchResults.length > 0 && (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="bp-table">
+                  <div className="bp-table-wrap" style={{ overflowX: 'auto' }}>
+                    <table className="bp-table bp-table--line-items">
                       <thead>
                         <tr>
                           <th>Item</th>
@@ -681,7 +744,7 @@ export default function BillsPage() {
             {/* Bill table (normal view) */}
             {!searchActive && (
               <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto' }}>
+                <div className="bp-table-wrap" style={{ overflowX: 'auto' }}>
                   <table className="bp-table">
                     <thead>
                       <tr>
@@ -727,6 +790,7 @@ export default function BillsPage() {
             {/* Pagination controls */}
             {!searchActive && allVisibleBills.length > PAGE_SIZE && (
               <nav
+                className="bp-pagination"
                 aria-label="Pagination"
                 style={{
                   display: 'flex',
@@ -741,7 +805,7 @@ export default function BillsPage() {
                   Showing {(currentPage - 1) * PAGE_SIZE + 1}–
                   {Math.min(currentPage * PAGE_SIZE, allVisibleBills.length)} of {allVisibleBills.length}
                 </div>
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <div className="bp-pagination__controls" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                   <Chip
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
@@ -845,6 +909,7 @@ function BillDetailModal({
 
   return (
     <div
+      className="bp-bill-modal-overlay"
       onClick={onClose}
       style={{
         position: 'fixed',
@@ -858,6 +923,7 @@ function BillDetailModal({
       }}
     >
       <div
+        className="bp-bill-modal-panel"
         onClick={e => e.stopPropagation()}
         style={{
           background: '#0d0d0d',
@@ -873,7 +939,7 @@ function BillDetailModal({
         }}
       >
         {/* Header */}
-        <div style={{
+        <div className="bp-bill-modal-header" style={{
           padding: '16px 22px',
           borderBottom: '1px solid var(--border)',
           display: 'flex',
@@ -894,7 +960,7 @@ function BillDetailModal({
               {' · '}{money(bill.total, bill.currencyCode)}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <div className="bp-bill-modal-actions" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             {viewMode === 'lines' ? (
               <button onClick={onShowPdf} className="bp-btn" style={{ fontSize: 13 }}>
                 View invoice
@@ -917,7 +983,7 @@ function BillDetailModal({
 
         {/* Line items view */}
         {viewMode === 'lines' && (
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0' }}>
+          <div className="bp-bill-modal-lines" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0' }}>
             {lineItemsLoading ? (
               <div style={{ color: 'var(--muted-strong)', fontSize: 13, padding: 40, textAlign: 'center' }}>
                 Loading line items…
@@ -939,7 +1005,7 @@ function BillDetailModal({
                 No line items were extracted from this invoice.
               </div>
             ) : (
-              <table className="bp-table">
+              <table className="bp-table bp-table--line-items">
                 <thead>
                   <tr>
                     <th>Item</th>
@@ -1049,7 +1115,7 @@ function BillDetailModal({
 
         {/* Footer */}
         {viewMode === 'pdf' && attachments.length > 0 && (
-          <div style={{
+          <div className="bp-bill-modal-footer" style={{
             padding: '10px 22px',
             borderTop: '1px solid var(--border)',
             display: 'flex',
@@ -1062,7 +1128,7 @@ function BillDetailModal({
             <span>
               {attachments.length} file{attachments.length === 1 ? '' : 's'} · {totalKb.toFixed(0)} KB total
             </span>
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div className="bp-bill-modal-downloads" style={{ display: 'flex', gap: 12 }}>
               {attachments.map((att, i) => blobs[i] && (
                 <a
                   key={att.attachmentID}

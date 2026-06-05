@@ -198,7 +198,7 @@ export default function AdminPage() {
     return (
       <>
         <BpHeader email={email} onSignOut={signOut} activeTab="admin" allowedTabs={getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: false })} />
-        <main className="bp-container" style={{ padding: 24 }}>
+        <main className="bp-container bp-admin-main" style={{ padding: 24 }}>
           <div style={{ opacity: 0.6 }}>Loading…</div>
         </main>
       </>
@@ -208,7 +208,7 @@ export default function AdminPage() {
   return (
     <>
       <BpHeader email={email} onSignOut={signOut} activeTab="admin" allowedTabs={getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: false })} />
-      <main className="bp-container" style={{ padding: 24 }}>
+      <main className="bp-container bp-admin-main" style={{ padding: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 16 }}>Admin</h1>
 
         <div
@@ -297,6 +297,7 @@ export default function AdminPage() {
                 >
                   <div
                     onClick={() => toggleDetail(u.id)}
+                    className="bp-admin-user-row"
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '1fr 100px 140px 100px',
@@ -342,6 +343,7 @@ export default function AdminPage() {
                       {detail && detail.user.id === u.id && (
                         <>
                           <div
+                            className="bp-admin-detail-grid"
                             style={{
                               display: 'grid',
                               gridTemplateColumns: '140px 1fr',
@@ -557,6 +559,7 @@ function SuppliersPanel() {
               return (
                 <label
                   key={c.contactName}
+                  className="bp-supplier-row"
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '20px 1fr auto',
@@ -577,7 +580,7 @@ function SuppliersPanel() {
                     onChange={(e) => toggle(c.contactName, e.target.checked)}
                   />
                   <span style={{ fontSize: 13 }}>{c.contactName}</span>
-                  <span style={{ fontSize: 11, opacity: 0.5, whiteSpace: 'nowrap' }}>
+                  <span className="bp-supplier-count" style={{ fontSize: 11, opacity: 0.5, whiteSpace: 'nowrap' }}>
                     {c.invoiceCount} {c.invoiceCount === 1 ? 'invoice' : 'invoices'}
                   </span>
                 </label>

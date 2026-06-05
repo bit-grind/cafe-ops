@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { getServerBranding } from "@/lib/brandingServer";
 import { BrandingProvider } from "@/lib/useBranding";
@@ -15,6 +15,13 @@ export async function generateMetadata(): Promise<Metadata> {
     title: branding.displayName,
     description: "Internal operations dashboard for cafe teams",
   };
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0b0b0b",
 }
 
 export default async function RootLayout({
