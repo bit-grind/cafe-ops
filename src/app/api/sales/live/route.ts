@@ -17,11 +17,22 @@ function brisbaneTodayISO() {
   return `${year}-${month}-${day}`
 }
 
+function requestedBusinessDate(req: Request) {
+  const value = new URL(req.url).searchParams.get('date')
+  if (!value) return brisbaneTodayISO()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const parsed = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return null
+  return value
+}
+
 export async function GET(req: Request) {
   const session = await getSessionUser(req)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const businessDate = brisbaneTodayISO()
+  const businessDate = requestedBusinessDate(req)
+  if (!businessDate) return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
+
   const supabase = adminClient()
   const { data, error } = await supabase
     .from('sales_business_day')

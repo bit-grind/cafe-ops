@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import BpHeader from '@/components/BpHeader'
 import MetricCard, { MetricSkeleton } from '@/components/MetricCard'
 import { supabase } from '@/lib/supabaseClient'
@@ -272,11 +272,32 @@ export default function OpsHome() {
   const [brief, setBrief] = useState<Brief | null>(null)
   const [briefDates, setBriefDates] = useState<string[]>([])
   const [selectedBriefDate, setSelectedBriefDate] = useState<string | null>(null)
+  const selectedDateRef = useRef<string | null>(null)
   const [briefLoading, setBriefLoading] = useState(true)
   const [briefError, setBriefError] = useState(false)
   const [showBrief, setShowBrief] = useState(false)
 
-  async function loadBrief(date?: string | null, accessToken?: string) {
+  useEffect(() => {
+    selectedDateRef.current = selectedBriefDate
+  }, [selectedBriefDate])
+
+  const loadSalesForDate = useCallback(async (date?: string | null, accessToken?: string) => {
+    const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token
+    if (!token) return
+    const query = date ? `?date=${encodeURIComponent(date)}` : ''
+    const res = await fetch(`/api/sales/live${query}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    }).catch(() => null)
+    if (!res?.ok) return
+    const body = await res.json() as LiveSalesResponse
+    setLiveBusinessDate(body.business_date)
+    setLiveSalesUpdatedAt(body.fetched_at)
+    setLiveHours(body.hours ?? [])
+    if (body.day) setDays(prev => mergeDay(prev, body.day as Day))
+  }, [])
+
+  const loadBrief = useCallback(async (date?: string | null, accessToken?: string) => {
     const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token
     if (!token) return
     setBriefLoading(true)
@@ -288,34 +309,20 @@ export default function OpsHome() {
       const d = await res.json() as { brief?: Brief | null; dates?: string[] }
       setBrief((d?.brief as Brief | null | undefined) ?? null)
       setBriefDates(d?.dates ?? [])
-      setSelectedBriefDate(d?.brief?.brief_date ?? date ?? null)
+      const nextDate = d?.brief?.brief_date ?? date ?? null
+      setSelectedBriefDate(nextDate)
+      if (nextDate) void loadSalesForDate(nextDate, token)
     } catch {
       setBrief(null)
       setBriefError(true)
     } finally {
       setBriefLoading(false)
     }
-  }
+  }, [loadSalesForDate])
 
   useEffect(() => {
     let cancelled = false
     let liveSalesTimer: number | undefined
-
-    async function loadLiveSales(accessToken?: string) {
-      const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token
-      if (!token) return
-      const res = await fetch('/api/sales/live', {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      }).catch(() => null)
-      if (!res?.ok) return
-      const body = await res.json() as LiveSalesResponse
-      if (cancelled) return
-      setLiveBusinessDate(body.business_date)
-      setLiveSalesUpdatedAt(body.fetched_at)
-      setLiveHours(body.hours ?? [])
-      if (body.day) setDays(prev => mergeDay(prev, body.day as Day))
-    }
 
     async function load() {
       const { data: sessionData } = await supabase.auth.getSession()
@@ -365,7 +372,7 @@ export default function OpsHome() {
       }
 
       if (!cancelled) {
-        liveSalesTimer = window.setInterval(() => { void loadLiveSales() }, LIVE_SALES_INTERVAL_MS)
+        liveSalesTimer = window.setInterval(() => { void loadSalesForDate(selectedDateRef.current) }, LIVE_SALES_INTERVAL_MS)
         setLoading(false)
       }
     }
@@ -376,7 +383,7 @@ export default function OpsHome() {
       cancelled = true
       if (liveSalesTimer) window.clearInterval(liveSalesTimer)
     }
-  }, [])
+  }, [loadBrief, loadSalesForDate])
 
   async function signOut() {
     await supabase.auth.signOut()
@@ -469,11 +476,12 @@ export default function OpsHome() {
                   <button
                     type="button"
                     className="bp-btn"
-                    onClick={() => hasNewerBrief && void loadBrief(briefDates[selectedBriefIndex - 1])}
-                    disabled={briefLoading || !hasNewerBrief}
-                    style={{ padding: '7px 10px', borderRadius: 8, fontSize: 12 }}
+                    onClick={() => hasOlderBrief && void loadBrief(briefDates[selectedBriefIndex + 1])}
+                    disabled={briefLoading || !hasOlderBrief}
+                    aria-label="Previous date"
+                    style={{ width: 40, padding: '7px 10px', borderRadius: 8, fontSize: 16, lineHeight: 1 }}
                   >
-                    Newer
+                    ←
                   </button>
                   <select
                     className="bp-input"
@@ -490,11 +498,12 @@ export default function OpsHome() {
                   <button
                     type="button"
                     className="bp-btn"
-                    onClick={() => hasOlderBrief && void loadBrief(briefDates[selectedBriefIndex + 1])}
-                    disabled={briefLoading || !hasOlderBrief}
-                    style={{ padding: '7px 10px', borderRadius: 8, fontSize: 12 }}
+                    onClick={() => hasNewerBrief && void loadBrief(briefDates[selectedBriefIndex - 1])}
+                    disabled={briefLoading || !hasNewerBrief}
+                    aria-label="Next date"
+                    style={{ width: 40, padding: '7px 10px', borderRadius: 8, fontSize: 16, lineHeight: 1 }}
                   >
-                    Older
+                    →
                   </button>
                 </div>
               )}
