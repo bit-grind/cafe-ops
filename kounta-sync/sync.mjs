@@ -154,7 +154,8 @@ function mapProducts(rows, businessDate) {
 function parseHourCell(value) {
   const text = String(value ?? '').trim().toLowerCase()
   if (!text || text === 'total') return null
-  const time = text.match(/^(\d{1,2})(?::\d{2})?\s*(am|pm)?$/)
+  const first = text.split(/\s[-–—]\s/)[0]?.trim() || text
+  const time = first.match(/(\d{1,2})(?::\d{2})?\s*(am|pm)?/)
   if (time) {
     let hour = Number(time[1])
     const meridiem = time[2]
@@ -167,29 +168,37 @@ function parseHourCell(value) {
 }
 
 function mapHours(rows, businessDate) {
-  const header = rows[0]?.map(normalizeHeader) ?? []
+  const headerIndex = rows.findIndex(row => {
+    const normalized = row.map(normalizeHeader)
+    const hasHour = normalized.some(h => ['salehour', 'salehourid', 'salehourname', 'hour', 'time', 'timeperiod', 'period', 'starttime'].includes(h))
+    const hasSales = normalized.some(h => ['saleamount', 'salesamount', 'grosssales', 'total', 'totalinctax', 'amount'].includes(h))
+    return hasHour && hasSales
+  })
+  if (headerIndex < 0) return []
+
+  const header = rows[headerIndex].map(normalizeHeader)
   const findCol = (...names) => {
     const normalized = names.map(normalizeHeader)
     return header.findIndex(h => normalized.includes(h))
   }
-  const hourCol = findCol('salehour', 'hour', 'time', 'salehourid')
-  const countCol = findCol('salecount', 'sale count', 'number of sales', 'sales')
-  const grossCol = findCol('saleamount', 'sale amount', 'gross sales', 'total inc tax', 'total')
+  const hourCol = findCol('salehour', 'sale hour', 'salehourname', 'sale hour name', 'hour', 'time', 'time period', 'period', 'start time', 'salehourid')
+  const countCol = findCol('salecount', 'sale count', 'number of sales', 'sales', 'orders', 'transactions', 'customers')
+  const grossCol = findCol('saleamount', 'sales amount', 'sale amount', 'gross sales', 'total inc tax', 'total', 'amount')
   const netCol = findCol('saleexamount', 'sale ex amount', 'net sales', 'net amount')
   const taxCol = findCol('saletaxamount', 'sale tax amount', 'tax amount', 'tax')
   const aovCol = findCol('averageamount', 'average amount', 'sale average', 'aov')
 
   const byHour = new Map()
-  for (const r of rows.slice(1)) {
-    const fallbackHourCol = parseHourCell(r[1]) == null ? 0 : 1
+  for (const r of rows.slice(headerIndex + 1)) {
+    const fallbackHourCol = r.findIndex(cell => parseHourCell(cell) != null)
     const hour = parseHourCell(r[hourCol >= 0 ? hourCol : fallbackHourCol])
     if (hour == null) continue
 
-    const offset = fallbackHourCol === 1 ? 1 : 0
-    const orderCount = Math.round(num(r[countCol >= 0 ? countCol : 1 + offset]))
-    const grossSales = num(r[grossCol >= 0 ? grossCol : 2 + offset])
-    const netSales = num(r[netCol >= 0 ? netCol : 3 + offset])
-    const tax = num(r[taxCol >= 0 ? taxCol : 4 + offset])
+    const fallbackSalesCol = r.findIndex((cell, index) => index !== fallbackHourCol && /[$,]|\d/.test(String(cell ?? '')) && num(cell) > 0)
+    const orderCount = Math.round(num(r[countCol >= 0 ? countCol : Math.max(0, fallbackSalesCol - 1)]))
+    const grossSales = num(r[grossCol >= 0 ? grossCol : fallbackSalesCol])
+    const netSales = netCol >= 0 ? num(r[netCol]) : grossSales
+    const tax = taxCol >= 0 ? num(r[taxCol]) : 0
     const aov = aovCol >= 0 ? num(r[aovCol]) : orderCount > 0 ? grossSales / orderCount : 0
 
     byHour.set(hour, {
