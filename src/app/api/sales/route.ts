@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 365) : 90
   const { data, error } = await adminClient()
     .from('sales_business_day')
-    .select('business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov')
+    .select('business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov,updated_at')
     .order('business_date', { ascending: false })
     .limit(limit)
   if (error) return NextResponse.json({ error: 'Failed to load sales data' }, { status: 500 })

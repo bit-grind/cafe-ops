@@ -16,6 +16,7 @@ type Day = {
   refunds: number
   order_count: number
   aov: number
+  updated_at?: string
 }
 
 type Brief = {
@@ -292,7 +293,9 @@ export default function OpsHome() {
                   computed.liveDay ? (
                     <>
                       Orders: {fmtNum(computed.liveDay.order_count)} &nbsp;·&nbsp; AOV: {money(computed.liveDay.aov)}
-                      {liveSalesUpdatedAt && <> &nbsp;·&nbsp; Updated {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
+                      {computed.liveDay.updated_at
+                        ? <> &nbsp;·&nbsp; Imported {fmtBrisbaneTime(computed.liveDay.updated_at)}</>
+                        : liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
                     </>
                   ) : (
                     <>

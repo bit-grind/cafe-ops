@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   const businessDate = brisbaneTodayISO()
   const { data, error } = await adminClient()
     .from('sales_business_day')
-    .select('business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov')
+    .select('business_date,gross_sales,net_sales,tax,discounts,refunds,order_count,aov,updated_at')
     .eq('business_date', businessDate)
     .maybeSingle()
 

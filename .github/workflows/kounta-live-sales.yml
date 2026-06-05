@@ -1,12 +1,6 @@
 name: Kounta live sales
 
 on:
-  schedule:
-    # Starts a runner 5 minutes before each trading hour, then polls Kounta
-    # every minute. 18:55-03:55 UTC = 04:55-13:55 Brisbane (UTC+10).
-    # The script stops at 14:20 Brisbane; the full product sync runs at 14:30.
-    - cron: '55 18-23 * * *'
-    - cron: '55 0-3 * * *'
   workflow_dispatch:
     inputs:
       date_from:

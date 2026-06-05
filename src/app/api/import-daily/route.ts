@@ -18,7 +18,9 @@ export async function POST(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
+    const importedAt = new Date().toISOString()
     const rows = parseDailySalesRows(JSON.parse(rawBody))
+      .map(row => ({ ...row, updated_at: importedAt }))
 
     const { error } = await supabase
       .from('sales_business_day')
