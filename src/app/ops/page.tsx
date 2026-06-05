@@ -103,6 +103,7 @@ function hourRangeLabel(hour: number) {
 }
 
 function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
+  const [activeHour, setActiveHour] = useState<number | null>(null)
   const salesByHour = new Map(hours.map(row => [row.hour, Number(row.gross_sales || 0)]))
   const buckets = Array.from({ length: 10 }, (_, index) => {
     const hour = index + 5
@@ -186,9 +187,41 @@ function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
         }}
       >
         {buckets.map(bucket => (
-          <div key={bucket.hour} style={{ minWidth: 0 }}>
+          <div
+            key={bucket.hour}
+            onMouseEnter={() => setActiveHour(bucket.hour)}
+            onMouseLeave={() => setActiveHour(null)}
+            onFocus={() => setActiveHour(bucket.hour)}
+            onBlur={() => setActiveHour(null)}
+            tabIndex={0}
+            style={{ minWidth: 0, position: 'relative', cursor: 'default' }}
+          >
+            {activeHour === bucket.hour && (
+              <div
+                role="tooltip"
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  bottom: 'calc(100% + 8px)',
+                  transform: 'translateX(-50%)',
+                  zIndex: 3,
+                  whiteSpace: 'nowrap',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: '#181818',
+                  color: 'var(--foreground)',
+                  borderRadius: 8,
+                  padding: '6px 8px',
+                  boxShadow: '0 10px 26px rgba(0,0,0,0.36)',
+                  fontSize: 11,
+                  lineHeight: 1.2,
+                  pointerEvents: 'none',
+                }}
+              >
+                <div style={{ color: 'var(--muted-strong)', marginBottom: 2 }}>{bucket.range}</div>
+                <div style={{ fontWeight: 600 }}>{money(bucket.sales)} total</div>
+              </div>
+            )}
             <div
-              title={`${bucket.range}: ${money(bucket.sales)} total`}
               style={{
                 height: 92,
                 display: 'flex',
@@ -201,10 +234,16 @@ function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
                   width: '100%',
                   minHeight: bucket.sales > 0 ? 6 : 2,
                   height: `${Math.max(2, (bucket.sales / guideMax) * 92)}px`,
-                  borderRadius: '6px 6px 0 0',
+                  borderRadius: '4px 4px 0 0',
+                  border: bucket.sales > 0 ? '1px solid rgba(255,255,255,0.18)' : '0',
+                  borderBottom: 0,
                   background: bucket.sales > 0
-                    ? 'linear-gradient(180deg, #78d7a8 0%, #2f9e70 100%)'
+                    ? 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.16) 100%)'
                     : 'rgba(255,255,255,0.08)',
+                  boxShadow: activeHour === bucket.hour
+                    ? '0 0 0 1px rgba(255,255,255,0.26), 0 10px 24px rgba(0,0,0,0.3)'
+                    : 'none',
+                  transition: 'background 0.15s, box-shadow 0.15s, opacity 0.15s',
                 }}
               />
             </div>
@@ -506,9 +545,6 @@ export default function OpsHome() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--muted-strong)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
                       Hourly sales
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--muted-strong)' }}>
-                      From Kounta
                     </span>
                   </div>
                   <HourlySalesChart hours={liveHours} />
