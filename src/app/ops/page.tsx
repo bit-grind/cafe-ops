@@ -269,6 +269,8 @@ export default function OpsHome() {
   const [liveHours, setLiveHours] = useState<HourlySale[]>([])
   const [liveBusinessDate, setLiveBusinessDate] = useState<string | null>(null)
   const [liveSalesUpdatedAt, setLiveSalesUpdatedAt] = useState<string | null>(null)
+  const [liveRefreshing, setLiveRefreshing] = useState(false)
+  const [liveRefreshError, setLiveRefreshError] = useState(false)
   const [brief, setBrief] = useState<Brief | null>(null)
   const [briefDates, setBriefDates] = useState<string[]>([])
   const [selectedBriefDate, setSelectedBriefDate] = useState<string | null>(null)
@@ -277,20 +279,36 @@ export default function OpsHome() {
   const [showBrief, setShowBrief] = useState(false)
 
   const loadSalesForDate = useCallback(async (date?: string | null, accessToken?: string) => {
-    const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token
-    if (!token) return
-    const query = date ? `?date=${encodeURIComponent(date)}` : ''
-    const res = await fetch(`/api/sales/live${query}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    }).catch(() => null)
-    if (!res?.ok) return
-    const body = await res.json() as LiveSalesResponse
-    setLiveBusinessDate(body.business_date)
-    setLiveSalesUpdatedAt(body.fetched_at)
-    setLiveHours(body.hours ?? [])
-    if (body.day) setDays(prev => mergeDay(prev, body.day as Day))
+    try {
+      const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token
+      if (!token) return false
+      const query = date ? `?date=${encodeURIComponent(date)}` : ''
+      const res = await fetch(`/api/sales/live${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      }).catch(() => null)
+      if (!res?.ok) return false
+      const body = await res.json() as LiveSalesResponse
+      setLiveBusinessDate(body.business_date)
+      setLiveSalesUpdatedAt(body.fetched_at)
+      setLiveHours(body.hours ?? [])
+      if (body.day) setDays(prev => mergeDay(prev, body.day as Day))
+      setLiveRefreshError(false)
+      return true
+    } catch {
+      return false
+    }
   }, [])
+
+  const refreshLiveSales = useCallback(async () => {
+    setLiveRefreshing(true)
+    try {
+      const ok = await loadSalesForDate()
+      setLiveRefreshError(!ok)
+    } finally {
+      setLiveRefreshing(false)
+    }
+  }, [loadSalesForDate])
 
   const loadBrief = useCallback(async (date?: string | null, accessToken?: string) => {
     const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token
@@ -538,8 +556,22 @@ export default function OpsHome() {
             <div className="bp-metric bp-metric--primary" style={{ padding: 20 }}>
               <div className="live-takings-layout">
                 <div>
-                  <div className="bp-metric__label">Live takings</div>
-                  <div className="bp-metric__sub">{fmtDate(computed.liveBusinessDate)}</div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                    <div>
+                      <div className="bp-metric__label">Live takings</div>
+                      <div className="bp-metric__sub">{fmtDate(computed.liveBusinessDate)}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="bp-btn"
+                      onClick={() => void refreshLiveSales()}
+                      disabled={liveRefreshing}
+                      aria-label="Refresh live takings"
+                      style={{ flex: '0 0 auto', minWidth: 82, padding: '7px 10px', borderRadius: 8, fontSize: 12, lineHeight: 1.1 }}
+                    >
+                      {liveRefreshing ? 'Refreshing...' : 'Refresh'}
+                    </button>
+                  </div>
                   <div className="bp-metric__value">{computed.liveDay ? money(computed.liveDay.gross_sales) : '—'}</div>
                   <div className="bp-metric__foot">
                     {computed.liveDay ? (
@@ -555,6 +587,7 @@ export default function OpsHome() {
                         {liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
                       </>
                     )}
+                    {liveRefreshError && <> &nbsp;·&nbsp; Refresh failed</>}
                   </div>
                 </div>
                 <div style={{ minWidth: 0 }}>
