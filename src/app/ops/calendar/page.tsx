@@ -15,6 +15,9 @@ type CalendarEvent = {
   employeeName: string
   type: CalendarEventType
   status?: string | null
+  areaId?: number | null
+  areaName?: string | null
+  areaColor?: string | null
   start: string
   end: string
   dateStart: string
@@ -52,6 +55,57 @@ const TYPE_COLOR: Record<CalendarEventType, string> = {
   unavailable: '#e58080',
   available: '#5bd38b',
   shift: '#7ab8ff',
+}
+
+const FALLBACK_AREA_COLOR: Record<string, string> = {
+  Kitchen: '#f0a35e',
+  'Shift Supervisor': '#c9a5ff',
+  Barista: '#64d6c2',
+  Pourer: '#f4cf65',
+  Till: '#8eb8ff',
+  Runner: '#ff8aa6',
+  BBQ: '#ff9f7a',
+  FOH: '#9bd66f',
+}
+
+const AREA_ORDER = ['Barista', 'Pourer', 'Till', 'Runner', 'Kitchen', 'BBQ']
+
+function areaSortValue(area: string) {
+  const normalized = area === 'Runners' ? 'Runner' : area
+  const index = AREA_ORDER.indexOf(normalized)
+  return index === -1 ? AREA_ORDER.length : index
+}
+
+function eventColor(event: CalendarEvent) {
+  if (event.type === 'shift' && event.areaColor) return event.areaColor
+  if (event.type === 'shift' && event.areaName && FALLBACK_AREA_COLOR[event.areaName]) return FALLBACK_AREA_COLOR[event.areaName]
+  return TYPE_COLOR[event.type]
+}
+
+function employeeInitials(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return '?'
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase()
+}
+
+function groupedDayEvents(events: CalendarEvent[]) {
+  const groups = new Map<string, CalendarEvent[]>()
+  for (const event of events) {
+    const key = event.type === 'shift' ? event.areaName ?? 'Unassigned' : TYPE_LABEL[event.type]
+    const group = groups.get(key) ?? []
+    group.push(event)
+    groups.set(key, group)
+  }
+  return Array.from(groups.entries()).map(([label, group]) => ({
+    label,
+    events: group,
+    color: eventColor(group[0]),
+  })).sort((a, b) => areaSortValue(a.label) - areaSortValue(b.label) || a.label.localeCompare(b.label))
+}
+
+function orderedDayBubbles(events: CalendarEvent[]) {
+  return groupedDayEvents(events).flatMap(group => group.events)
 }
 
 function isoDate(date: Date) {
@@ -105,6 +159,17 @@ function fmtDate(value: string) {
 
 function eventTouchesDay(event: CalendarEvent, day: string) {
   return event.dateStart <= day && event.dateEnd >= day
+}
+
+function uniqueEventsForDay(events: CalendarEvent[], day: string) {
+  const seen = new Set<string>()
+  return events.filter(event => {
+    if (event.type === 'shift') return true
+    const key = `${event.type}-${event.employeeId ?? event.employeeName}-${day}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 export default function TeamCalendarPage() {
@@ -187,13 +252,27 @@ export default function TeamCalendarPage() {
 
   const selectedEvents = visibleEvents
     .filter(event => eventTouchesDay(event, selectedDay))
-    .sort((a, b) => a.start.localeCompare(b.start) || a.employeeName.localeCompare(b.employeeName))
+  const uniqueSelectedEvents = uniqueEventsForDay(selectedEvents, selectedDay)
+  uniqueSelectedEvents
+    .sort((a, b) => {
+      const areaDiff = areaSortValue(a.areaName ?? TYPE_LABEL[a.type]) - areaSortValue(b.areaName ?? TYPE_LABEL[b.type])
+      return areaDiff || a.start.localeCompare(b.start) || a.employeeName.localeCompare(b.employeeName)
+    })
+  const selectedGroups = groupedDayEvents(uniqueSelectedEvents)
+  const areaLegend = useMemo(() => {
+    const areas = new Map<string, string>()
+    for (const event of events) {
+      if (event.type !== 'shift' || !event.areaName) continue
+      if (!areas.has(event.areaName)) areas.set(event.areaName, eventColor(event))
+    }
+    return Array.from(areas.entries()).sort(([a], [b]) => areaSortValue(a) - areaSortValue(b) || a.localeCompare(b))
+  }, [events])
 
   return (
     <div>
       <BpHeader email={email} onSignOut={signOut} activeTab="calendar" allowedTabs={allowedTabs} />
 
-      <main className="bp-container">
+      <main className="bp-container" style={{ maxWidth: 1500 }}>
         <div
           className="bp-page-toolbar"
           style={{
@@ -275,83 +354,147 @@ export default function TeamCalendarPage() {
           className="bp-mobile-grid-one"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 360px)',
+            gridTemplateColumns: 'minmax(820px, 1fr) minmax(280px, 340px)',
             gap: 14,
             alignItems: 'start',
           }}
         >
-          <section className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-                background: 'rgba(255,255,255,0.03)',
-                borderBottom: '1px solid var(--border)',
-              }}
-            >
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                <div key={day} style={{ padding: '10px 8px', fontSize: 11, fontWeight: 700, color: 'var(--muted-strong)' }}>
-                  {day}
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
-              {days.map(day => {
-                const dayIso = isoDate(day)
-                const inMonth = day.getMonth() === month.getMonth()
-                const isSelected = dayIso === selectedDay
-                const dayEvents = visibleEvents.filter(event => eventTouchesDay(event, dayIso))
-                return (
-                  <button
-                    key={dayIso}
-                    type="button"
-                    onClick={() => setSelectedDay(dayIso)}
-                    style={{
-                      minHeight: 118,
-                      padding: 8,
-                      border: 0,
-                      borderRight: '1px solid var(--border)',
-                      borderBottom: '1px solid var(--border)',
-                      background: isSelected ? 'rgba(255,255,255,0.07)' : 'transparent',
-                      color: inMonth ? 'var(--foreground)' : 'rgba(255,255,255,0.34)',
-                      textAlign: 'left',
-                      font: 'inherit',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: isSelected ? 700 : 600 }}>{day.getDate()}</span>
-                      {dayEvents.length > 3 ? (
-                        <span style={{ fontSize: 10, color: 'var(--muted-strong)' }}>+{dayEvents.length - 3}</span>
-                      ) : null}
-                    </div>
-                    <div style={{ marginTop: 8, display: 'grid', gap: 5 }}>
-                      {dayEvents.slice(0, 3).map(event => (
-                        <div
-                          key={`${dayIso}-${event.id}`}
-                          title={`${event.employeeName}: ${TYPE_LABEL[event.type]}`}
-                          style={{
-                            minWidth: 0,
-                            borderLeft: `3px solid ${TYPE_COLOR[event.type]}`,
-                            background: 'rgba(255,255,255,0.05)',
-                            padding: '4px 6px',
-                            borderRadius: 6,
-                            fontSize: 11,
-                            color: inMonth ? 'rgba(255,255,255,0.86)' : 'rgba(255,255,255,0.42)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {event.employeeName}
-                        </div>
-                      ))}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </section>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <section className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderBottom: '1px solid var(--border)',
+                }}
+              >
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                  <div key={day} style={{ padding: '10px 8px', fontSize: 11, fontWeight: 700, color: 'var(--muted-strong)' }}>
+                    {day}
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
+                {days.map(day => {
+                  const dayIso = isoDate(day)
+                  const inMonth = day.getMonth() === month.getMonth()
+                  const isSelected = dayIso === selectedDay
+                  const dayEvents = uniqueEventsForDay(visibleEvents.filter(event => eventTouchesDay(event, dayIso)), dayIso)
+                  const visibleDayEvents = orderedDayBubbles(dayEvents).slice(0, 12)
+                  const denseBubbles = dayEvents.length > 8
+                  const markerWidth = denseBubbles ? 18 : 22
+                  const markerHeight = denseBubbles ? 16 : 22
+                  const markerGap = denseBubbles ? 3 : 4
+                  return (
+                    <button
+                      key={dayIso}
+                      type="button"
+                      onClick={() => setSelectedDay(dayIso)}
+                      style={{
+                        minHeight: 118,
+                        padding: 8,
+                        border: 0,
+                        borderRight: '1px solid var(--border)',
+                        borderBottom: '1px solid var(--border)',
+                        background: isSelected ? 'rgba(255,255,255,0.07)' : 'transparent',
+                        color: inMonth ? 'var(--foreground)' : 'rgba(255,255,255,0.34)',
+                        textAlign: 'left',
+                        font: 'inherit',
+                        cursor: 'pointer',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: isSelected ? 700 : 600 }}>{day.getDate()}</span>
+                        {dayEvents.length > 0 ? (
+                          <span
+                            title={`${dayEvents.length} staff`}
+                            style={{
+                              fontSize: 10,
+                              color: 'var(--muted-strong)',
+                              fontWeight: 800,
+                            }}
+                          >
+                            {dayEvents.length}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div
+                        style={{
+                          marginTop: 8,
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                          gridAutoRows: markerHeight,
+                          gap: markerGap,
+                          alignContent: 'start',
+                          maxWidth: markerWidth * 3 + markerGap * 2,
+                        }}
+                      >
+                        {visibleDayEvents.map(event => (
+                          <span
+                            key={`${dayIso}-${event.id}`}
+                            title={`${event.employeeName}${event.areaName ? ` · ${event.areaName}` : ''}: ${fmtTime(event.start)} - ${fmtTime(event.end)}`}
+                            aria-label={`${event.employeeName}${event.areaName ? `, ${event.areaName}` : ''}`}
+                            style={{
+                              width: '100%',
+                              maxWidth: markerWidth,
+                              height: markerHeight,
+                              borderRadius: 5,
+                              display: 'grid',
+                              gridTemplateRows: `${denseBubbles ? 4 : 5}px 1fr`,
+                              overflow: 'hidden',
+                              background: 'rgba(255,255,255,0.08)',
+                              color: inMonth ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.48)',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                              fontSize: denseBubbles ? 7 : 9,
+                              fontWeight: 900,
+                              letterSpacing: 0,
+                              lineHeight: 1,
+                              opacity: inMonth ? 1 : 0.45,
+                            }}
+                          >
+                            <span aria-hidden="true" style={{ background: inMonth ? eventColor(event) : 'rgba(255,255,255,0.2)' }} />
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                minWidth: 0,
+                              }}
+                            >
+                              {employeeInitials(event.employeeName)}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+
+            <section className="bp-card" style={{ padding: '10px 12px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 14px', alignItems: 'center' }}>
+                {areaLegend.map(([area, color]) => (
+                  <div key={area} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted-strong)' }}>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 999,
+                        background: color,
+                        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.24)',
+                      }}
+                    />
+                    <span>{area}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
 
           <aside style={{ display: 'grid', gap: 14 }}>
             <section className="bp-card">
@@ -360,38 +503,82 @@ export default function TeamCalendarPage() {
                   <div style={{ fontSize: 12, color: 'var(--muted-strong)', marginBottom: 6 }}>Selected day</div>
                   <h2 style={{ margin: 0, fontSize: 20 }}>{fmtDate(selectedDay)}</h2>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--muted-strong)' }}>{selectedEvents.length} events</div>
+                <div style={{ fontSize: 12, color: 'var(--muted-strong)' }}>{uniqueSelectedEvents.length} events</div>
               </div>
 
-              <div style={{ marginTop: 16, display: 'grid', gap: 10 }}>
+              <div
+                style={{
+                  marginTop: 16,
+                  display: 'grid',
+                  gap: 12,
+                }}
+              >
                 {calendarLoading ? (
                   <div style={{ color: 'var(--muted-strong)', fontSize: 13 }}>Loading calendar...</div>
-                ) : selectedEvents.length === 0 ? (
+                ) : uniqueSelectedEvents.length === 0 ? (
                   <div style={{ color: 'var(--muted-strong)', fontSize: 13 }}>No leave or availability recorded.</div>
                 ) : (
-                  selectedEvents.map(event => (
-                    <div
-                      key={event.id}
-                      style={{
-                        borderLeft: `3px solid ${TYPE_COLOR[event.type]}`,
-                        background: 'rgba(255,255,255,0.04)',
-                        borderRadius: 8,
-                        padding: 10,
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                        <div style={{ fontWeight: 700 }}>{event.employeeName}</div>
-                        <div style={{ color: TYPE_COLOR[event.type], fontSize: 12, fontWeight: 700 }}>
-                          {TYPE_LABEL[event.type]}
-                        </div>
+                  selectedGroups.map(group => (
+                    <div key={group.label} style={{ display: 'grid', gap: 8 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 7,
+                          color: group.color,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          lineHeight: 1,
+                        }}
+                      >
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: 9,
+                            height: 9,
+                            borderRadius: 999,
+                            background: group.color,
+                            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.24)',
+                          }}
+                        />
+                        <span>{group.label}</span>
                       </div>
-                      <div style={{ marginTop: 6, fontSize: 12, color: 'var(--muted-strong)' }}>
-                        {fmtTime(event.start)} - {fmtTime(event.end)}
-                        {event.status ? ` · ${event.status}` : ''}
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))',
+                          gap: 10,
+                        }}
+                      >
+                        {group.events.map(event => (
+                          <div
+                            key={event.id}
+                            title={`${event.employeeName}${event.areaName ? ` · ${event.areaName}` : ''}: ${fmtTime(event.start)} - ${fmtTime(event.end)}`}
+                            style={{
+                              minWidth: 0,
+                              borderLeft: `3px solid ${eventColor(event)}`,
+                              background: 'rgba(255,255,255,0.04)',
+                              borderRadius: 8,
+                              padding: '9px 10px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                minWidth: 0,
+                                fontWeight: 700,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {event.employeeName}
+                            </div>
+                            <div style={{ marginTop: 5, fontSize: 12, color: 'var(--muted-strong)' }}>
+                              {fmtTime(event.start)} - {fmtTime(event.end)}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      {event.comment ? (
-                        <div style={{ marginTop: 8, fontSize: 13, color: 'rgba(255,255,255,0.78)' }}>{event.comment}</div>
-                      ) : null}
                     </div>
                   ))
                 )}

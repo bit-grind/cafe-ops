@@ -8,6 +8,7 @@ import {
   normalizeLeave,
   normalizeRoster,
   isRosterShift,
+  operationalUnitMap,
   type DeputyCalendarEvent,
 } from '@/lib/deputyCalendar'
 
@@ -90,8 +91,9 @@ async function loadDeputyEvents(from: string, to: string) {
   }
 
   try {
-    const [employees, leave, availability, roster] = await Promise.all([
+    const [employees, operationalUnits, leave, availability, roster] = await Promise.all([
       deputyGet(baseUrl, token, 'Employee'),
+      deputyGet(baseUrl, token, 'OperationalUnit'),
       deputyQuery(baseUrl, token, 'Leave', {
         search: {
           s1: { field: 'DateEnd', data: offsetDate(from, -1), type: 'gt' },
@@ -103,11 +105,12 @@ async function loadDeputyEvents(from: string, to: string) {
       deputyQuery(baseUrl, token, 'Roster', dateSearch('Date', from, to)),
     ])
     const names = employeeMap(employees)
+    const areas = operationalUnitMap(operationalUnits)
     const activeIds = activeEmployeeIds(employees)
-      const events = [
+    const events = [
       ...leave.map(row => normalizeLeave(row, names)),
       ...availability.map(row => normalizeAvailability(row, names)),
-      ...roster.filter(isRosterShift).map(row => normalizeRoster(row, names)),
+      ...roster.filter(isRosterShift).map(row => normalizeRoster(row, names, areas)),
     ].filter(event => {
       return event.employeeId !== null
         && event.employeeId !== undefined
@@ -163,6 +166,9 @@ async function loadStoredEvents(from: string, to: string) {
       employeeName: row.employee_name,
       type: row.type,
       status: row.status,
+      areaId: null,
+      areaName: null,
+      areaColor: null,
       start: row.start_at,
       end: row.end_at,
       dateStart: row.date_start,

@@ -8,6 +8,9 @@ export type DeputyCalendarEvent = {
   employeeName: string
   type: DeputyCalendarEventType
   status?: string | null
+  areaId?: number | null
+  areaName?: string | null
+  areaColor?: string | null
   start: string
   end: string
   dateStart: string
@@ -34,6 +37,11 @@ function numberValue(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value)
   return null
+}
+
+function colorValue(value: unknown): string | null {
+  const raw = stringValue(value)
+  return raw && /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : null
 }
 
 function dateOnly(value: string): string {
@@ -115,6 +123,18 @@ export function activeEmployeeIds(rows: DeputyRecord[]): Set<number> {
   return ids
 }
 
+export function operationalUnitMap(rows: DeputyRecord[]): Map<number, { name: string, color: string | null }> {
+  const map = new Map<number, { name: string, color: string | null }>()
+  for (const row of rows) {
+    const id = numberValue(row.Id)
+    if (!id) continue
+    if (row.Active === false) continue
+    const name = stringValue(row.OperationalUnitName) ?? stringValue(row.Name)
+    if (name) map.set(id, { name, color: colorValue(row.Colour) })
+  }
+  return map
+}
+
 export function normalizeLeave(row: DeputyRecord, employees: Map<number, string>): DeputyCalendarEvent {
   const start = pickStart(row)
   const end = pickEnd(row, start)
@@ -166,10 +186,12 @@ export function isRosterShift(row: DeputyRecord): boolean {
   return row.Open !== true && row.Published !== false
 }
 
-export function normalizeRoster(row: DeputyRecord, employees: Map<number, string>): DeputyCalendarEvent {
+export function normalizeRoster(row: DeputyRecord, employees: Map<number, string>, areas = new Map<number, { name: string, color: string | null }>()): DeputyCalendarEvent {
   const start = pickStart(row)
   const end = pickEnd(row, start)
   const employeeId = numberValue(row.Employee ?? row.EmployeeId ?? row.EmployeeID)
+  const areaId = numberValue(row.OperationalUnit ?? row.OperationalUnitId ?? row.OperationalUnitID)
+  const area = areaId ? areas.get(areaId) : null
   const id = String(row.Id ?? `roster-${employeeId ?? 'unknown'}-${start}`)
   const rosterDate = stringValue(row.Date)
   const dateStart = rosterDate ? dateOnly(rosterDate) : dateOnly(start)
@@ -183,6 +205,9 @@ export function normalizeRoster(row: DeputyRecord, employees: Map<number, string
     employeeName: employeeName(row, employees),
     type: 'shift',
     status: stringValue(row.Status) ?? stringValue(row.Published),
+    areaId,
+    areaName: area?.name ?? null,
+    areaColor: area?.color ?? null,
     start,
     end,
     dateStart,
