@@ -8,6 +8,7 @@ import {
   normalizeLeave,
   normalizeRoster,
   isRosterShift,
+  isUnavailableRecord,
   operationalUnitMap,
   type DeputyCalendarEvent,
 } from '@/lib/deputyCalendar'
@@ -109,7 +110,7 @@ async function loadDeputyEvents(from: string, to: string) {
     const activeIds = activeEmployeeIds(employees)
     const events = [
       ...leave.map(row => normalizeLeave(row, names)),
-      ...availability.map(row => normalizeAvailability(row, names)),
+      ...availability.filter(isUnavailableRecord).map(row => normalizeAvailability(row, names)),
       ...roster.filter(isRosterShift).map(row => normalizeRoster(row, names, areas)),
     ].filter(event => {
       return event.employeeId !== null

@@ -58,6 +58,35 @@ function dateOnly(value: string): string {
   return `${byType.get('year')}-${byType.get('month')}-${byType.get('day')}`
 }
 
+function localTimeParts(value: string): { hour: number, minute: number, second: number } | null {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Brisbane',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const byType = new Map(parts.map(part => [part.type, part.value]))
+  return {
+    hour: Number(byType.get('hour')),
+    minute: Number(byType.get('minute')),
+    second: Number(byType.get('second')),
+  }
+}
+
+function addIsoDays(value: string, days: number): string {
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  date.setDate(date.getDate() + days)
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
 function fromUnix(value: unknown): string | null {
   const n = numberValue(value)
   if (!n) return null
@@ -176,10 +205,29 @@ export function normalizeAvailability(row: DeputyRecord, employees: Map<number, 
     status: stringValue(row.Status),
     start,
     end,
-    dateStart: dateOnly(start),
-    dateEnd: dateOnly(end),
+    dateStart: availabilityDateStart(row, start),
+    dateEnd: availabilityDateEnd(row, start, end),
     comment: stringValue(row.Comment) ?? stringValue(row.Reason),
   }
+}
+
+function availabilityDateStart(row: DeputyRecord, fallbackStart: string): string {
+  const date = fromDate(row.Date)
+  return date ? dateOnly(date) : dateOnly(fallbackStart)
+}
+
+function availabilityDateEnd(row: DeputyRecord, fallbackStart: string, end: string): string {
+  const startDate = availabilityDateStart(row, fallbackStart)
+  const endDate = dateOnly(end)
+  const endParts = localTimeParts(end)
+  const endsAtMidnight = endParts?.hour === 0 && endParts.minute === 0 && endParts.second === 0
+  if (endsAtMidnight && endDate > startDate) return addIsoDays(endDate, -1)
+  return endDate < startDate ? startDate : endDate
+}
+
+export function isUnavailableRecord(row: DeputyRecord): boolean {
+  const type = numberValue(row.Type)
+  return type === null || type === 0 || type === 1 || type === 2
 }
 
 export function isRosterShift(row: DeputyRecord): boolean {

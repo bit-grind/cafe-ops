@@ -258,7 +258,6 @@ export default function TeamCalendarPage() {
       const areaDiff = areaSortValue(a.areaName ?? TYPE_LABEL[a.type]) - areaSortValue(b.areaName ?? TYPE_LABEL[b.type])
       return areaDiff || a.start.localeCompare(b.start) || a.employeeName.localeCompare(b.employeeName)
     })
-  const selectedGroups = groupedDayEvents(uniqueSelectedEvents)
   const areaLegend = useMemo(() => {
     const areas = new Map<string, string>()
     for (const event of events) {
@@ -272,7 +271,7 @@ export default function TeamCalendarPage() {
     <div>
       <BpHeader email={email} onSignOut={signOut} activeTab="calendar" allowedTabs={allowedTabs} />
 
-      <main className="bp-container" style={{ maxWidth: 1500 }}>
+      <main className="bp-container" style={{ maxWidth: 1320 }}>
         <div
           className="bp-page-toolbar"
           style={{
@@ -354,7 +353,7 @@ export default function TeamCalendarPage() {
           className="bp-mobile-grid-one"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(820px, 1fr) minmax(280px, 340px)',
+            gridTemplateColumns: 'minmax(760px, 1fr) minmax(410px, 440px)',
             gap: 14,
             alignItems: 'start',
           }}
@@ -518,69 +517,59 @@ export default function TeamCalendarPage() {
                 ) : uniqueSelectedEvents.length === 0 ? (
                   <div style={{ color: 'var(--muted-strong)', fontSize: 13 }}>No leave or availability recorded.</div>
                 ) : (
-                  selectedGroups.map(group => (
-                    <div key={group.label} style={{ display: 'grid', gap: 8 }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 7,
-                          color: group.color,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          lineHeight: 1,
-                        }}
-                      >
-                        <span
-                          aria-hidden="true"
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                      gap: 10,
+                    }}
+                  >
+                    {uniqueSelectedEvents.map(event => {
+                      const roleLabel = event.type === 'shift' ? event.areaName ?? 'Unassigned' : TYPE_LABEL[event.type]
+                      const color = eventColor(event)
+                      return (
+                        <div
+                          key={event.id}
+                          title={`${event.employeeName}${event.areaName ? ` · ${event.areaName}` : ''}: ${fmtTime(event.start)} - ${fmtTime(event.end)}`}
                           style={{
-                            width: 9,
-                            height: 9,
-                            borderRadius: 999,
-                            background: group.color,
-                            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.24)',
+                            minWidth: 0,
+                            borderLeft: `3px solid ${color}`,
+                            background: 'rgba(255,255,255,0.04)',
+                            borderRadius: 8,
+                            padding: '9px 10px',
                           }}
-                        />
-                        <span>{group.label}</span>
-                      </div>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))',
-                          gap: 10,
-                        }}
-                      >
-                        {group.events.map(event => (
+                        >
                           <div
-                            key={event.id}
-                            title={`${event.employeeName}${event.areaName ? ` · ${event.areaName}` : ''}: ${fmtTime(event.start)} - ${fmtTime(event.end)}`}
                             style={{
                               minWidth: 0,
-                              borderLeft: `3px solid ${eventColor(event)}`,
-                              background: 'rgba(255,255,255,0.04)',
-                              borderRadius: 8,
-                              padding: '9px 10px',
+                              fontWeight: 700,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
                             }}
                           >
-                            <div
-                              style={{
-                                minWidth: 0,
-                                fontWeight: 700,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {event.employeeName}
-                            </div>
-                            <div style={{ marginTop: 5, fontSize: 12, color: 'var(--muted-strong)' }}>
-                              {fmtTime(event.start)} - {fmtTime(event.end)}
-                            </div>
+                            {event.employeeName}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
+                          <div
+                            style={{
+                              marginTop: 5,
+                              color,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {roleLabel}
+                          </div>
+                          <div style={{ marginTop: 5, fontSize: 12, color: 'var(--muted-strong)' }}>
+                            {fmtTime(event.start)} - {fmtTime(event.end)}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
             </section>
