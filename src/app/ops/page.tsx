@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import BpHeader from '@/components/BpHeader'
 import MetricCard, { MetricSkeleton } from '@/components/MetricCard'
 import { supabase } from '@/lib/supabaseClient'
@@ -272,14 +272,9 @@ export default function OpsHome() {
   const [brief, setBrief] = useState<Brief | null>(null)
   const [briefDates, setBriefDates] = useState<string[]>([])
   const [selectedBriefDate, setSelectedBriefDate] = useState<string | null>(null)
-  const selectedDateRef = useRef<string | null>(null)
   const [briefLoading, setBriefLoading] = useState(true)
   const [briefError, setBriefError] = useState(false)
   const [showBrief, setShowBrief] = useState(false)
-
-  useEffect(() => {
-    selectedDateRef.current = selectedBriefDate
-  }, [selectedBriefDate])
 
   const loadSalesForDate = useCallback(async (date?: string | null, accessToken?: string) => {
     const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token
@@ -311,14 +306,13 @@ export default function OpsHome() {
       setBriefDates(d?.dates ?? [])
       const nextDate = d?.brief?.brief_date ?? date ?? null
       setSelectedBriefDate(nextDate)
-      if (nextDate) void loadSalesForDate(nextDate, token)
     } catch {
       setBrief(null)
       setBriefError(true)
     } finally {
       setBriefLoading(false)
     }
-  }, [loadSalesForDate])
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -372,7 +366,7 @@ export default function OpsHome() {
       }
 
       if (!cancelled) {
-        liveSalesTimer = window.setInterval(() => { void loadSalesForDate(selectedDateRef.current) }, LIVE_SALES_INTERVAL_MS)
+        liveSalesTimer = window.setInterval(() => { void loadSalesForDate() }, LIVE_SALES_INTERVAL_MS)
         setLoading(false)
       }
     }
