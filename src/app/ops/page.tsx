@@ -115,8 +115,9 @@ function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
     }
   })
   const maxSales = Math.max(...buckets.map(bucket => bucket.sales), 1)
-  const guideMax = Math.max(500, Math.ceil(maxSales / 500) * 500)
-  const guides = Array.from({ length: guideMax / 500 }, (_, index) => (index + 1) * 500)
+  const guideStep = maxSales < 500 ? 250 : 500
+  const guideMax = Math.max(guideStep * 2, Math.ceil(maxSales / guideStep) * guideStep)
+  const guides = Array.from({ length: guideMax / guideStep }, (_, index) => (index + 1) * guideStep)
 
   if (!hours.length) {
     return (
