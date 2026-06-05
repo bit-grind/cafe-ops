@@ -1,4 +1,4 @@
-export type AppTab = 'dashboard' | 'kitchen' | 'calendar' | 'ask' | 'bills' | 'admin' | 'recipes'
+export type AppTab = 'dashboard' | 'kitchen' | 'ask' | 'bills' | 'admin' | 'recipes'
 
 export type SessionFlags = {
   isAdmin: boolean
@@ -9,7 +9,6 @@ export type SessionFlags = {
 export const ALL_TABS: Array<{ label: string; tab: AppTab; href: string }> = [
   { label: 'Dashboard', tab: 'dashboard', href: '/ops' },
   { label: 'Kitchen', tab: 'kitchen', href: '/ops/kitchen' },
-  { label: 'Team Calendar', tab: 'calendar', href: '/ops/calendar' },
   { label: 'Ask AI', tab: 'ask', href: '/ops/ask' },
   { label: 'Suppliers', tab: 'bills', href: '/ops/bills' },
   { label: 'Recipes', tab: 'recipes', href: '/ops/recipes' },
@@ -17,8 +16,8 @@ export const ALL_TABS: Array<{ label: string; tab: AppTab; href: string }> = [
 ]
 
 export function getAllowedTabs({ isAdmin, isGuest, isKitchen }: SessionFlags): AppTab[] {
-  if (isKitchen) return ['kitchen', 'calendar', 'bills', 'recipes']
-  if (isAdmin) return ['dashboard', 'kitchen', 'calendar', 'ask', 'bills', 'recipes', 'admin']
+  if (isKitchen) return ['kitchen', 'bills', 'recipes']
+  if (isAdmin) return ['dashboard', 'kitchen', 'ask', 'bills', 'recipes', 'admin']
   if (isGuest) return ['dashboard', 'ask']
-  return ['dashboard', 'kitchen', 'calendar', 'ask', 'bills', 'recipes']
+  return ['dashboard', 'kitchen', 'ask', 'bills', 'recipes']
 }

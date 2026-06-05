@@ -78,10 +78,6 @@ Then open [http://localhost:3000](http://localhost:3000).
 - Most authenticated client pages call `/api/me` to determine role-specific navigation and redirects.
 - The Ask AI route blends multiple data sources: sales totals, product sales, holiday/date parsing, Brisbane weather, Xero bills, and extracted invoice line items.
 - Xero bills support line-item drilldown and attachment viewing.
-- The Team Calendar can read Deputy directly when `DEPUTY_BASE_URL` and
-  `DEPUTY_ACCESS_TOKEN` are set. Zapier calendar pushes require
-  `DEPUTY_ZAPIER_WEBHOOK_SECRET` plus the
-  `supabase/migrations/202606050002_deputy_calendar_events.sql` migration.
 - Guest users cannot read supplier costs, Xero bills, extracted invoice lines, recipes, or generated daily briefs.
 - Kounta imports require timestamped HMAC signatures and replay protection.
 
