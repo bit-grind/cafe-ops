@@ -7,6 +7,7 @@ import {
   normalizeAvailability,
   normalizeLeave,
   normalizeRoster,
+  isRosterShift,
   type DeputyCalendarEvent,
 } from '@/lib/deputyCalendar'
 
@@ -57,9 +58,14 @@ async function deputyQuery(baseUrl: string, token: string, resource: string, pay
 }
 
 function offsetDate(date: string, days: number) {
-  const next = new Date(`${date}T00:00:00+10:00`)
+  const [year, month, day] = date.split('-').map(Number)
+  const next = new Date(year, month - 1, day)
   next.setDate(next.getDate() + days)
-  return next.toISOString().slice(0, 10)
+  return [
+    next.getFullYear(),
+    String(next.getMonth() + 1).padStart(2, '0'),
+    String(next.getDate()).padStart(2, '0'),
+  ].join('-')
 }
 
 function dateSearch(field: string, from: string, to: string) {
@@ -98,10 +104,10 @@ async function loadDeputyEvents(from: string, to: string) {
     ])
     const names = employeeMap(employees)
     const activeIds = activeEmployeeIds(employees)
-    const events = [
+      const events = [
       ...leave.map(row => normalizeLeave(row, names)),
       ...availability.map(row => normalizeAvailability(row, names)),
-      ...roster.map(row => normalizeRoster(row, names)),
+      ...roster.filter(isRosterShift).map(row => normalizeRoster(row, names)),
     ].filter(event => {
       return event.employeeId !== null
         && event.employeeId !== undefined

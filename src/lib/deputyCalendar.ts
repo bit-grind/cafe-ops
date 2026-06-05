@@ -37,7 +37,17 @@ function numberValue(value: unknown): number | null {
 }
 
 function dateOnly(value: string): string {
-  return value.slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value.slice(0, 10)
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Brisbane',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const byType = new Map(parts.map(part => [part.type, part.value]))
+  return `${byType.get('year')}-${byType.get('month')}-${byType.get('day')}`
 }
 
 function fromUnix(value: unknown): string | null {
@@ -152,11 +162,18 @@ export function normalizeAvailability(row: DeputyRecord, employees: Map<number, 
   }
 }
 
+export function isRosterShift(row: DeputyRecord): boolean {
+  return row.Open !== true && row.Published !== false
+}
+
 export function normalizeRoster(row: DeputyRecord, employees: Map<number, string>): DeputyCalendarEvent {
   const start = pickStart(row)
   const end = pickEnd(row, start)
   const employeeId = numberValue(row.Employee ?? row.EmployeeId ?? row.EmployeeID)
   const id = String(row.Id ?? `roster-${employeeId ?? 'unknown'}-${start}`)
+  const rosterDate = stringValue(row.Date)
+  const dateStart = rosterDate ? dateOnly(rosterDate) : dateOnly(start)
+  const dateEnd = dateOnly(end)
 
   return {
     id: `deputy-roster-${id}`,
@@ -168,8 +185,8 @@ export function normalizeRoster(row: DeputyRecord, employees: Map<number, string
     status: stringValue(row.Status) ?? stringValue(row.Published),
     start,
     end,
-    dateStart: dateOnly(start),
-    dateEnd: dateOnly(end),
+    dateStart,
+    dateEnd: dateEnd < dateStart ? dateStart : dateEnd,
     comment: stringValue(row.Comment),
   }
 }
