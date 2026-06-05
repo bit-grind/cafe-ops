@@ -5,7 +5,7 @@ import BpHeader from '@/components/BpHeader'
 import { supabase } from '@/lib/supabaseClient'
 import type { AppTab } from '@/lib/permissions'
 
-type CalendarEventType = 'leave' | 'unavailable' | 'available' | 'shift'
+type CalendarEventType = 'leave' | 'unavailable' | 'available' | 'shift' | 'birthday'
 
 type CalendarEvent = {
   id: string
@@ -38,6 +38,7 @@ type MeResponse = {
 
 const FILTERS: Array<{ key: CalendarEventType; label: string }> = [
   { key: 'shift', label: 'Shifts' },
+  { key: 'birthday', label: 'Birthdays' },
   { key: 'unavailable', label: 'Unavailable' },
   { key: 'available', label: 'Available' },
   { key: 'leave', label: 'Leave' },
@@ -48,6 +49,7 @@ const TYPE_LABEL: Record<CalendarEventType, string> = {
   unavailable: 'Unavailable',
   available: 'Available',
   shift: 'Shift',
+  birthday: 'Birthday',
 }
 
 const TYPE_COLOR: Record<CalendarEventType, string> = {
@@ -55,6 +57,7 @@ const TYPE_COLOR: Record<CalendarEventType, string> = {
   unavailable: '#e58080',
   available: '#5bd38b',
   shift: '#7ab8ff',
+  birthday: '#f4cf65',
 }
 
 const FALLBACK_AREA_COLOR: Record<string, string> = {
@@ -155,6 +158,33 @@ function fmtDate(value: string) {
     day: 'numeric',
     month: 'short',
   }).format(parseIsoDay(value))
+}
+
+function eventTitle(event: CalendarEvent) {
+  if (event.type === 'birthday') return `${event.employeeName} · Birthday`
+  return `${event.employeeName}${event.areaName ? ` · ${event.areaName}` : ''}: ${fmtTime(event.start)} - ${fmtTime(event.end)}`
+}
+
+function eventAriaLabel(event: CalendarEvent) {
+  if (event.type === 'birthday') return `${event.employeeName}, Birthday`
+  return `${event.employeeName}${event.areaName ? `, ${event.areaName}` : ''}`
+}
+
+function eventTimeLabel(event: CalendarEvent) {
+  return event.type === 'birthday'
+    ? 'All day'
+    : `${fmtTime(event.start)} - ${fmtTime(event.end)}`
+}
+
+function emptySelectedMessage(filter: CalendarEventType) {
+  if (filter === 'birthday') return 'No staff birthdays.'
+  if (filter === 'shift') return 'No shifts rostered.'
+  return `No ${TYPE_LABEL[filter].toLowerCase()} recorded.`
+}
+
+function countLabel(count: number, filter: CalendarEventType) {
+  const noun = filter === 'birthday' ? 'birthday' : 'event'
+  return `${count} ${noun}${count === 1 ? '' : 's'}`
 }
 
 function eventTouchesDay(event: CalendarEvent, day: string) {
@@ -433,8 +463,8 @@ export default function TeamCalendarPage() {
                         {visibleDayEvents.map(event => (
                           <span
                             key={`${dayIso}-${event.id}`}
-                            title={`${event.employeeName}${event.areaName ? ` · ${event.areaName}` : ''}: ${fmtTime(event.start)} - ${fmtTime(event.end)}`}
-                            aria-label={`${event.employeeName}${event.areaName ? `, ${event.areaName}` : ''}`}
+                            title={eventTitle(event)}
+                            aria-label={eventAriaLabel(event)}
                             style={{
                               width: '100%',
                               maxWidth: markerWidth,
@@ -474,25 +504,27 @@ export default function TeamCalendarPage() {
               </div>
             </section>
 
-            <section className="bp-card" style={{ padding: '10px 12px' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 14px', alignItems: 'center' }}>
-                {areaLegend.map(([area, color]) => (
-                  <div key={area} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted-strong)' }}>
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 999,
-                        background: color,
-                        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.24)',
-                      }}
-                    />
-                    <span>{area}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
+            {filter === 'shift' && areaLegend.length > 0 ? (
+              <section className="bp-card" style={{ padding: '10px 12px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 14px', alignItems: 'center' }}>
+                  {areaLegend.map(([area, color]) => (
+                    <div key={area} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted-strong)' }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 999,
+                          background: color,
+                          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.24)',
+                        }}
+                      />
+                      <span>{area}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </div>
 
           <aside style={{ display: 'grid', gap: 14 }}>
@@ -502,7 +534,7 @@ export default function TeamCalendarPage() {
                   <div style={{ fontSize: 12, color: 'var(--muted-strong)', marginBottom: 6 }}>Selected day</div>
                   <h2 style={{ margin: 0, fontSize: 20 }}>{fmtDate(selectedDay)}</h2>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--muted-strong)' }}>{uniqueSelectedEvents.length} events</div>
+                <div style={{ fontSize: 12, color: 'var(--muted-strong)' }}>{countLabel(uniqueSelectedEvents.length, filter)}</div>
               </div>
 
               <div
@@ -515,7 +547,7 @@ export default function TeamCalendarPage() {
                 {calendarLoading ? (
                   <div style={{ color: 'var(--muted-strong)', fontSize: 13 }}>Loading calendar...</div>
                 ) : uniqueSelectedEvents.length === 0 ? (
-                  <div style={{ color: 'var(--muted-strong)', fontSize: 13 }}>No leave or availability recorded.</div>
+                  <div style={{ color: 'var(--muted-strong)', fontSize: 13 }}>{emptySelectedMessage(filter)}</div>
                 ) : (
                   <div
                     style={{
@@ -530,7 +562,7 @@ export default function TeamCalendarPage() {
                       return (
                         <div
                           key={event.id}
-                          title={`${event.employeeName}${event.areaName ? ` · ${event.areaName}` : ''}: ${fmtTime(event.start)} - ${fmtTime(event.end)}`}
+                          title={eventTitle(event)}
                           style={{
                             minWidth: 0,
                             borderLeft: `3px solid ${color}`,
@@ -564,7 +596,7 @@ export default function TeamCalendarPage() {
                             {roleLabel}
                           </div>
                           <div style={{ marginTop: 5, fontSize: 12, color: 'var(--muted-strong)' }}>
-                            {fmtTime(event.start)} - {fmtTime(event.end)}
+                            {eventTimeLabel(event)}
                           </div>
                         </div>
                       )
