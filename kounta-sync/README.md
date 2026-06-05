@@ -8,12 +8,12 @@ without anyone running a script.
 
 Two scheduled GitHub Actions keep sales current:
 
-- `.github/workflows/kounta-live-sales.yml` starts a runner shortly before each
-  trading hour from **05:00 to 14:20 Brisbane**. Each runner logs into Kounta
-  once, polls the sales summary every minute, and imports only the summary for
-  today's live takings card.
-- `.github/workflows/kounta-sync.yml` runs at **14:30 Brisbane** daily, right
-  after the shop closes. It imports the final sales summary and product rows.
+- `.github/workflows/kounta-sync.yml` starts a live runner shortly before each
+  trading hour from **05:00 to 14:20 Brisbane**. Each live runner logs into
+  Kounta once, polls the sales summary every minute, and imports only the
+  summary for today's live takings card.
+- The same workflow runs the full daily sync at **14:30 Brisbane**, right after
+  the shop closes. It imports the final sales summary and product rows.
 
 The full daily sync:
 
@@ -59,7 +59,8 @@ The summary pulls the whole range in one request; products are pulled per day.
 For a live summary monitor, run **Actions → "Kounta live sales" → Run workflow**.
 It uses the same date inputs, skips product export/import, and polls once per
 minute for 60 minutes by default. Set `monitor_minutes` to `0` for a one-shot
-summary refresh.
+summary refresh. Scheduled live monitoring runs from **Kounta daily sync**;
+`Kounta live sales` is for manual diagnostics.
 
 ## Debugging a failed run
 
