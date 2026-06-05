@@ -226,23 +226,26 @@ function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
                 height: 92,
                 display: 'flex',
                 alignItems: 'end',
+                justifyContent: 'center',
                 borderBottom: '1px solid rgba(255,255,255,0.12)',
               }}
             >
               <div
                 style={{
-                  width: '100%',
+                  width: '64%',
+                  maxWidth: 34,
+                  minWidth: 8,
                   minHeight: bucket.sales > 0 ? 6 : 2,
                   height: `${Math.max(2, (bucket.sales / guideMax) * 92)}px`,
-                  borderRadius: '4px 4px 0 0',
-                  border: bucket.sales > 0 ? '1px solid rgba(255,255,255,0.18)' : '0',
+                  borderRadius: '3px 3px 0 0',
+                  border: bucket.sales > 0 ? '1px solid rgba(255,255,255,0.36)' : '0',
                   borderBottom: 0,
                   background: bucket.sales > 0
-                    ? 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.16) 100%)'
-                    : 'rgba(255,255,255,0.08)',
+                    ? 'linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.42) 100%)'
+                    : 'rgba(255,255,255,0.12)',
                   boxShadow: activeHour === bucket.hour
-                    ? '0 0 0 1px rgba(255,255,255,0.26), 0 10px 24px rgba(0,0,0,0.3)'
-                    : 'none',
+                    ? '0 0 0 1px rgba(255,255,255,0.34), 0 10px 24px rgba(0,0,0,0.36)'
+                    : bucket.sales > 0 ? 'inset 0 1px 0 rgba(255,255,255,0.35)' : 'none',
                   transition: 'background 0.15s, box-shadow 0.15s, opacity 0.15s',
                 }}
               />
