@@ -380,7 +380,7 @@ export default function TeamCalendarPage() {
         </div>
 
         <div
-          className="bp-mobile-grid-one"
+          className="bp-mobile-grid-one bp-calendar-layout"
           style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(760px, 1fr) minmax(410px, 440px)',
@@ -388,7 +388,7 @@ export default function TeamCalendarPage() {
             alignItems: 'start',
           }}
         >
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div className="bp-calendar-main" style={{ display: 'grid', gap: 10 }}>
             <section className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
               <div
                 style={{
@@ -527,7 +527,7 @@ export default function TeamCalendarPage() {
             ) : null}
           </div>
 
-          <aside style={{ display: 'grid', gap: 14 }}>
+          <aside className="bp-calendar-selected" style={{ display: 'grid', gap: 14 }}>
             <section className="bp-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}>
                 <div>
