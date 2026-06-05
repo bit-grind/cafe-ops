@@ -2,11 +2,12 @@ name: Kounta daily sync
 
 on:
   schedule:
-    # Starts a live runner 5 minutes before each trading hour, then polls Kounta
-    # every minute. 18:55-03:55 UTC = 04:55-13:55 Brisbane (UTC+10).
-    # The script stops at 14:20 Brisbane; the full product sync runs at 14:30.
-    - cron: '55 18-23 * * *'
-    - cron: '55 0-3 * * *'
+    # Summary-only live takings refreshes. Kounta's dashboard export updates on
+    # roughly a 10 minute cycle, so sample just after each observed cycle point.
+    # 19:02-04:22 UTC = 05:02-14:22 Brisbane (UTC+10).
+    - cron: '2,12,22,32,42,52 19-23 * * *'
+    - cron: '2,12,22,32,42,52 0-3 * * *'
+    - cron: '2,12,22 4 * * *'
     # 04:30 UTC = 14:30 Brisbane (UTC+10). Pulls today's trade right after close.
     - cron: '30 4 * * *'
   workflow_dispatch:
@@ -120,7 +121,7 @@ jobs:
         working-directory: kounta-sync
         run: npx playwright install --with-deps chromium
 
-      - name: Run live summary monitor
+      - name: Run live summary refresh
         if: steps.pre.outputs.ready == 'true'
         working-directory: kounta-sync
         run: node sync.mjs
@@ -130,9 +131,8 @@ jobs:
           IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
           APP_URL: ${{ vars.APP_URL }}
           SYNC_PRODUCTS: 'false'
-          LIVE_MONITOR_MINUTES: '60'
+          LIVE_MONITOR_MINUTES: '0'
           LIVE_POLL_SECONDS: '60'
-          LIVE_STOP_BRISBANE: '14:20'
 
       - name: Upload error screenshot on failure
         if: failure() && steps.pre.outputs.ready == 'true'
