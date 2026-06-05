@@ -2,13 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { getAllowedTabs } from '@/lib/permissions'
 
 describe('getAllowedTabs', () => {
-  it('kitchen sees kitchen, calendar, bills and recipes', () => {
-    expect(getAllowedTabs({ isAdmin: false, isGuest: false, isKitchen: true })).toEqual(['kitchen', 'calendar', 'bills', 'recipes'])
+  it('kitchen sees only kitchen, bills and recipes', () => {
+    expect(getAllowedTabs({ isAdmin: false, isGuest: false, isKitchen: true })).toEqual(['kitchen', 'bills', 'recipes'])
   })
 
   it('admin sees every tab', () => {
     expect(getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: false })).toEqual([
-      'dashboard', 'kitchen', 'calendar', 'ask', 'bills', 'recipes', 'admin',
+      'dashboard', 'kitchen', 'ask', 'bills', 'recipes', 'admin',
     ])
   })
 
@@ -18,11 +18,11 @@ describe('getAllowedTabs', () => {
 
   it('a standard user sees the default set (no admin)', () => {
     expect(getAllowedTabs({ isAdmin: false, isGuest: false, isKitchen: false })).toEqual([
-      'dashboard', 'kitchen', 'calendar', 'ask', 'bills', 'recipes',
+      'dashboard', 'kitchen', 'ask', 'bills', 'recipes',
     ])
   })
 
   it('kitchen role takes precedence even if also admin', () => {
-    expect(getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: true })).toEqual(['kitchen', 'calendar', 'bills', 'recipes'])
+    expect(getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: true })).toEqual(['kitchen', 'bills', 'recipes'])
   })
 })
