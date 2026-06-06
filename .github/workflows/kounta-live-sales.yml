@@ -83,6 +83,7 @@ jobs:
           LIVE_MONITOR_MINUTES: ${{ github.event_name == 'schedule' && '0' || github.event.inputs.monitor_minutes || '60' }}
           LIVE_POLL_SECONDS: ${{ github.event.inputs.poll_seconds || '60' }}
           LIVE_STOP_BRISBANE: '14:20'
+          ALLOW_MISSING_CURRENT_DAY: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
 
       - name: Upload error screenshot on failure
         if: failure() && steps.pre.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.upload_debug_screenshot == 'true'

@@ -133,6 +133,7 @@ jobs:
           SYNC_PRODUCTS: 'false'
           LIVE_MONITOR_MINUTES: '0'
           LIVE_POLL_SECONDS: '60'
+          ALLOW_MISSING_CURRENT_DAY: 'true'
 
       - name: Upload error screenshot on failure
         if: failure() && steps.pre.outputs.ready == 'true'

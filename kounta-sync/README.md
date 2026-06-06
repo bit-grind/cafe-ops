@@ -52,7 +52,9 @@ Then open the **Variables** tab in the same screen and add:
 That's it — the daily run starts automatically.
 
 Optional script controls: `SYNC_HOURS=false` skips Sales Summary by Hour imports,
-and `SYNC_PRODUCTS=false` skips product rows.
+and `SYNC_PRODUCTS=false` skips product rows. Scheduled live refreshes also set
+`ALLOW_MISSING_CURRENT_DAY=true`, which exits cleanly when Kounta has not created
+today's summary row yet; manual and final daily syncs remain strict.
 
 ## Backfill / manual run
 
