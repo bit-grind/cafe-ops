@@ -102,6 +102,12 @@ function hourRangeLabel(hour: number) {
   return `${hourLabel(hour)}-${hourLabel((hour + 1) % 24)}`
 }
 
+// Light-blue, semi-transparent bar palette. Tweak these to experiment with the shade.
+const BAR_FILL = 'linear-gradient(180deg, rgba(130,196,255,0.72) 0%, rgba(130,196,255,0.42) 100%)'
+const BAR_BORDER = 'rgba(150,205,255,0.40)'
+const BAR_GLOSS = 'rgba(200,230,255,0.42)'
+const BAR_RING = 'rgba(150,205,255,0.45)'
+
 function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
   const [activeHour, setActiveHour] = useState<number | null>(null)
   const salesByHour = new Map(hours.map(row => [row.hour, Number(row.gross_sales || 0)]))
@@ -239,14 +245,12 @@ function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
                   minHeight: bucket.sales > 0 ? 6 : 2,
                   height: `${Math.max(2, (bucket.sales / guideMax) * 92)}px`,
                   borderRadius: '3px 3px 0 0',
-                  border: bucket.sales > 0 ? '1px solid rgba(255,255,255,0.36)' : '0',
+                  border: bucket.sales > 0 ? `1px solid ${BAR_BORDER}` : '0',
                   borderBottom: 0,
-                  background: bucket.sales > 0
-                    ? 'linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.42) 100%)'
-                    : 'rgba(255,255,255,0.12)',
+                  background: bucket.sales > 0 ? BAR_FILL : 'rgba(255,255,255,0.12)',
                   boxShadow: activeHour === bucket.hour
-                    ? '0 0 0 1px rgba(255,255,255,0.34), 0 10px 24px rgba(0,0,0,0.36)'
-                    : bucket.sales > 0 ? 'inset 0 1px 0 rgba(255,255,255,0.35)' : 'none',
+                    ? `0 0 0 1px ${BAR_RING}, 0 10px 24px rgba(0,0,0,0.36)`
+                    : bucket.sales > 0 ? `inset 0 1px 0 ${BAR_GLOSS}` : 'none',
                   transition: 'background 0.15s, box-shadow 0.15s, opacity 0.15s',
                 }}
               />
