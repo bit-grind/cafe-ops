@@ -56,10 +56,12 @@ export function computeMetrics(days: Day[], products: ProductRow[]) {
   const worst30 = last30.length ? last30.reduce((a, b) => (Number(a.gross_sales) < Number(b.gross_sales) ? a : b)) : null
 
   // Week-to-date vs the same span of last week (Mon-anchored, Sydney/Brisbane).
-  const t = new Date(subject.business_date + 'T00:00:00')
+  // Anchor at UTC midnight and use UTC setters so the math is independent of the
+  // host timezone — mondayOf/isoDate read the instant back as Sydney calendar days.
+  const t = new Date(subject.business_date + 'T00:00:00Z')
   const mon = mondayOf(t)
-  const prevMon = new Date(mon); prevMon.setDate(prevMon.getDate() - 7)
-  const prevEquiv = new Date(t); prevEquiv.setDate(t.getDate() - 7)
+  const prevMon = new Date(mon); prevMon.setUTCDate(prevMon.getUTCDate() - 7)
+  const prevEquiv = new Date(t); prevEquiv.setUTCDate(t.getUTCDate() - 7)
   const monIso = isoDate(mon), prevMonIso = isoDate(prevMon), prevEquivIso = isoDate(prevEquiv)
   const sum = (arr: Day[]) => arr.reduce((s, d) => s + Number(d.gross_sales || 0), 0)
   const wtd = sum(days.filter(d => d.business_date >= monIso && d.business_date <= subject.business_date))

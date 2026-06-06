@@ -1,15 +1,24 @@
+import { timingSafeEqual } from 'crypto'
 import { NextResponse } from 'next/server'
 import { adminClient } from '@/lib/adminAuth'
 import { normalizeZapierEvent } from '@/lib/deputyCalendar'
 
 export const dynamic = 'force-dynamic'
 
+// Constant-time compare that never short-circuits on length.
+function secretsMatch(supplied: string, expected: string) {
+  const a = Buffer.from(supplied)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
+}
+
 function hasValidSecret(req: Request) {
   const expected = process.env.DEPUTY_ZAPIER_WEBHOOK_SECRET
   if (!expected) return false
-  const url = new URL(req.url)
-  const supplied = req.headers.get('x-deputy-calendar-secret') ?? url.searchParams.get('secret')
-  return supplied === expected
+  // Header only — a secret in the query string leaks into request logs.
+  const supplied = req.headers.get('x-deputy-calendar-secret')
+  return typeof supplied === 'string' && secretsMatch(supplied, expected)
 }
 
 export async function POST(req: Request) {
