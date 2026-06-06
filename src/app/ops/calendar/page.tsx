@@ -183,6 +183,7 @@ function emptySelectedMessage(filter: CalendarEventType) {
 }
 
 function countLabel(count: number, filter: CalendarEventType) {
+  if (filter === 'shift') return `${count} staff`
   const noun = filter === 'birthday' ? 'birthday' : 'event'
   return `${count} ${noun}${count === 1 ? '' : 's'}`
 }
@@ -531,7 +532,6 @@ export default function TeamCalendarPage() {
             <section className="bp-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}>
                 <div>
-                  <div style={{ fontSize: 12, color: 'var(--muted-strong)', marginBottom: 6 }}>Selected day</div>
                   <h2 style={{ margin: 0, fontSize: 20 }}>{fmtDate(selectedDay)}</h2>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--muted-strong)' }}>{countLabel(uniqueSelectedEvents.length, filter)}</div>
