@@ -176,6 +176,12 @@ function eventTimeLabel(event: CalendarEvent) {
     : `${fmtTime(event.start)} - ${fmtTime(event.end)}`
 }
 
+// Shift length in ms; used to order rostered staff longest-first within a group.
+function eventDurationMs(event: CalendarEvent) {
+  const ms = new Date(event.end).getTime() - new Date(event.start).getTime()
+  return Number.isFinite(ms) && ms > 0 ? ms : 0
+}
+
 function emptySelectedMessage(filter: CalendarEventType) {
   if (filter === 'birthday') return 'No staff birthdays.'
   if (filter === 'shift') return 'No shifts rostered.'
@@ -287,7 +293,10 @@ export default function TeamCalendarPage() {
   uniqueSelectedEvents
     .sort((a, b) => {
       const areaDiff = areaSortValue(a.areaName ?? TYPE_LABEL[a.type]) - areaSortValue(b.areaName ?? TYPE_LABEL[b.type])
-      return areaDiff || a.start.localeCompare(b.start) || a.employeeName.localeCompare(b.employeeName)
+      return areaDiff
+        || eventDurationMs(b) - eventDurationMs(a)
+        || a.start.localeCompare(b.start)
+        || a.employeeName.localeCompare(b.employeeName)
     })
   const areaLegend = useMemo(() => {
     const areas = new Map<string, string>()
@@ -411,7 +420,10 @@ export default function TeamCalendarPage() {
                   const inMonth = day.getMonth() === month.getMonth()
                   const isSelected = dayIso === selectedDay
                   const dayEvents = uniqueEventsForDay(visibleEvents.filter(event => eventTouchesDay(event, dayIso)), dayIso)
-                  const visibleDayEvents = orderedDayBubbles(dayEvents).slice(0, 12)
+                  const orderedEvents = orderedDayBubbles(dayEvents)
+                  const visibleDayEvents = orderedEvents.slice(0, 12)
+                  // Only a handful of names fit as full-width rows; busier days fall back to initials.
+                  const showFullNames = dayEvents.length > 0 && dayEvents.length <= 3
                   const denseBubbles = dayEvents.length > 8
                   const markerWidth = denseBubbles ? 18 : 22
                   const markerHeight = denseBubbles ? 16 : 22
@@ -450,55 +462,105 @@ export default function TeamCalendarPage() {
                           </span>
                         ) : null}
                       </div>
-                      <div
-                        style={{
-                          marginTop: 8,
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                          gridAutoRows: markerHeight,
-                          gap: markerGap,
-                          alignContent: 'start',
-                          maxWidth: markerWidth * 3 + markerGap * 2,
-                        }}
-                      >
-                        {visibleDayEvents.map(event => (
-                          <span
-                            key={`${dayIso}-${event.id}`}
-                            title={eventTitle(event)}
-                            aria-label={eventAriaLabel(event)}
-                            style={{
-                              width: '100%',
-                              maxWidth: markerWidth,
-                              height: markerHeight,
-                              borderRadius: 5,
-                              display: 'grid',
-                              gridTemplateRows: `${denseBubbles ? 4 : 5}px 1fr`,
-                              overflow: 'hidden',
-                              background: 'rgba(255,255,255,0.08)',
-                              color: inMonth ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.48)',
-                              border: '1px solid rgba(255,255,255,0.12)',
-                              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-                              fontSize: denseBubbles ? 7 : 9,
-                              fontWeight: 900,
-                              letterSpacing: 0,
-                              lineHeight: 1,
-                              opacity: inMonth ? 1 : 0.45,
-                            }}
-                          >
-                            <span aria-hidden="true" style={{ background: inMonth ? eventColor(event) : 'rgba(255,255,255,0.2)' }} />
+                      {showFullNames ? (
+                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {orderedEvents.map(event => (
                             <span
+                              key={`${dayIso}-${event.id}`}
+                              title={eventTitle(event)}
+                              aria-label={eventAriaLabel(event)}
                               style={{
-                                display: 'inline-flex',
+                                display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
-                                minWidth: 0,
+                                gap: 5,
+                                height: 18,
+                                padding: '0 6px 0 5px',
+                                borderRadius: 5,
+                                overflow: 'hidden',
+                                background: 'rgba(255,255,255,0.08)',
+                                color: inMonth ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.48)',
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                                opacity: inMonth ? 1 : 0.45,
                               }}
                             >
-                              {employeeInitials(event.employeeName)}
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  flex: '0 0 auto',
+                                  width: 3,
+                                  height: 12,
+                                  borderRadius: 2,
+                                  background: inMonth ? eventColor(event) : 'rgba(255,255,255,0.2)',
+                                }}
+                              />
+                              <span
+                                style={{
+                                  minWidth: 0,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  lineHeight: 1,
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}
+                              >
+                                {event.employeeName}
+                              </span>
                             </span>
-                          </span>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                            gridAutoRows: markerHeight,
+                            gap: markerGap,
+                            alignContent: 'start',
+                            maxWidth: markerWidth * 3 + markerGap * 2,
+                          }}
+                        >
+                          {visibleDayEvents.map(event => (
+                            <span
+                              key={`${dayIso}-${event.id}`}
+                              title={eventTitle(event)}
+                              aria-label={eventAriaLabel(event)}
+                              style={{
+                                width: '100%',
+                                maxWidth: markerWidth,
+                                height: markerHeight,
+                                borderRadius: 5,
+                                display: 'grid',
+                                gridTemplateRows: `${denseBubbles ? 4 : 5}px 1fr`,
+                                overflow: 'hidden',
+                                background: 'rgba(255,255,255,0.08)',
+                                color: inMonth ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.48)',
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                                fontSize: denseBubbles ? 7 : 9,
+                                fontWeight: 900,
+                                letterSpacing: 0,
+                                lineHeight: 1,
+                                opacity: inMonth ? 1 : 0.45,
+                              }}
+                            >
+                              <span aria-hidden="true" style={{ background: inMonth ? eventColor(event) : 'rgba(255,255,255,0.2)' }} />
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  minWidth: 0,
+                                }}
+                              >
+                                {employeeInitials(event.employeeName)}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </button>
                   )
                 })}
