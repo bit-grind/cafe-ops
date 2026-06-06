@@ -421,12 +421,13 @@ export default function TeamCalendarPage() {
                   const isSelected = dayIso === selectedDay
                   const dayEvents = uniqueEventsForDay(visibleEvents.filter(event => eventTouchesDay(event, dayIso)), dayIso)
                   const orderedEvents = orderedDayBubbles(dayEvents)
-                  const visibleDayEvents = orderedEvents.slice(0, 12)
+                  const visibleDayEvents = orderedEvents.slice(0, 24)
                   // Only a handful of names fit as full-width rows; busier days fall back to initials.
                   const showFullNames = dayEvents.length > 0 && dayEvents.length <= 3
-                  const denseBubbles = dayEvents.length > 8
-                  const markerWidth = denseBubbles ? 18 : 22
-                  const markerHeight = denseBubbles ? 16 : 22
+                  // Busy days pack tighter so every name still fits and fills the cell width.
+                  const denseBubbles = dayEvents.length > 9
+                  const markerMinWidth = denseBubbles ? 26 : 32
+                  const markerHeight = denseBubbles ? 16 : 20
                   const markerGap = denseBubbles ? 3 : 4
                   return (
                     <button
@@ -515,11 +516,10 @@ export default function TeamCalendarPage() {
                           style={{
                             marginTop: 8,
                             display: 'grid',
-                            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                            gridTemplateColumns: `repeat(auto-fit, minmax(${markerMinWidth}px, 1fr))`,
                             gridAutoRows: markerHeight,
                             gap: markerGap,
                             alignContent: 'start',
-                            maxWidth: markerWidth * 3 + markerGap * 2,
                           }}
                         >
                           {visibleDayEvents.map(event => (
@@ -529,7 +529,6 @@ export default function TeamCalendarPage() {
                               aria-label={eventAriaLabel(event)}
                               style={{
                                 width: '100%',
-                                maxWidth: markerWidth,
                                 height: markerHeight,
                                 borderRadius: 5,
                                 display: 'grid',
@@ -539,7 +538,7 @@ export default function TeamCalendarPage() {
                                 color: inMonth ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.48)',
                                 border: '1px solid rgba(255,255,255,0.12)',
                                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-                                fontSize: denseBubbles ? 7 : 9,
+                                fontSize: denseBubbles ? 8 : 9,
                                 fontWeight: 900,
                                 letterSpacing: 0,
                                 lineHeight: 1,
