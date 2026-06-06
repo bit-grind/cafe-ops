@@ -2,6 +2,12 @@ name: Kounta daily sync
 
 on:
   schedule:
+    # One-shot summary/hour live refreshes during trading. Offset from the
+    # backup live-sales workflow so a missed GitHub schedule has another chance.
+    # 19:03-04:23 UTC = 05:03-14:23 Brisbane (UTC+10).
+    - cron: '3,13,23,33,43,53 19-23 * * *'
+    - cron: '3,13,23,33,43,53 0-3 * * *'
+    - cron: '3,13,23 4 * * *'
     # 04:30 UTC = 14:30 Brisbane (UTC+10). Pulls today's trade right after close.
     - cron: '30 4 * * *'
   workflow_dispatch:
