@@ -435,8 +435,11 @@ export default function TeamCalendarPage() {
                       type="button"
                       onClick={() => setSelectedDay(dayIso)}
                       style={{
+                        position: 'relative',
                         minHeight: 118,
-                        padding: 8,
+                        // Top padding reserves a fixed band for the pinned date/count header,
+                        // so the first pill row always starts at the same place in every cell.
+                        padding: '28px 8px 8px',
                         border: 0,
                         borderRight: '1px solid var(--border)',
                         borderBottom: '1px solid var(--border)',
@@ -448,13 +451,14 @@ export default function TeamCalendarPage() {
                         overflow: 'hidden',
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
-                        <span style={{ fontSize: 13, fontWeight: isSelected ? 700 : 600 }}>{day.getDate()}</span>
+                      <div style={{ position: 'absolute', top: 8, left: 8, right: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
+                        <span style={{ fontSize: 13, lineHeight: 1, fontWeight: isSelected ? 700 : 600 }}>{day.getDate()}</span>
                         {dayEvents.length > 0 ? (
                           <span
                             title={`${dayEvents.length} staff`}
                             style={{
                               fontSize: 10,
+                              lineHeight: 1,
                               color: 'var(--muted-strong)',
                               fontWeight: 800,
                             }}
@@ -464,7 +468,7 @@ export default function TeamCalendarPage() {
                         ) : null}
                       </div>
                       {showFullNames ? (
-                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           {orderedEvents.map(event => (
                             <span
                               key={`${dayIso}-${event.id}`}
@@ -514,7 +518,6 @@ export default function TeamCalendarPage() {
                       ) : (
                         <div
                           style={{
-                            marginTop: 8,
                             display: 'grid',
                             gridTemplateColumns: `repeat(auto-fit, minmax(${markerMinWidth}px, 1fr))`,
                             gridAutoRows: markerHeight,
