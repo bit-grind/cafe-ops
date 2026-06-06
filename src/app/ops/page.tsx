@@ -261,6 +261,25 @@ function HourlySalesChart({ hours }: { hours: HourlySale[] }) {
   )
 }
 
+function RefreshIcon({ spinning }: { spinning: boolean }) {
+  return (
+    <svg
+      className={spinning ? 'live-refresh-icon live-refresh-icon--spinning' : 'live-refresh-icon'}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M20 6v5h-5M4 18v-5h5M18.3 10a6.5 6.5 0 0 0-10.7-2.4L4 11m16 2-3.6 3.4A6.5 6.5 0 0 1 5.7 14"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export default function OpsHome() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
@@ -567,9 +586,10 @@ export default function OpsHome() {
                       onClick={() => void refreshLiveSales()}
                       disabled={liveRefreshing}
                       aria-label="Refresh live takings"
-                      style={{ flex: '0 0 auto', minWidth: 82, padding: '7px 10px', borderRadius: 8, fontSize: 12, lineHeight: 1.1 }}
+                      title="Refresh live takings"
+                      style={{ flex: '0 0 auto', width: 36, height: 36, padding: 0, borderRadius: 8, display: 'grid', placeItems: 'center' }}
                     >
-                      {liveRefreshing ? 'Refreshing...' : 'Refresh'}
+                      <RefreshIcon spinning={liveRefreshing} />
                     </button>
                   </div>
                   <div className="bp-metric__value">{computed.liveDay ? money(computed.liveDay.gross_sales) : '—'}</div>
