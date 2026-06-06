@@ -26,6 +26,7 @@
  */
 import { chromium } from 'playwright'
 import { createHmac, randomUUID } from 'crypto'
+import { shouldSkipMissingCurrentDaySummary } from './syncPolicy.mjs'
 
 const { APP_URL: rawAppUrl, KOUNTA_USER, KOUNTA_PASS, IMPORT_SECRET } = process.env
 
@@ -39,6 +40,7 @@ const SYNC_HOURS = process.env.SYNC_HOURS !== 'false'
 const LIVE_MONITOR_MINUTES = Number.parseInt(process.env.LIVE_MONITOR_MINUTES || '', 10)
 const LIVE_POLL_SECONDS = Math.max(15, Number.parseInt(process.env.LIVE_POLL_SECONDS || '60', 10) || 60)
 const LIVE_STOP_BRISBANE = process.env.LIVE_STOP_BRISBANE || ''
+const ALLOW_MISSING_CURRENT_DAY = process.env.ALLOW_MISSING_CURRENT_DAY === 'true'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 const num = (s) => {
@@ -349,11 +351,22 @@ async function login(page) {
 async function importSummary(page, from, to) {
   const summary = mapSummary(parseCsv(await exportCsv(page, 'salesummary', from, to)))
   const summaryByDate = new Map(summary.map(day => [day.business_date, day]))
-  for (const day of eachDay(from, to)) {
-    if (!summaryByDate.has(day)) throw new Error(`Summary export did not include ${day}`)
+  const missingDays = eachDay(from, to).filter(day => !summaryByDate.has(day))
+  if (missingDays.length > 0) {
+    const skippedMissingCurrentDay = shouldSkipMissingCurrentDaySummary({
+      allowMissingCurrentDay: ALLOW_MISSING_CURRENT_DAY,
+      from,
+      to,
+      today: brisbaneTodayISO(),
+      missingDays,
+    })
+    if (skippedMissingCurrentDay) {
+      return { summary, summaryByDate, skippedMissingCurrentDay }
+    }
+    throw new Error(`Summary export did not include ${missingDays.join(', ')}`)
   }
   await postJson('/api/import-daily', summary)
-  return { summary, summaryByDate }
+  return { summary, summaryByDate, skippedMissingCurrentDay: false }
 }
 
 async function importHours(page, day, allowEmpty = false) {
@@ -381,7 +394,14 @@ async function runLiveMonitor(page, from, to) {
 
     sample += 1
     const sampledAt = new Date().toISOString()
-    const { summary, summaryByDate } = await importSummary(page, from, to)
+    const { summary, summaryByDate, skippedMissingCurrentDay } = await importSummary(page, from, to)
+    if (skippedMissingCurrentDay) {
+      console.log(`Live sample ${sample} @ ${sampledAt}: Kounta has no summary row for ${to} yet; skipped.`)
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) break
+      await sleep(Math.min(LIVE_POLL_SECONDS * 1000, remaining))
+      continue
+    }
     const subject = summaryByDate.get(to) ?? summary[summary.length - 1]
     const allowEmptyHours = !subject || (subject.order_count === 0 && subject.gross_sales === 0)
     const hours = SYNC_HOURS ? await importHours(page, to, allowEmptyHours) : []
@@ -419,35 +439,39 @@ try {
     await runLiveMonitor(page, from, to)
   } else {
     // Summary report accepts a date range in one request.
-    const { summary, summaryByDate } = await importSummary(page, from, to)
-    console.log(`Summary: imported ${summary.length} day(s).`)
-
-    if (SYNC_HOURS) {
-      let hourTotal = 0
-      for (const day of syncDays) {
-        const totals = summaryByDate.get(day)
-        const allowEmpty = totals.order_count === 0 && totals.gross_sales === 0
-        const hours = await importHours(page, day, allowEmpty)
-        hourTotal += hours.length
-        console.log(`Hours ${day}: imported ${hours.length}.`)
-      }
-      console.log(`Hours: imported ${hourTotal} bucket(s).`)
-    }
-
-    if (SYNC_PRODUCTS) {
-      // By-product report aggregates over a range, so pull one day at a time.
-      let productTotal = 0
-      for (const day of syncDays) {
-        const products = mapProducts(parseCsv(await exportCsv(page, 'salesummarybyproduct', day, day)), day)
-        const totals = summaryByDate.get(day)
-        const allowEmpty = totals.order_count === 0 && totals.gross_sales === 0
-        await postJson('/api/import-products', { business_date: day, rows: products, allow_empty: allowEmpty })
-        productTotal += products.length
-        console.log(`Products ${day}: imported ${products.length}.`)
-      }
-      console.log(`Done. ${summary.length} summary day(s), ${productTotal} product rows.`)
+    const { summary, summaryByDate, skippedMissingCurrentDay } = await importSummary(page, from, to)
+    if (skippedMissingCurrentDay) {
+      console.log(`Kounta has no summary row for ${to} yet; scheduled live refresh skipped.`)
     } else {
-      console.log(`Done. ${summary.length} summary day(s).`)
+      console.log(`Summary: imported ${summary.length} day(s).`)
+
+      if (SYNC_HOURS) {
+        let hourTotal = 0
+        for (const day of syncDays) {
+          const totals = summaryByDate.get(day)
+          const allowEmpty = totals.order_count === 0 && totals.gross_sales === 0
+          const hours = await importHours(page, day, allowEmpty)
+          hourTotal += hours.length
+          console.log(`Hours ${day}: imported ${hours.length}.`)
+        }
+        console.log(`Hours: imported ${hourTotal} bucket(s).`)
+      }
+
+      if (SYNC_PRODUCTS) {
+        // By-product report aggregates over a range, so pull one day at a time.
+        let productTotal = 0
+        for (const day of syncDays) {
+          const products = mapProducts(parseCsv(await exportCsv(page, 'salesummarybyproduct', day, day)), day)
+          const totals = summaryByDate.get(day)
+          const allowEmpty = totals.order_count === 0 && totals.gross_sales === 0
+          await postJson('/api/import-products', { business_date: day, rows: products, allow_empty: allowEmpty })
+          productTotal += products.length
+          console.log(`Products ${day}: imported ${products.length}.`)
+        }
+        console.log(`Done. ${summary.length} summary day(s), ${productTotal} product rows.`)
+      } else {
+        console.log(`Done. ${summary.length} summary day(s).`)
+      }
     }
   }
 } catch (e) {
