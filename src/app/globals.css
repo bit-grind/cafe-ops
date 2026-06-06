@@ -151,6 +151,17 @@ button.bp-metric:hover {
   gap: 22px;
   align-items: end;
 }
+.live-refresh-icon {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+.live-refresh-icon--spinning {
+  animation: live-refresh-spin 0.8s linear infinite;
+}
+@keyframes live-refresh-spin {
+  to { transform: rotate(360deg); }
+}
 
 @media (max-width: 640px) {
   .live-takings-layout {
