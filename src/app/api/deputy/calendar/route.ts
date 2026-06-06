@@ -23,15 +23,24 @@ function dateParam(url: URL, key: string, fallback: string) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : fallback
 }
 
+function brisbaneTodayISO() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Australia/Brisbane',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const year = parts.find(p => p.type === 'year')?.value
+  const month = parts.find(p => p.type === 'month')?.value
+  const day = parts.find(p => p.type === 'day')?.value
+  return `${year}-${month}-${day}`
+}
+
 function defaultRange() {
-  const today = new Date()
-  const from = new Date(today)
-  from.setDate(from.getDate() - 14)
-  const to = new Date(today)
-  to.setDate(to.getDate() + 60)
+  const today = brisbaneTodayISO()
   return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
+    from: offsetDate(today, -14),
+    to: offsetDate(today, 60),
   }
 }
 
