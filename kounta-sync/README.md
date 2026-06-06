@@ -8,10 +8,14 @@ without anyone running a script.
 
 Two scheduled GitHub Actions keep sales current:
 
-- `.github/workflows/kounta-sync.yml` runs a lightweight live refresh every 10
-  minutes from **05:02 to 14:22 Brisbane**. Each live refresh logs into Kounta,
-  imports the sales summary and Sales Summary by Hour buckets, and skips product
-  rows so today's live takings card can follow Kounta's own dashboard cadence.
+- `.github/workflows/kounta-live-sales.yml` starts an hourly browser session
+  from **05:08 to 14:08 Brisbane**. Each session polls Kounta every minute for
+  up to 70 minutes and stops at 14:20, so a delayed hourly launch does not
+  create a data gap.
+- `.github/workflows/kounta-sync.yml` also requests a lightweight one-shot live
+  refresh every 10 minutes from **05:03 to 14:23 Brisbane** as a backup. Live
+  refreshes import the sales summary and Sales Summary by Hour buckets while
+  skipping product rows.
 - The same workflow runs the full daily sync at **14:30 Brisbane**, right after
   the shop closes. It imports the final sales summary, hourly buckets, and
   product rows.
@@ -65,9 +69,7 @@ The summary pulls the whole range in one request; products are pulled per day.
 For a live summary monitor, run **Actions → "Kounta live sales" → Run workflow**.
 It uses the same date inputs, imports hourly buckets, skips product
 export/import, and polls once per minute for 60 minutes by default. Set
-`monitor_minutes` to `0` for a one-shot summary/hourly refresh. Scheduled live
-refreshes run from **Kounta daily sync**;
-`Kounta live sales` is for manual diagnostics.
+`monitor_minutes` to `0` for a one-shot summary/hourly refresh.
 
 ## Debugging a failed run
 

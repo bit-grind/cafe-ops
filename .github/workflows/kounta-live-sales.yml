@@ -2,11 +2,11 @@ name: Kounta live sales
 
 on:
   schedule:
-    # Backup one-shot summary/hour refreshes during trading, offset from
-    # kounta-sync.yml. 19:08-04:28 UTC = 05:08-14:28 Brisbane (UTC+10).
-    - cron: '8,18,28,38,48,58 19-23 * * *'
-    - cron: '8,18,28,38,48,58 0-3 * * *'
-    - cron: '8,18,28 4 * * *'
+    # Keep a browser session polling each minute through trading. Runs overlap
+    # slightly so a delayed hourly launch does not create a data gap.
+    # 19:08-04:08 UTC = 05:08-14:08 Brisbane (UTC+10).
+    - cron: '8 19-23 * * *'
+    - cron: '8 0-4 * * *'
   workflow_dispatch:
     inputs:
       date_from:
@@ -80,7 +80,7 @@ jobs:
           SYNC_DATE_FROM: ${{ github.event.inputs.date_from }}
           SYNC_DATE_TO: ${{ github.event.inputs.date_to }}
           UPLOAD_DEBUG_SCREENSHOT: ${{ github.event.inputs.upload_debug_screenshot }}
-          LIVE_MONITOR_MINUTES: ${{ github.event_name == 'schedule' && '0' || github.event.inputs.monitor_minutes || '60' }}
+          LIVE_MONITOR_MINUTES: ${{ github.event_name == 'schedule' && '70' || github.event.inputs.monitor_minutes || '60' }}
           LIVE_POLL_SECONDS: ${{ github.event.inputs.poll_seconds || '60' }}
           LIVE_STOP_BRISBANE: '14:20'
           ALLOW_MISSING_CURRENT_DAY: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
