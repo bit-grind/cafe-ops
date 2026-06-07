@@ -526,7 +526,7 @@ export default function OpsHome() {
                       <>
                         Orders: {fmtNum(computed.liveDay.order_count)} &nbsp;·&nbsp; AOV: {money(computed.liveDay.aov)}
                         {computed.liveDay.updated_at
-                          ? <> &nbsp;·&nbsp; Imported {fmtBrisbaneTime(computed.liveDay.updated_at)}</>
+                          ? <> &nbsp;·&nbsp; Updated {fmtBrisbaneTime(computed.liveDay.updated_at)}</>
                           : liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
                       </>
                     ) : (
