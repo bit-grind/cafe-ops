@@ -595,7 +595,7 @@ export default function OpsHome() {
                     disabled={briefLoading || !hasNewerBrief}
                     style={{ padding: '7px 10px', borderRadius: 8, fontSize: 12 }}
                   >
-                    Today
+                    Latest
                   </button>
                   <button
                     type="button"
