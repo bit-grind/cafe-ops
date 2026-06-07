@@ -4,8 +4,8 @@ on:
   schedule:
     # Keep a browser session polling each minute through trading. Runs overlap
     # slightly so a delayed hourly launch does not create a data gap.
-    # 19:08-04:08 UTC = 05:08-14:08 Brisbane (UTC+10).
-    - cron: '8 19-23 * * *'
+    # 18:08-04:08 UTC = 04:08-14:08 Brisbane (UTC+10).
+    - cron: '8 18-23 * * *'
     - cron: '8 0-4 * * *'
   workflow_dispatch:
     inputs:
@@ -26,12 +26,18 @@ on:
       poll_seconds:
         description: 'Seconds between live samples — leave blank for 60'
         required: false
+      continue_monitoring:
+        description: 'Dispatch a successor monitor while the cafe is trading'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
-  group: kounta-live-sales-${{ github.event_name }}
+  group: ${{ (github.event_name == 'schedule' || github.event.inputs.continue_monitoring == 'true') && 'kounta-live-sales-monitor' || format('kounta-live-sales-manual-{0}', github.run_id) }}
   cancel-in-progress: true
 
 jobs:
@@ -68,6 +74,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run summary sync
+        id: sync
         if: steps.pre.outputs.ready == 'true'
         working-directory: kounta-sync
         run: node sync.mjs
@@ -83,7 +90,7 @@ jobs:
           LIVE_MONITOR_MINUTES: ${{ github.event_name == 'schedule' && '70' || github.event.inputs.monitor_minutes || '60' }}
           LIVE_POLL_SECONDS: ${{ github.event.inputs.poll_seconds || '60' }}
           LIVE_STOP_BRISBANE: '14:20'
-          ALLOW_MISSING_CURRENT_DAY: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
+          ALLOW_MISSING_CURRENT_DAY: ${{ github.event_name == 'schedule' && 'true' || github.event.inputs.continue_monitoring || 'false' }}
 
       - name: Upload error screenshot on failure
         if: failure() && steps.pre.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.upload_debug_screenshot == 'true'
@@ -93,3 +100,42 @@ jobs:
           path: kounta-sync/kounta-sync-error.png
           if-no-files-found: ignore
           retention-days: 1
+
+      - name: Continue live monitor during trading
+        if: always() && steps.pre.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONTINUE_MONITORING: ${{ github.event_name == 'schedule' && 'true' || github.event.inputs.continue_monitoring || 'false' }}
+          SYNC_OUTCOME: ${{ steps.sync.outcome }}
+        run: |
+          if [ "$CONTINUE_MONITORING" != "true" ]; then
+            exit 0
+          fi
+
+          brisbane_minute=$(node -e "
+            const parts = new Intl.DateTimeFormat('en-GB', {
+              timeZone: 'Australia/Brisbane',
+              hour: '2-digit',
+              minute: '2-digit',
+              hourCycle: 'h23',
+            }).formatToParts(new Date())
+            const hour = Number(parts.find(part => part.type === 'hour').value)
+            const minute = Number(parts.find(part => part.type === 'minute').value)
+            process.stdout.write(String(hour * 60 + minute))
+          ")
+
+          if [ "$brisbane_minute" -lt 240 ] || [ "$brisbane_minute" -ge 860 ]; then
+            echo "Outside the 04:00-14:20 Brisbane monitor window; not dispatching a successor."
+            exit 0
+          fi
+
+          if [ "$SYNC_OUTCOME" != "success" ]; then
+            echo "Previous monitor failed; waiting two minutes before retrying."
+            sleep 120
+          fi
+
+          gh workflow run kounta-live-sales.yml \
+            --ref "$GITHUB_REF_NAME" \
+            -f monitor_minutes=70 \
+            -f poll_seconds=60 \
+            -f continue_monitoring=true
