@@ -296,6 +296,7 @@ export default function OpsHome() {
   const [liveRefreshing, setLiveRefreshing] = useState(false)
   const [liveRefreshError, setLiveRefreshError] = useState(false)
   const [brief, setBrief] = useState<Brief | null>(null)
+  const [briefHours, setBriefHours] = useState<HourlySale[]>([])
   const [briefDates, setBriefDates] = useState<string[]>([])
   const [selectedBriefDate, setSelectedBriefDate] = useState<string | null>(null)
   const [briefLoading, setBriefLoading] = useState(true)
@@ -343,13 +344,15 @@ export default function OpsHome() {
       const query = date ? `?date=${encodeURIComponent(date)}` : ''
       const res = await fetch(`/api/brief${query}`, { headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) throw new Error('Brief request failed')
-      const d = await res.json() as { brief?: Brief | null; dates?: string[] }
+      const d = await res.json() as { brief?: Brief | null; dates?: string[]; hours?: HourlySale[] }
       setBrief((d?.brief as Brief | null | undefined) ?? null)
+      setBriefHours(d?.hours ?? [])
       setBriefDates(d?.dates ?? [])
       const nextDate = d?.brief?.brief_date ?? date ?? null
       setSelectedBriefDate(nextDate)
     } catch {
       setBrief(null)
+      setBriefHours([])
       setBriefError(true)
     } finally {
       setBriefLoading(false)
@@ -608,9 +611,17 @@ export default function OpsHome() {
               )}
             </div>
             {brief ? (
-              <div style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>
-                {brief.narrative}
-              </div>
+              <>
+                <div style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>
+                  {brief.narrative}
+                </div>
+                <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--muted-strong)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+                    Hourly takings
+                  </div>
+                  <HourlySalesChart hours={briefHours} />
+                </div>
+              </>
             ) : (
               <div style={{ fontSize: 13, color: 'var(--muted-strong)' }}>
                 {briefLoading

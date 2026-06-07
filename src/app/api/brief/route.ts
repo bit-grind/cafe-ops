@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getSessionUser, adminClient } from '@/lib/adminAuth'
 import { getBriefByDate, getBriefDates, getLatestBrief } from '@/lib/brief'
 
+const HOURS_SELECT = 'business_date,hour,gross_sales,net_sales,tax,order_count,aov,updated_at'
+
 /**
  * Returns the latest daily brief for any authenticated user (read-only sales
  * narrative. Generation is cron-owned so this GET route stays read-only.
@@ -18,8 +20,16 @@ export async function GET(req: Request) {
       date ? getBriefByDate(supabase, date) : getLatestBrief(supabase),
       getBriefDates(supabase),
     ])
+    const { data: hours, error: hoursError } = brief
+      ? await supabase
+          .from('sales_by_hour')
+          .select(HOURS_SELECT)
+          .eq('business_date', brief.brief_date)
+          .order('hour', { ascending: true })
+      : { data: [], error: null }
+    if (hoursError) console.error('Brief hourly sales lookup failed:', hoursError.message)
 
-    return NextResponse.json({ brief, dates })
+    return NextResponse.json({ brief, dates, hours: hoursError ? [] : hours ?? [] })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
     return NextResponse.json({ error: message }, { status: 500 })
