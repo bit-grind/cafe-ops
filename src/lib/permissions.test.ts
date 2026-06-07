@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { getAllowedTabs } from '@/lib/permissions'
 
 describe('getAllowedTabs', () => {
-  it('kitchen sees kitchen, calendar, bills and recipes', () => {
-    expect(getAllowedTabs({ isAdmin: false, isGuest: false, isKitchen: true })).toEqual(['kitchen', 'calendar', 'bills', 'recipes'])
+  it('kitchen sees its limited dashboard, full team calendar, suppliers and recipes', () => {
+    expect(getAllowedTabs({ isAdmin: false, isGuest: false, isKitchen: true })).toEqual([
+      'dashboard', 'kitchen', 'calendar', 'bills', 'recipes',
+    ])
   })
 
   it('admin sees every tab', () => {
@@ -23,6 +25,8 @@ describe('getAllowedTabs', () => {
   })
 
   it('kitchen role takes precedence even if also admin', () => {
-    expect(getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: true })).toEqual(['kitchen', 'calendar', 'bills', 'recipes'])
+    expect(getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: true })).toEqual([
+      'dashboard', 'kitchen', 'calendar', 'bills', 'recipes',
+    ])
   })
 })

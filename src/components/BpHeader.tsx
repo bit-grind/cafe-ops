@@ -18,8 +18,7 @@ export default function BpHeader({
     ? ALL_TABS.filter(t => allowedTabs.includes(t.tab))
     : ALL_TABS.filter(t => t.tab !== 'admin')
 
-  // Logo links to the user's landing page — kitchen users don't see the
-  // dashboard, so send them to their first visible tab instead.
+  // The first visible tab is the role-specific landing page.
   const homeHref = visible[0]?.href ?? '/ops'
 
   return (

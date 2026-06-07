@@ -32,25 +32,23 @@ export async function GET(req: Request) {
     allowedTabs: getAllowedTabs(session),
   }
 
-  if (session.isKitchen) {
-    return NextResponse.json({
-      profile,
-      days: [],
-      live_business_date: liveBusinessDate,
-      fetched_at: new Date().toISOString(),
-    })
-  }
-
   const url = new URL(req.url)
   const requested = Number.parseInt(url.searchParams.get('limit') ?? '', 10)
   const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 365) : 90
 
   const supabase = adminClient()
-  const { data, error } = await supabase
-    .from('sales_business_day')
-    .select(SALES_SELECT)
-    .order('business_date', { ascending: false })
-    .limit(limit)
+  const salesQuery = session.isKitchen
+    ? supabase
+        .from('sales_business_day')
+        .select(SALES_SELECT)
+        .eq('business_date', liveBusinessDate)
+        .limit(1)
+    : supabase
+        .from('sales_business_day')
+        .select(SALES_SELECT)
+        .order('business_date', { ascending: false })
+        .limit(limit)
+  const { data, error } = await salesQuery
 
   if (error) return NextResponse.json({ error: 'Failed to load dashboard data' }, { status: 500 })
 

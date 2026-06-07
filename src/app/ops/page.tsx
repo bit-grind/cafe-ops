@@ -288,6 +288,7 @@ export default function OpsHome() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState<string | null>(null)
   const [allowedTabs, setAllowedTabs] = useState<AppTab[]>([])
+  const [isKitchen, setIsKitchen] = useState<boolean | null>(null)
   const [days, setDays] = useState<Day[]>([])
   const [liveHours, setLiveHours] = useState<HourlySale[]>([])
   const [liveBusinessDate, setLiveBusinessDate] = useState<string | null>(null)
@@ -382,20 +383,15 @@ export default function OpsHome() {
       const dashboard = await dashboardRes.json() as DashboardResponse
       if (cancelled) return
 
-      let canLoadBrief = true
       const profile = dashboard.profile
-      // Kitchen users land on their own dashboard, not the sales one.
-      if (profile.isKitchen) {
-        window.location.replace('/ops/kitchen')
-        return
-      }
       setEmail(profile.email ?? sessionData.session.user.email ?? null)
       setAllowedTabs(profile.allowedTabs ?? [])
+      setIsKitchen(Boolean(profile.isKitchen))
       setDays(dashboard.days ?? [])
       setLiveHours(dashboard.live_hours ?? [])
       setLiveBusinessDate(dashboard.live_business_date)
       setLiveSalesUpdatedAt(dashboard.fetched_at)
-      canLoadBrief = !profile.isGuest
+      const canLoadBrief = !profile.isGuest
       setShowBrief(canLoadBrief)
 
       // Morning brief loads independently so it never delays the metric cards.
@@ -627,74 +623,76 @@ export default function OpsHome() {
           )}
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))',
-            gap: 14,
-            marginTop: 18,
-          }}
-        >
-          {loading || !computed ? (
-            <>
-              <MetricSkeleton primary />
-              <MetricSkeleton />
-              <MetricSkeleton />
-              <MetricSkeleton />
-            </>
-          ) : (
-            <>
-              {computed.today.business_date !== computed.liveBusinessDate && (
+        {isKitchen === false && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))',
+              gap: 14,
+              marginTop: 18,
+            }}
+          >
+            {loading || !computed ? (
+              <>
+                <MetricSkeleton primary />
+                <MetricSkeleton />
+                <MetricSkeleton />
+                <MetricSkeleton />
+              </>
+            ) : (
+              <>
+                {computed.today.business_date !== computed.liveBusinessDate && (
+                  <MetricCard
+                    label={`Latest day · ${fmtDate(computed.today.business_date)}`}
+                    value={money(computed.today.gross_sales)}
+                    foot={
+                      <>
+                        Orders: {fmtNum(computed.today.order_count)} &nbsp;·&nbsp; AOV: {money(computed.today.aov)}
+                      </>
+                    }
+                  />
+                )}
+
                 <MetricCard
-                  label={`Latest day · ${fmtDate(computed.today.business_date)}`}
-                  value={money(computed.today.gross_sales)}
+                  label="This week"
+                  sub={`${fmtDate(computed.wtdFrom)} – ${fmtDate(computed.weekSun)}`}
+                  value={money(computed.wtdSales)}
                   foot={
                     <>
-                      Orders: {fmtNum(computed.today.order_count)} &nbsp;·&nbsp; AOV: {money(computed.today.aov)}
+                      vs same days last week:{' '}
+                      <span style={{ color: pctTone(computed.wowPct), fontWeight: 600 }}>
+                        {computed.wowPct === null ? 'n/a' : `${computed.wowPct >= 0 ? '+' : ''}${computed.wowPct.toFixed(1)}%`}
+                      </span>
                     </>
                   }
                 />
-              )}
 
-              <MetricCard
-                label="This week"
-                sub={`${fmtDate(computed.wtdFrom)} – ${fmtDate(computed.weekSun)}`}
-                value={money(computed.wtdSales)}
-                foot={
-                  <>
-                    vs same days last week:{' '}
-                    <span style={{ color: pctTone(computed.wowPct), fontWeight: 600 }}>
-                      {computed.wowPct === null ? 'n/a' : `${computed.wowPct >= 0 ? '+' : ''}${computed.wowPct.toFixed(1)}%`}
-                    </span>
-                  </>
-                }
-              />
+                <MetricCard
+                  label="Last week"
+                  sub={`${fmtDate(computed.lastWeekFrom)} – ${fmtDate(computed.lastWeekTo)}`}
+                  value={money(computed.lastWeekSales)}
+                  foot={<>Orders: {fmtNum(computed.lastWeekOrders)}</>}
+                />
 
-              <MetricCard
-                label="Last week"
-                sub={`${fmtDate(computed.lastWeekFrom)} – ${fmtDate(computed.lastWeekTo)}`}
-                value={money(computed.lastWeekSales)}
-                foot={<>Orders: {fmtNum(computed.lastWeekOrders)}</>}
-              />
-
-              <MetricCard
-                label="This month"
-                sub={`${fmtDate(computed.mtdFrom)} – today`}
-                value={money(computed.mtdSales)}
-                foot={
-                  <>
-                    Last month ({fmtDate(computed.lmFrom).slice(3)}): {money(computed.lastMonthSales)}{' '}
-                    {computed.momPct !== null && (
-                      <span style={{ color: pctTone(computed.momPct), fontWeight: 600 }}>
-                        ({computed.momPct >= 0 ? '+' : ''}{computed.momPct.toFixed(1)}%)
-                      </span>
-                    )}
-                  </>
-                }
-              />
-            </>
-          )}
-        </div>
+                <MetricCard
+                  label="This month"
+                  sub={`${fmtDate(computed.mtdFrom)} – today`}
+                  value={money(computed.mtdSales)}
+                  foot={
+                    <>
+                      Last month ({fmtDate(computed.lmFrom).slice(3)}): {money(computed.lastMonthSales)}{' '}
+                      {computed.momPct !== null && (
+                        <span style={{ color: pctTone(computed.momPct), fontWeight: 600 }}>
+                          ({computed.momPct >= 0 ? '+' : ''}{computed.momPct.toFixed(1)}%)
+                        </span>
+                      )}
+                    </>
+                  }
+                />
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

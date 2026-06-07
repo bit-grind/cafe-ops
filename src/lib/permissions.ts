@@ -17,7 +17,7 @@ export const ALL_TABS: Array<{ label: string; tab: AppTab; href: string }> = [
 ]
 
 export function getAllowedTabs({ isAdmin, isGuest, isKitchen }: SessionFlags): AppTab[] {
-  if (isKitchen) return ['kitchen', 'calendar', 'bills', 'recipes']
+  if (isKitchen) return ['dashboard', 'kitchen', 'calendar', 'bills', 'recipes']
   if (isAdmin) return ['dashboard', 'kitchen', 'calendar', 'ask', 'bills', 'recipes', 'admin']
   if (isGuest) return ['dashboard', 'ask']
   return ['dashboard', 'kitchen', 'calendar', 'ask', 'bills', 'recipes']
