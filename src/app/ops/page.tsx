@@ -489,6 +489,65 @@ export default function OpsHome() {
       <BpHeader email={email} onSignOut={signOut} activeTab="dashboard" allowedTabs={allowedTabs} />
 
       <div className="bp-container">
+        <div style={{ marginTop: 18 }}>
+          {loading || !computed ? (
+            <div className="bp-metric bp-metric--primary">
+              <div className="bp-skel" style={{ width: 90, height: 11 }} />
+              <div className="bp-skel" style={{ width: 160, height: 36, marginTop: 14 }} />
+              <div className="bp-skel" style={{ width: '100%', height: 110, marginTop: 18 }} />
+            </div>
+          ) : (
+            <div className="bp-metric bp-metric--primary" style={{ padding: 20 }}>
+              <div className="live-takings-layout">
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                    <div>
+                      <div className="bp-metric__label">Live takings</div>
+                      <div className="bp-metric__sub">{fmtDate(computed.liveBusinessDate)}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="bp-btn"
+                      onClick={() => void refreshLiveSales()}
+                      disabled={liveRefreshing}
+                      aria-label="Refresh live takings"
+                      title="Refresh live takings"
+                      style={{ flex: '0 0 auto', width: 36, height: 36, padding: 0, borderRadius: 8, display: 'grid', placeItems: 'center' }}
+                    >
+                      <RefreshIcon spinning={liveRefreshing} />
+                    </button>
+                  </div>
+                  <div className="bp-metric__value">{computed.liveDay ? money(computed.liveDay.gross_sales) : '—'}</div>
+                  <div className="bp-metric__foot">
+                    {computed.liveDay ? (
+                      <>
+                        Orders: {fmtNum(computed.liveDay.order_count)} &nbsp;·&nbsp; AOV: {money(computed.liveDay.aov)}
+                        {computed.liveDay.updated_at
+                          ? <> &nbsp;·&nbsp; Imported {fmtBrisbaneTime(computed.liveDay.updated_at)}</>
+                          : liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
+                      </>
+                    ) : (
+                      <>
+                        No sales imported yet
+                        {liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
+                      </>
+                    )}
+                    {liveRefreshError && <> &nbsp;·&nbsp; Refresh failed</>}
+                  </div>
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 11, color: 'var(--muted-strong)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+                      Hourly sales
+                    </span>
+                  </div>
+                  <HourlySalesChart hours={liveHours} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {showBrief && (
           <div className="bp-card" style={{ marginTop: 18 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: brief ? 8 : 0, flexWrap: 'wrap' }}>
@@ -563,65 +622,6 @@ export default function OpsHome() {
             )}
           </div>
         )}
-
-        <div style={{ marginTop: 18 }}>
-          {loading || !computed ? (
-            <div className="bp-metric bp-metric--primary">
-              <div className="bp-skel" style={{ width: 90, height: 11 }} />
-              <div className="bp-skel" style={{ width: 160, height: 36, marginTop: 14 }} />
-              <div className="bp-skel" style={{ width: '100%', height: 110, marginTop: 18 }} />
-            </div>
-          ) : (
-            <div className="bp-metric bp-metric--primary" style={{ padding: 20 }}>
-              <div className="live-takings-layout">
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                    <div>
-                      <div className="bp-metric__label">Live takings</div>
-                      <div className="bp-metric__sub">{fmtDate(computed.liveBusinessDate)}</div>
-                    </div>
-                    <button
-                      type="button"
-                      className="bp-btn"
-                      onClick={() => void refreshLiveSales()}
-                      disabled={liveRefreshing}
-                      aria-label="Refresh live takings"
-                      title="Refresh live takings"
-                      style={{ flex: '0 0 auto', width: 36, height: 36, padding: 0, borderRadius: 8, display: 'grid', placeItems: 'center' }}
-                    >
-                      <RefreshIcon spinning={liveRefreshing} />
-                    </button>
-                  </div>
-                  <div className="bp-metric__value">{computed.liveDay ? money(computed.liveDay.gross_sales) : '—'}</div>
-                  <div className="bp-metric__foot">
-                    {computed.liveDay ? (
-                      <>
-                        Orders: {fmtNum(computed.liveDay.order_count)} &nbsp;·&nbsp; AOV: {money(computed.liveDay.aov)}
-                        {computed.liveDay.updated_at
-                          ? <> &nbsp;·&nbsp; Imported {fmtBrisbaneTime(computed.liveDay.updated_at)}</>
-                          : liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
-                      </>
-                    ) : (
-                      <>
-                        No sales imported yet
-                        {liveSalesUpdatedAt && <> &nbsp;·&nbsp; Checked {fmtBrisbaneTime(liveSalesUpdatedAt)}</>}
-                      </>
-                    )}
-                    {liveRefreshError && <> &nbsp;·&nbsp; Refresh failed</>}
-                  </div>
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
-                    <span style={{ fontSize: 11, color: 'var(--muted-strong)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-                      Hourly sales
-                    </span>
-                  </div>
-                  <HourlySalesChart hours={liveHours} />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
 
         {isKitchen === false && (
           <div
