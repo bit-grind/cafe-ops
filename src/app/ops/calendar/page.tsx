@@ -36,10 +36,11 @@ type MeResponse = {
   isGuest?: boolean
 }
 
-const FILTERS: Array<{ key: CalendarEventType; label: string }> = [
+type CalendarFilter = CalendarEventType | 'holiday'
+
+const FILTERS: Array<{ key: CalendarFilter; label: string }> = [
   { key: 'shift', label: 'Shifts' },
-  { key: 'public_holiday', label: 'Public holidays' },
-  { key: 'school_holiday', label: 'School holidays' },
+  { key: 'holiday', label: 'Holidays' },
   { key: 'birthday', label: 'Birthdays' },
   { key: 'unavailable', label: 'Unavailable' },
   { key: 'available', label: 'Available' },
@@ -174,6 +175,10 @@ function isHolidayEvent(event: CalendarEvent) {
   return event.type === 'public_holiday' || event.type === 'school_holiday'
 }
 
+function eventMatchesFilter(event: CalendarEvent, filter: CalendarFilter) {
+  return filter === 'holiday' ? isHolidayEvent(event) : event.type === filter
+}
+
 function eventTitle(event: CalendarEvent) {
   if (event.type === 'birthday') return `${event.employeeName} · Birthday`
   if (isHolidayEvent(event)) return `${event.employeeName} · ${event.status ?? TYPE_LABEL[event.type]}`
@@ -198,18 +203,16 @@ function eventDurationMs(event: CalendarEvent) {
   return Number.isFinite(ms) && ms > 0 ? ms : 0
 }
 
-function emptySelectedMessage(filter: CalendarEventType) {
+function emptySelectedMessage(filter: CalendarFilter) {
   if (filter === 'birthday') return 'No staff birthdays.'
-  if (filter === 'public_holiday') return 'No public holidays.'
-  if (filter === 'school_holiday') return 'No school holidays.'
+  if (filter === 'holiday') return 'No holidays.'
   if (filter === 'shift') return 'No shifts rostered.'
   return `No ${TYPE_LABEL[filter].toLowerCase()} recorded.`
 }
 
-function countLabel(count: number, filter: CalendarEventType) {
+function countLabel(count: number, filter: CalendarFilter) {
   if (filter === 'shift') return `${count} staff`
-  if (filter === 'public_holiday') return `${count} public holiday${count === 1 ? '' : 's'}`
-  if (filter === 'school_holiday') return `${count} school holiday${count === 1 ? '' : 's'}`
+  if (filter === 'holiday') return `${count} holiday${count === 1 ? '' : 's'}`
   const noun = filter === 'birthday' ? 'birthday' : 'event'
   return `${count} ${noun}${count === 1 ? '' : 's'}`
 }
@@ -237,7 +240,7 @@ export default function TeamCalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [month, setMonth] = useState(() => new Date())
   const [selectedDay, setSelectedDay] = useState(() => isoDate(new Date()))
-  const [filter, setFilter] = useState<CalendarEventType>('shift')
+  const [filter, setFilter] = useState<CalendarFilter>('shift')
 
   useEffect(() => {
     async function init() {
@@ -297,7 +300,7 @@ export default function TeamCalendarPage() {
   }
 
   const visibleEvents = useMemo(() => {
-    return events.filter(event => event.type === filter)
+    return events.filter(event => eventMatchesFilter(event, filter))
   }, [events, filter])
 
   const days = useMemo(() => {
@@ -475,7 +478,7 @@ export default function TeamCalendarPage() {
                         <span style={{ fontSize: 13, lineHeight: 1, fontWeight: isSelected ? 700 : 600 }}>{day.getDate()}</span>
                         {dayEvents.length > 0 ? (
                           <span
-                            title={`${dayEvents.length} staff`}
+                            title={countLabel(dayEvents.length, filter)}
                             style={{
                               fontSize: 10,
                               lineHeight: 1,

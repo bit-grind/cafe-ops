@@ -128,7 +128,7 @@ function publicHolidaysForYear(year: number) {
     { name: 'Easter Monday', date: addDays(easter, 1) },
     { name: 'Anzac Day', date: anzacDayWeekday === 0 ? `${year}-04-26` : anzacDay },
     { name: 'Labour Day', date: isoDate(firstWeekday(year, 5, 1)) },
-    { name: 'Royal Queensland Show', date: royalQueenslandShowDay(year), status: 'Brisbane area only' },
+    { name: 'Ekka public holiday', date: royalQueenslandShowDay(year), status: 'Royal Queensland Show - Brisbane area only' },
     { name: "King's Birthday", date: isoDate(firstWeekday(year, 10, 1)) },
     { name: 'Christmas Eve', date: `${year}-12-24`, startTime: '18:00:00', endTime: '23:59:00', status: '6pm to midnight' },
     { name: 'Christmas Day', date: `${year}-12-25` },

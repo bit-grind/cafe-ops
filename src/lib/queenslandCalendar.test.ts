@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { normalizeQueenslandCalendarHolidays } from '@/lib/queenslandCalendar'
 
 describe('Queensland calendar holidays', () => {
-  it('adds the Brisbane Royal Queensland Show public holiday', () => {
+  it('adds the Brisbane Ekka public holiday', () => {
     const events = normalizeQueenslandCalendarHolidays('2026-08-01', '2026-08-31')
 
     expect(events).toContainEqual(expect.objectContaining({
-      id: 'qld-public-holiday-2026-08-12-royal-queensland-show',
+      id: 'qld-public-holiday-2026-08-12-ekka-public-holiday',
       source: 'queensland',
-      employeeName: 'Royal Queensland Show',
+      employeeName: 'Ekka public holiday',
       type: 'public_holiday',
-      status: 'Brisbane area only',
+      status: 'Royal Queensland Show - Brisbane area only',
       dateStart: '2026-08-12',
       dateEnd: '2026-08-12',
     }))
