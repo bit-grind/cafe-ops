@@ -5,11 +5,11 @@ import BpHeader from '@/components/BpHeader'
 import { supabase } from '@/lib/supabaseClient'
 import type { AppTab } from '@/lib/permissions'
 
-type CalendarEventType = 'leave' | 'unavailable' | 'available' | 'shift' | 'birthday'
+type CalendarEventType = 'leave' | 'unavailable' | 'available' | 'shift' | 'birthday' | 'public_holiday' | 'school_holiday'
 
 type CalendarEvent = {
   id: string
-  source: 'deputy' | 'zapier'
+  source: 'deputy' | 'zapier' | 'queensland'
   externalId?: string | null
   employeeId?: number | null
   employeeName: string
@@ -38,6 +38,8 @@ type MeResponse = {
 
 const FILTERS: Array<{ key: CalendarEventType; label: string }> = [
   { key: 'shift', label: 'Shifts' },
+  { key: 'public_holiday', label: 'Public holidays' },
+  { key: 'school_holiday', label: 'School holidays' },
   { key: 'birthday', label: 'Birthdays' },
   { key: 'unavailable', label: 'Unavailable' },
   { key: 'available', label: 'Available' },
@@ -50,6 +52,8 @@ const TYPE_LABEL: Record<CalendarEventType, string> = {
   available: 'Available',
   shift: 'Shift',
   birthday: 'Birthday',
+  public_holiday: 'Public holiday',
+  school_holiday: 'School holiday',
 }
 
 const TYPE_COLOR: Record<CalendarEventType, string> = {
@@ -58,6 +62,8 @@ const TYPE_COLOR: Record<CalendarEventType, string> = {
   available: '#5bd38b',
   shift: '#7ab8ff',
   birthday: '#f4cf65',
+  public_holiday: '#d8a1ff',
+  school_holiday: '#64d6c2',
 }
 
 const FALLBACK_AREA_COLOR: Record<string, string> = {
@@ -160,18 +166,28 @@ function fmtDate(value: string) {
   }).format(parseIsoDay(value))
 }
 
+function isAllDayEvent(event: CalendarEvent) {
+  return event.start.includes('T00:00:00') && event.end.includes('T23:59:00')
+}
+
+function isHolidayEvent(event: CalendarEvent) {
+  return event.type === 'public_holiday' || event.type === 'school_holiday'
+}
+
 function eventTitle(event: CalendarEvent) {
   if (event.type === 'birthday') return `${event.employeeName} · Birthday`
+  if (isHolidayEvent(event)) return `${event.employeeName} · ${event.status ?? TYPE_LABEL[event.type]}`
   return `${event.employeeName}${event.areaName ? ` · ${event.areaName}` : ''}: ${fmtTime(event.start)} - ${fmtTime(event.end)}`
 }
 
 function eventAriaLabel(event: CalendarEvent) {
   if (event.type === 'birthday') return `${event.employeeName}, Birthday`
+  if (isHolidayEvent(event)) return `${event.employeeName}, ${event.status ?? TYPE_LABEL[event.type]}`
   return `${event.employeeName}${event.areaName ? `, ${event.areaName}` : ''}`
 }
 
 function eventTimeLabel(event: CalendarEvent) {
-  return event.type === 'birthday'
+  return event.type === 'birthday' || (isHolidayEvent(event) && isAllDayEvent(event))
     ? 'All day'
     : `${fmtTime(event.start)} - ${fmtTime(event.end)}`
 }
@@ -184,12 +200,16 @@ function eventDurationMs(event: CalendarEvent) {
 
 function emptySelectedMessage(filter: CalendarEventType) {
   if (filter === 'birthday') return 'No staff birthdays.'
+  if (filter === 'public_holiday') return 'No public holidays.'
+  if (filter === 'school_holiday') return 'No school holidays.'
   if (filter === 'shift') return 'No shifts rostered.'
   return `No ${TYPE_LABEL[filter].toLowerCase()} recorded.`
 }
 
 function countLabel(count: number, filter: CalendarEventType) {
   if (filter === 'shift') return `${count} staff`
+  if (filter === 'public_holiday') return `${count} public holiday${count === 1 ? '' : 's'}`
+  if (filter === 'school_holiday') return `${count} school holiday${count === 1 ? '' : 's'}`
   const noun = filter === 'birthday' ? 'birthday' : 'event'
   return `${count} ${noun}${count === 1 ? '' : 's'}`
 }
@@ -621,7 +641,11 @@ export default function TeamCalendarPage() {
                     }}
                   >
                     {uniqueSelectedEvents.map(event => {
-                      const roleLabel = event.type === 'shift' ? event.areaName ?? 'Unassigned' : TYPE_LABEL[event.type]
+                      const roleLabel = event.type === 'shift'
+                        ? event.areaName ?? 'Unassigned'
+                        : isHolidayEvent(event) && event.status
+                          ? event.status
+                          : TYPE_LABEL[event.type]
                       const color = eventColor(event)
                       return (
                         <div
