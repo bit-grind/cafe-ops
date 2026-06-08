@@ -13,6 +13,7 @@ import {
   operationalUnitMap,
   type DeputyCalendarEvent,
 } from '@/lib/deputyCalendar'
+import { normalizeQueenslandCalendarHolidays } from '@/lib/queenslandCalendar'
 
 export const dynamic = 'force-dynamic'
 
@@ -208,7 +209,7 @@ export async function GET(req: Request) {
     loadStoredEvents(from, to),
     loadDeputyEvents(from, to),
   ])
-  const events = [...stored.events, ...deputy.events]
+  const events = [...stored.events, ...deputy.events, ...normalizeQueenslandCalendarHolidays(from, to)]
     .sort((a, b) => a.start.localeCompare(b.start) || a.employeeName.localeCompare(b.employeeName))
 
   return NextResponse.json({
@@ -218,6 +219,7 @@ export async function GET(req: Request) {
     sources: {
       zapier: { status: stored.status, error: stored.error },
       deputy: { status: deputy.status, error: deputy.error },
+      queensland: { status: 'connected', error: null },
     },
     fetched_at: new Date().toISOString(),
   })

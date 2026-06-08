@@ -1,8 +1,8 @@
-export type DeputyCalendarEventType = 'leave' | 'unavailable' | 'available' | 'shift' | 'birthday'
+export type DeputyCalendarEventType = 'leave' | 'unavailable' | 'available' | 'shift' | 'birthday' | 'public_holiday' | 'school_holiday'
 
 export type DeputyCalendarEvent = {
   id: string
-  source: 'deputy' | 'zapier'
+  source: 'deputy' | 'zapier' | 'queensland'
   externalId?: string | null
   employeeId?: number | null
   employeeName: string
