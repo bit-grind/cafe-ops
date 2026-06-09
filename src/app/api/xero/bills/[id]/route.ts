@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 import { getBill, getXeroConnection } from '@/lib/xero'
 
 /**
@@ -28,7 +29,6 @@ export async function GET(
 
     return NextResponse.json({ bill })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return internalError('Bill fetch failed', e, 'Failed to load bill')
   }
 }

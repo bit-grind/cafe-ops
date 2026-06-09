@@ -25,7 +25,10 @@ export async function POST(req: Request) {
     const dateFrom = url.searchParams.get('dateFrom') ?? undefined
     const dateTo = url.searchParams.get('dateTo') ?? undefined
 
-    if (!dateFrom || !dateTo) {
+    // Strict format check — these values are interpolated into the Xero
+    // where clause by listBills, so never pass through free-form text.
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+    if (!dateFrom || !dateTo || !DATE_RE.test(dateFrom) || !DATE_RE.test(dateTo)) {
       return NextResponse.json(
         { error: 'dateFrom and dateTo query params are required (YYYY-MM-DD)' },
         { status: 400 }

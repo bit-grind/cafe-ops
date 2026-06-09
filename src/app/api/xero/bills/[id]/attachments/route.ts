@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 import { listBillAttachments, getXeroConnection } from '@/lib/xero'
 
 /**
@@ -25,7 +26,6 @@ export async function GET(
     const attachments = await listBillAttachments(id)
     return NextResponse.json({ attachments })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return internalError('Attachment list failed', e, 'Failed to load attachments')
   }
 }

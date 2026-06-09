@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { adminClient, getSessionUser } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 import { mondayOf, isoDate } from '@/lib/dates'
 import { isKitchenSupplierBill } from '@/lib/suppliers'
 import { getKitchenSuppliers } from '@/lib/suppliers-db'
@@ -40,7 +41,7 @@ export async function GET(req: Request) {
       .limit(500),
     getKitchenSuppliers(),
   ])
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return internalError('Food cost week query failed', error, 'Failed to load week bills')
 
   const bills = (data ?? [])
     .filter(r => isKitchenSupplierBill(r.contact_name, r.invoice_number, suppliers))
