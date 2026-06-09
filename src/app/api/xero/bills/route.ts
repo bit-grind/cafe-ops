@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { adminClient, getSessionUser } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 import { getXeroConnection } from '@/lib/xero'
 
 /**
@@ -38,7 +39,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await query
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return internalError('Bills list query failed', error, 'Failed to load bills')
     }
 
     const bills = (data ?? []).map((r) => ({
@@ -63,7 +64,6 @@ export async function GET(req: Request) {
       totalScanned: bills.length,
     })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return internalError('Bills list failed', e, 'Failed to load bills')
   }
 }

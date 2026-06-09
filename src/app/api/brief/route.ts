@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser, adminClient } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 import { getBriefByDate, getBriefDates, getLatestBrief } from '@/lib/brief'
 
 const HOURS_SELECT = 'business_date,hour,gross_sales,net_sales,tax,order_count,aov,updated_at'
@@ -31,7 +32,6 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ brief, dates, hours: hoursError ? [] : hours ?? [] })
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return internalError('Brief load failed', e, 'Failed to load brief')
   }
 }

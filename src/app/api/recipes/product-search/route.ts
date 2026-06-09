@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser, adminClient } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 import { convertRecipePrice } from '@/lib/recipeUnits'
 
 type ExtractionRunRelation =
@@ -50,7 +51,7 @@ export async function GET(req: Request) {
     .order('invoice_date', { ascending: false, foreignTable: 'extraction_runs' })
     .limit(40)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return internalError('Product search failed', error, 'Search failed')
 
   const seen = new Set<string>()
   const results = (data ?? [])

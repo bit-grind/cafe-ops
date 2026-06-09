@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { adminClient, getSessionUser } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 
 type ExtractionRunRelation =
   | {
@@ -70,7 +71,7 @@ export async function GET(req: Request) {
     .limit(500)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return internalError('Line-item search failed', error, 'Search failed')
   }
 
   // Flatten the join for a cleaner response

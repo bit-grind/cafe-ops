@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser, adminClient } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 import { getPriceWatch } from '@/lib/priceWatch'
 
 /**
@@ -14,7 +15,6 @@ export async function GET(req: Request) {
     const changes = await getPriceWatch(adminClient())
     return NextResponse.json({ changes })
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return internalError('Price watch failed', e, 'Failed to load price changes')
   }
 }

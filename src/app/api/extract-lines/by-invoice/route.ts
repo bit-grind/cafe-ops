@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { adminClient, getSessionUser } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 
 /**
  * GET /api/extract-lines/by-invoice?invoiceId=<xero-invoice-id>
@@ -40,7 +41,7 @@ export async function GET(req: Request) {
   ])
 
   if (itemsRes.error) {
-    return NextResponse.json({ error: itemsRes.error.message }, { status: 500 })
+    return internalError('Line-item lookup failed', itemsRes.error, 'Failed to load line items')
   }
 
   const run = runRes.data

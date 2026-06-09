@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser, adminClient } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser(req)
@@ -17,7 +18,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       .order('sort_order'),
   ])
 
-  if (recipeRes.error) return NextResponse.json({ error: recipeRes.error.message }, { status: 404 })
+  if (recipeRes.error) return NextResponse.json({ error: 'Recipe not found' }, { status: 404 })
   return NextResponse.json({ recipe: recipeRes.data, ingredients: ingredientsRes.data ?? [] })
 }
 
@@ -36,7 +37,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const { error } = await db.from('recipe_ingredients')
         .update({ unit_cost: unit_cost ?? null })
         .eq('id', ingId).eq('recipe_id', id)
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (error) return internalError('Recipe cost update failed', error, 'Failed to save costs')
     }
     return NextResponse.json({ ok: true })
   }
@@ -50,7 +51,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       yield_qty: body.yield_qty ?? 1,
       yield_unit: body.yield_unit ?? 'portion',
     }).eq('id', id)
-    if (recipeError) return NextResponse.json({ error: recipeError.message }, { status: 500 })
+    if (recipeError) return internalError('Recipe update failed', recipeError, 'Failed to save recipe')
 
     if (Array.isArray(body.ingredients)) {
       const incoming = body.ingredients as Array<Record<string, unknown>>
@@ -62,14 +63,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         .from('recipe_ingredients')
         .select('id')
         .eq('recipe_id', id)
-      if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
+      if (existingError) return internalError('Recipe ingredient lookup failed', existingError, 'Failed to save recipe')
 
       const removedIds = (existingRows ?? [])
         .map(row => row.id as number)
         .filter(ingId => !incomingIds.includes(ingId))
       if (removedIds.length) {
         const { error: deleteError } = await db.from('recipe_ingredients').delete().in('id', removedIds).eq('recipe_id', id)
-        if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 })
+        if (deleteError) return internalError('Recipe ingredient delete failed', deleteError, 'Failed to save recipe')
       }
 
       for (const [i, ing] of incoming.entries()) {
@@ -87,13 +88,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             .update(values)
             .eq('id', ing.id)
             .eq('recipe_id', id)
-          if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+          if (updateError) return internalError('Recipe ingredient update failed', updateError, 'Failed to save recipe')
         } else {
           const { error: insertError } = await db.from('recipe_ingredients').insert({
             recipe_id: id,
             ...values,
           })
-          if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 })
+          if (insertError) return internalError('Recipe ingredient insert failed', insertError, 'Failed to save recipe')
         }
       }
     }
@@ -111,6 +112,6 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   const { id } = await params
   const { error } = await adminClient().from('recipes').delete().eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return internalError('Recipe delete failed', error, 'Failed to delete recipe')
   return NextResponse.json({ ok: true })
 }

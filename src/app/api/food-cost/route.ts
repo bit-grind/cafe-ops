@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { adminClient, getSessionUser } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 import { mondayOf, isoDate } from '@/lib/dates'
 import { isKitchenSupplierBill } from '@/lib/suppliers'
 import { getKitchenSuppliers } from '@/lib/suppliers-db'
@@ -42,7 +43,7 @@ export async function GET(req: Request) {
       .limit(10000),
     getKitchenSuppliers(),
   ])
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return internalError('Food cost query failed', error, 'Failed to load food cost')
 
   const weekTotals = new Map<string, number>()
   for (const b of bills ?? []) {

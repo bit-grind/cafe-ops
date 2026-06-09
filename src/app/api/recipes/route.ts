@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSessionUser, adminClient } from '@/lib/adminAuth'
+import { internalError } from '@/lib/apiError'
 
 export async function GET(req: Request) {
   const user = await getSessionUser(req)
@@ -11,7 +12,7 @@ export async function GET(req: Request) {
     .select('id, name, yield_qty, yield_unit')
     .order('name')
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return internalError('Recipe list failed', error, 'Failed to load recipes')
   return NextResponse.json({ recipes: data })
 }
 
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
     .select('id, name, yield_qty, yield_unit')
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return internalError('Recipe create failed', error, 'Failed to save recipe')
 
   if (Array.isArray(ingredients) && ingredients.length) {
     const { error: ingredientError } = await db.from('recipe_ingredients').insert(
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
         sort_order: i,
       }))
     )
-    if (ingredientError) return NextResponse.json({ error: ingredientError.message }, { status: 500 })
+    if (ingredientError) return internalError('Recipe ingredient insert failed', ingredientError, 'Failed to save recipe')
   }
 
   return NextResponse.json({ recipe })
