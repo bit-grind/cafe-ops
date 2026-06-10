@@ -60,12 +60,12 @@ const NAV_LABELS: Record<AppTab, string> = {
 
 const NAV_HREFS: Record<AppTab, string> = {
   dashboard: '/v2',
-  kitchen: '/ops/kitchen',
-  recipes: '/ops/recipes',
-  bills: '/ops/bills',
-  ask: '/ops/ask',
-  calendar: '/ops/calendar',
-  admin: '/ops/admin',
+  kitchen: '/v2/kitchen',
+  recipes: '/v2/recipes',
+  bills: '/v2/bills',
+  ask: '/v2/ask',
+  calendar: '/v2/calendar',
+  admin: '/v2/admin',
 }
 
 function mergeDay(days: DashboardDay[], day: DashboardDay) {
@@ -432,7 +432,7 @@ export default function V2DashboardPage() {
               >
                 <RefreshIcon spinning={liveRefreshing} />
               </button>
-              {allowedTabs.includes('ask') && <Link href="/ops/ask" className={styles.askButton}>Ask {branding.displayName}</Link>}
+              {allowedTabs.includes('ask') && <Link href="/v2/ask" className={styles.askButton}>Ask {branding.displayName}</Link>}
             </div>
           </header>
 
