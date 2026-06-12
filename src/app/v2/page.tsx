@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fmtDate, fmtNum, money } from '@/lib/fmt'
-import type { AppTab } from '@/lib/permissions'
+import { getLandingHref, type AppTab } from '@/lib/permissions'
 import { supabase } from '@/lib/supabaseClient'
 import { useBranding } from '@/lib/useBranding'
 import {
@@ -279,8 +279,13 @@ export default function V2DashboardPage() {
       const dashboard = await dashboardResponse.json() as DashboardResponse
       if (cancelled) return
 
+      const tabs = dashboard.profile.allowedTabs ?? []
+      if (!tabs.includes('dashboard')) {
+        window.location.replace(getLandingHref(tabs, 'v2'))
+        return
+      }
       setEmail(dashboard.profile.email ?? sessionData.session.user.email ?? null)
-      setAllowedTabs(dashboard.profile.allowedTabs ?? [])
+      setAllowedTabs(tabs)
       setIsGuest(Boolean(dashboard.profile.isGuest))
       setDays(dashboard.days ?? [])
       setLiveHours(dashboard.live_hours ?? [])

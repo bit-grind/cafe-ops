@@ -7,7 +7,7 @@ import { getAllowedTabs } from '@/lib/permissions'
  * flags. Keeps the admin email out of client JavaScript.
  *
  * Response shape:
- *   { email, role, isAdmin, isGuest, isKitchen, allowedTabs }
+ *   { email, role, isAdmin, isGuest, isKitchen, isTeam, allowedTabs }
  *
  * `allowedTabs` lists the tab keys the user should see in the header.
  */
@@ -15,9 +15,9 @@ export async function GET(req: Request) {
   const session = await getSessionUser(req)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { email, role, isAdmin, isGuest, isKitchen } = session
+  const { email, role, isAdmin, isGuest, isKitchen, isTeam } = session
 
-  const allowedTabs = getAllowedTabs({ isAdmin, isGuest, isKitchen })
+  const allowedTabs = getAllowedTabs({ isAdmin, isGuest, isKitchen, isTeam })
 
   return NextResponse.json({
     email,
@@ -25,6 +25,7 @@ export async function GET(req: Request) {
     isAdmin,
     isGuest,
     isKitchen,
+    isTeam,
     allowedTabs,
   })
 }

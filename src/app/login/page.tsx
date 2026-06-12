@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useBranding } from '@/lib/useBranding'
+import { getLandingHref, type AppTab } from '@/lib/permissions'
 
 export default function LoginPage() {
   const branding = useBranding()
@@ -16,17 +17,40 @@ export default function LoginPage() {
     setBusy(true)
     setMsg(null)
     const trimmedEmail = email.trim()
+    const loginName = trimmedEmail.toLowerCase()
     const guestEmail = process.env.NEXT_PUBLIC_GUEST_LOGIN_EMAIL
-    if (trimmedEmail === 'guest' && !guestEmail) {
+    const teamEmail = process.env.NEXT_PUBLIC_TEAM_LOGIN_EMAIL
+    if (loginName === 'guest' && !guestEmail) {
       setBusy(false)
       setMsg('Guest login is not configured.')
       return
     }
-    const resolvedEmail = trimmedEmail === 'guest' ? guestEmail! : trimmedEmail
-    const { error } = await supabase.auth.signInWithPassword({ email: resolvedEmail, password })
+    if (loginName === 'team' && !teamEmail) {
+      setBusy(false)
+      setMsg('Team login is not configured.')
+      return
+    }
+    const resolvedEmail = loginName === 'guest'
+      ? guestEmail!
+      : loginName === 'team'
+        ? teamEmail!
+        : trimmedEmail
+    const { data, error } = await supabase.auth.signInWithPassword({ email: resolvedEmail, password })
     setBusy(false)
-    if (error) setMsg('Invalid email or password.')
-    else window.location.href = '/ops'
+    if (error || !data.session) {
+      setMsg('Invalid email or password.')
+      return
+    }
+
+    const meRes = await fetch('/api/me', {
+      headers: { Authorization: `Bearer ${data.session.access_token}` },
+    }).catch(() => null)
+    if (!meRes?.ok) {
+      window.location.href = '/ops'
+      return
+    }
+    const me = await meRes.json() as { allowedTabs?: AppTab[] }
+    window.location.href = getLandingHref(me.allowedTabs ?? [])
   }
 
   return (
@@ -87,12 +111,12 @@ export default function LoginPage() {
         </h1>
 
         <form onSubmit={signIn} style={{ display: 'grid', gap: 10 }}>
-          <label className="sr-only" htmlFor="login-email">Email</label>
+          <label className="sr-only" htmlFor="login-email">Email or username</label>
           <input
             id="login-email"
             className="bp-input"
-            placeholder="Email"
-            autoComplete="email"
+            placeholder="Email or username"
+            autoComplete="username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />

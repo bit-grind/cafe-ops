@@ -29,7 +29,18 @@ export async function GET(req: Request) {
     isAdmin: session.isAdmin,
     isGuest: session.isGuest,
     isKitchen: session.isKitchen,
+    isTeam: session.isTeam,
     allowedTabs: getAllowedTabs(session),
+  }
+
+  if (session.isTeam) {
+    return NextResponse.json({
+      profile,
+      days: [],
+      live_hours: [],
+      live_business_date: brisbaneTodayISO(),
+      fetched_at: new Date().toISOString(),
+    })
   }
 
   const url = new URL(req.url)

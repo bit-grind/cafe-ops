@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, type ReactNode } from 'react'
-import type { AppTab } from '@/lib/permissions'
+import { getLandingHref, type AppTab } from '@/lib/permissions'
 import { useBranding } from '@/lib/useBranding'
 import styles from './V2Shell.module.css'
 
@@ -60,13 +60,17 @@ export default function V2Shell({
   const branding = useBranding()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const visibleTabs = NAV_ORDER.filter(tab => allowedTabs.includes(tab))
-  const primaryMobileTabs = MOBILE_ORDER.filter(tab => visibleTabs.includes(tab))
+  const homeHref = getLandingHref(allowedTabs, 'v2')
+  const currentSiteHref = getLandingHref(allowedTabs)
+  const primaryMobileTabs = visibleTabs.length === 1
+    ? visibleTabs
+    : MOBILE_ORDER.filter(tab => visibleTabs.includes(tab))
   const extraMobileTabs = visibleTabs.filter(tab => !primaryMobileTabs.includes(tab))
 
   return (
     <>
       <header className={styles.mobileHeader}>
-        <Link href="/v2" className={styles.mobileBrand}>
+        <Link href={homeHref} className={styles.mobileBrand}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={branding.logoSrc} alt={`${branding.displayName} logo`} />
           <span><strong>{branding.displayName}</strong><small>{branding.subtitle}</small></span>
@@ -84,7 +88,7 @@ export default function V2Shell({
 
       <div className={styles.shell}>
         <aside className={styles.sidebar}>
-          <Link href="/v2" className={styles.brand}>
+          <Link href={homeHref} className={styles.brand}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={branding.logoSrc} alt={`${branding.displayName} logo`} />
             <span><strong>{branding.displayName}</strong><small>Operations</small></span>
@@ -125,7 +129,7 @@ export default function V2Shell({
             <strong title={email ?? undefined}>{email ?? 'Signed in'}</strong>
             <span>V2 workspace</span>
             <div className={styles.accountLinks}>
-              <Link href="/ops">Current site</Link>
+              <Link href={currentSiteHref}>Current site</Link>
               <button type="button" onClick={() => void onSignOut()}>Sign out</button>
             </div>
           </div>
@@ -156,7 +160,7 @@ export default function V2Shell({
                 {NAV_LABELS[tab]}
               </Link>
             ))}
-            <Link href="/ops">Current site</Link>
+            <Link href={currentSiteHref}>Current site</Link>
             <button type="button" onClick={() => void onSignOut()}>Sign out</button>
           </nav>
         </div>

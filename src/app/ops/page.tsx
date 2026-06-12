@@ -5,7 +5,7 @@ import BpHeader from '@/components/BpHeader'
 import MetricCard, { MetricSkeleton } from '@/components/MetricCard'
 import { supabase } from '@/lib/supabaseClient'
 import { fmtDate, fmtNum, iso, money } from '@/lib/fmt'
-import type { AppTab } from '@/lib/permissions'
+import { getLandingHref, type AppTab } from '@/lib/permissions'
 
 type Day = {
   business_date: string
@@ -387,8 +387,13 @@ export default function OpsHome() {
       if (cancelled) return
 
       const profile = dashboard.profile
+      const tabs = profile.allowedTabs ?? []
+      if (!tabs.includes('dashboard')) {
+        window.location.replace(getLandingHref(tabs))
+        return
+      }
       setEmail(profile.email ?? sessionData.session.user.email ?? null)
-      setAllowedTabs(profile.allowedTabs ?? [])
+      setAllowedTabs(tabs)
       setIsKitchen(Boolean(profile.isKitchen))
       setDays(dashboard.days ?? [])
       setLiveHours(dashboard.live_hours ?? [])

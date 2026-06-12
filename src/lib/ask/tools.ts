@@ -150,9 +150,11 @@ export function getAskToolsForRole(role: AppRole, isAdmin = false): {
   definitions: OpenAITool[]
   allowedNames: ReadonlySet<string>
 } {
-  const allowedNames = role === 'guest' && !isAdmin
-    ? SALES_TOOLS
-    : new Set(ASK_TOOLS.map(tool => tool.function.name))
+  const allowedNames = role === 'team' && !isAdmin
+    ? new Set<string>()
+    : role === 'guest' && !isAdmin
+      ? SALES_TOOLS
+      : new Set(ASK_TOOLS.map(tool => tool.function.name))
   return {
     definitions: ASK_TOOLS.filter(tool => allowedNames.has(tool.function.name)),
     allowedNames,

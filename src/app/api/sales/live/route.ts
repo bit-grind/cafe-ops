@@ -29,6 +29,7 @@ function requestedBusinessDate(req: Request) {
 export async function GET(req: Request) {
   const session = await getSessionUser(req)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.isTeam) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const businessDate = requestedBusinessDate(req)
   if (!businessDate) return NextResponse.json({ error: 'Invalid date' }, { status: 400 })

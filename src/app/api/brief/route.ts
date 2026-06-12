@@ -12,6 +12,7 @@ const HOURS_SELECT = 'business_date,hour,gross_sales,net_sales,tax,order_count,a
 export async function GET(req: Request) {
   const session = await getSessionUser(req)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.isTeam) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   if (session.isGuest) return NextResponse.json({ brief: null, dates: [] })
   try {
     const url = new URL(req.url)

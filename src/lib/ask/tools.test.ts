@@ -17,6 +17,12 @@ describe('getAskToolsForRole', () => {
   it('allows the configured admin to use the complete tool set', () => {
     expect(getAskToolsForRole('guest', true).definitions).toHaveLength(6)
   })
+
+  it('does not expose any Ask tools to team-calendar users', () => {
+    const team = getAskToolsForRole('team')
+    expect(team.definitions).toEqual([])
+    expect([...team.allowedNames]).toEqual([])
+  })
 })
 
 describe('executeAskTool', () => {

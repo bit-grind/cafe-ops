@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-export type AppRole = 'staff' | 'kitchen' | 'guest'
+export type AppRole = 'staff' | 'kitchen' | 'guest' | 'team'
 
-const APP_ROLES = new Set<AppRole>(['staff', 'kitchen', 'guest'])
+const APP_ROLES = new Set<AppRole>(['staff', 'kitchen', 'guest', 'team'])
 
 export function normalizeAppRole(role: unknown): AppRole {
   if (role === 'admin') return 'staff'
@@ -20,6 +20,16 @@ export function normalizeAppRole(role: unknown): AppRole {
 export function isAdminEmail(email?: string | null): boolean {
   const admin = process.env.ADMIN_EMAIL
   return !!admin && !!email && email === admin
+}
+
+export function isTeamEmail(email?: string | null): boolean {
+  const team = process.env.TEAM_LOGIN_EMAIL
+  return !!team && !!email && email === team
+}
+
+function effectiveAppRole(role: unknown, email?: string | null): AppRole {
+  const normalized = normalizeAppRole(role)
+  return normalized === 'guest' && isTeamEmail(email) ? 'team' : normalized
 }
 
 /**
@@ -69,6 +79,7 @@ export async function getSessionUser(req: Request): Promise<
       isAdmin: boolean
       isGuest: boolean
       isKitchen: boolean
+      isTeam: boolean
     }
 > {
   const anonClient = createClient(
@@ -90,15 +101,18 @@ export async function getSessionUser(req: Request): Promise<
     .eq('user_id', user.id)
     .maybeSingle()
   if (roleError) console.error('user_role lookup failed:', roleError.message)
-  if (roleRow?.role) role = normalizeAppRole(roleRow.role)
+  if (roleRow?.role) role = effectiveAppRole(roleRow.role, email)
 
   return {
     id: user.id,
     email,
     role,
     isAdmin,
-    isGuest: !isAdmin && role === 'guest',
+    // Team users inherit the restricted-user checks everywhere except the
+    // calendar route, which explicitly permits them.
+    isGuest: !isAdmin && (role === 'guest' || role === 'team'),
     isKitchen: role === 'kitchen',
+    isTeam: !isAdmin && role === 'team',
   }
 }
 
@@ -107,10 +121,11 @@ export async function getSessionUser(req: Request): Promise<
  * from admin user-management routes so the table stays the source of truth.
  */
 export async function setUserRole(userId: string, email: string | null, role: AppRole): Promise<void> {
+  const storedRole = role === 'team' ? 'guest' : role
   const { error } = await adminClient()
     .from('user_role')
     .upsert(
-      { user_id: userId, email, role, updated_at: new Date().toISOString() },
+      { user_id: userId, email, role: storedRole, updated_at: new Date().toISOString() },
       { onConflict: 'user_id' },
     )
   if (error) throw new Error(`user_role upsert failed: ${error.message}`)
@@ -125,9 +140,9 @@ export async function deleteUserRole(userId: string): Promise<void> {
 /** Fetch a map of user_id → role for the given user IDs (admin listings). */
 export async function getUserRoles(userIds: string[]): Promise<Record<string, AppRole>> {
   if (userIds.length === 0) return {}
-  const { data, error } = await adminClient().from('user_role').select('user_id, role').in('user_id', userIds)
+  const { data, error } = await adminClient().from('user_role').select('user_id, email, role').in('user_id', userIds)
   if (error) throw new Error(`user_role list failed: ${error.message}`)
   const map: Record<string, AppRole> = {}
-  for (const row of data ?? []) map[row.user_id as string] = normalizeAppRole(row.role)
+  for (const row of data ?? []) map[row.user_id as string] = effectiveAppRole(row.role, row.email as string | null)
   return map
 }
