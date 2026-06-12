@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import V2Shell from '@/components/v2/V2Shell'
+import { matchesTeamCalendarFilter, type TeamCalendarFilter } from '@/lib/calendarFilters'
+import type { DeputyCalendarEventType } from '@/lib/deputyCalendar'
 import { supabase } from '@/lib/supabaseClient'
 import { getLandingHref, type AppTab } from '@/lib/permissions'
 
-type CalendarEventType = 'leave' | 'unavailable' | 'available' | 'shift' | 'birthday' | 'public_holiday' | 'school_holiday'
+type CalendarEventType = DeputyCalendarEventType
 
 type CalendarEvent = {
   id: string
@@ -35,15 +37,12 @@ type MeResponse = {
   allowedTabs?: AppTab[]
 }
 
-type CalendarFilter = CalendarEventType | 'holiday'
-
-const FILTERS: Array<{ key: CalendarFilter; label: string }> = [
+const FILTERS: Array<{ key: TeamCalendarFilter; label: string }> = [
   { key: 'shift', label: 'Shifts' },
   { key: 'holiday', label: 'Holidays' },
   { key: 'birthday', label: 'Birthdays' },
-  { key: 'unavailable', label: 'Unavailable' },
+  { key: 'leave_unavailable', label: 'Leave & Unavailable' },
   { key: 'available', label: 'Available' },
-  { key: 'leave', label: 'Leave' },
 ]
 
 const TYPE_LABEL: Record<CalendarEventType, string> = {
@@ -174,10 +173,6 @@ function isHolidayEvent(event: CalendarEvent) {
   return event.type === 'public_holiday' || event.type === 'school_holiday'
 }
 
-function eventMatchesFilter(event: CalendarEvent, filter: CalendarFilter) {
-  return filter === 'holiday' ? isHolidayEvent(event) : event.type === filter
-}
-
 function eventTitle(event: CalendarEvent) {
   if (event.type === 'birthday') return `${event.employeeName} · Birthday`
   if (isHolidayEvent(event)) return `${event.employeeName} · ${event.status ?? TYPE_LABEL[event.type]}`
@@ -202,14 +197,15 @@ function eventDurationMs(event: CalendarEvent) {
   return Number.isFinite(ms) && ms > 0 ? ms : 0
 }
 
-function emptySelectedMessage(filter: CalendarFilter) {
+function emptySelectedMessage(filter: TeamCalendarFilter) {
   if (filter === 'birthday') return 'No staff birthdays.'
   if (filter === 'holiday') return 'No holidays.'
   if (filter === 'shift') return 'No shifts rostered.'
+  if (filter === 'leave_unavailable') return 'No leave or unavailable time recorded.'
   return `No ${TYPE_LABEL[filter].toLowerCase()} recorded.`
 }
 
-function countLabel(count: number, filter: CalendarFilter) {
+function countLabel(count: number, filter: TeamCalendarFilter) {
   if (filter === 'shift') return `${count} staff`
   if (filter === 'holiday') return `${count} holiday${count === 1 ? '' : 's'}`
   const noun = filter === 'birthday' ? 'birthday' : 'event'
@@ -239,7 +235,7 @@ export default function TeamCalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [month, setMonth] = useState(() => new Date())
   const [selectedDay, setSelectedDay] = useState(() => isoDate(new Date()))
-  const [filter, setFilter] = useState<CalendarFilter>('shift')
+  const [filter, setFilter] = useState<TeamCalendarFilter>('shift')
 
   useEffect(() => {
     async function init() {
@@ -300,7 +296,7 @@ export default function TeamCalendarPage() {
   }
 
   const visibleEvents = useMemo(() => {
-    return events.filter(event => eventMatchesFilter(event, filter))
+    return events.filter(event => matchesTeamCalendarFilter(event.type, filter))
   }, [events, filter])
 
   const days = useMemo(() => {
@@ -614,6 +610,27 @@ export default function TeamCalendarPage() {
                         }}
                       />
                       <span>{area}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            {filter === 'leave_unavailable' ? (
+              <section className="bp-card" style={{ padding: '10px 12px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 14px', alignItems: 'center' }}>
+                  {(['unavailable', 'leave'] as const).map(type => (
+                    <div key={type} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted-strong)' }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 999,
+                          background: TYPE_COLOR[type],
+                          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.24)',
+                        }}
+                      />
+                      <span>{TYPE_LABEL[type]}</span>
                     </div>
                   ))}
                 </div>
