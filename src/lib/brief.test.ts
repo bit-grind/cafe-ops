@@ -102,10 +102,32 @@ describe('getLatestBrief', () => {
     ])
 
     await expect(getLatestBrief(client)).resolves.toEqual(brief)
-    expect(calls[1]).toContainEqual(['lte', 'brief_date', '2026-06-03'])
+    expect(calls).toHaveLength(2)
     expect(calls[1]).toContainEqual(['eq', 'generation_status', 'completed'])
     expect(calls[1]).toContainEqual(['order', 'brief_date', { ascending: false }])
     expect(calls[1]).toContainEqual(['limit', 1])
+  })
+
+  it('falls back to a bounded lookup when the newest brief postdates the latest sales day', async () => {
+    const futureBrief = {
+      brief_date: '2026-06-09',
+      generated_at: '2026-06-10T20:00:00.000Z',
+      metrics: {},
+      narrative: 'Anomalous future brief',
+      model: null,
+      generation_status: 'completed',
+    }
+    const boundedBrief = { ...futureBrief, brief_date: '2026-06-02', narrative: 'Bounded brief' }
+    const { client, calls } = mockSupabase([
+      { data: { business_date: '2026-06-03' }, error: null },
+      { data: futureBrief, error: null },
+      { data: boundedBrief, error: null },
+    ])
+
+    await expect(getLatestBrief(client)).resolves.toEqual(boundedBrief)
+    expect(calls).toHaveLength(3)
+    expect(calls[2]).toContainEqual(['lte', 'brief_date', '2026-06-03'])
+    expect(calls[2]).toContainEqual(['eq', 'generation_status', 'completed'])
   })
 })
 

@@ -263,6 +263,15 @@ export default function V2DashboardPage() {
       const accessToken = sessionData.session.access_token
       setEmail(sessionData.session.user.email ?? null)
 
+      // The brief read is independent of the dashboard payload (the API
+      // returns a null brief for guests), so both requests go out together.
+      const briefPromise = fetch('/api/brief', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+      })
+        .then(response => response.ok ? response.json() : null)
+        .catch(() => null)
+
       const dashboardResponse = await fetch('/api/dashboard?limit=90', {
         headers: { Authorization: `Bearer ${accessToken}` },
         cache: 'no-store',
@@ -293,11 +302,7 @@ export default function V2DashboardPage() {
       setLiveSalesUpdatedAt(dashboard.fetched_at)
 
       if (!dashboard.profile.isGuest) {
-        fetch('/api/brief', {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          cache: 'no-store',
-        })
-          .then(response => response.ok ? response.json() : null)
+        void briefPromise
           .then(body => {
             if (!cancelled && body) setBrief((body.brief as Brief | null | undefined) ?? null)
           })

@@ -373,6 +373,12 @@ export default function OpsHome() {
       setEmail(sessionData.session.user.email ?? null)
       const accessToken = sessionData.session.access_token
 
+      // Morning brief loads in parallel with the dashboard so it never delays
+      // the metric cards. The API returns a null brief for guests, and the
+      // card stays hidden unless showBrief flips on below. Generation is
+      // cron-owned; this read never triggers paid AI work.
+      void loadBrief(null, accessToken)
+
       const dashboardRes = await fetch('/api/dashboard?limit=90', {
         headers: { Authorization: `Bearer ${accessToken}` },
         cache: 'no-store',
@@ -399,16 +405,7 @@ export default function OpsHome() {
       setLiveHours(dashboard.live_hours ?? [])
       setLiveBusinessDate(dashboard.live_business_date)
       setLiveSalesUpdatedAt(dashboard.fetched_at)
-      const canLoadBrief = !profile.isGuest
-      setShowBrief(canLoadBrief)
-
-      // Morning brief loads independently so it never delays the metric cards.
-      // Generation is cron-owned; this read never triggers paid AI work.
-      if (canLoadBrief) {
-        void loadBrief(null, accessToken)
-      } else {
-        setBriefLoading(false)
-      }
+      setShowBrief(!profile.isGuest)
 
       if (!cancelled) {
         liveSalesTimer = window.setInterval(() => { void loadSalesForDate() }, LIVE_SALES_INTERVAL_MS)

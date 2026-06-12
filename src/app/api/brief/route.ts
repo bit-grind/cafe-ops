@@ -18,16 +18,21 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const date = url.searchParams.get('date')
     const supabase = adminClient()
-    const [brief, dates] = await Promise.all([
+    const hoursFor = (businessDate: string) =>
+      supabase
+        .from('sales_by_hour')
+        .select(HOURS_SELECT)
+        .eq('business_date', businessDate)
+        .order('hour', { ascending: true })
+    // When the caller names a date the hours query is independent of the brief
+    // lookup, so all three run in parallel; otherwise hours wait on the brief.
+    const [brief, dates, requestedHours] = await Promise.all([
       date ? getBriefByDate(supabase, date) : getLatestBrief(supabase),
       getBriefDates(supabase),
+      date ? hoursFor(date) : Promise.resolve(null),
     ])
     const { data: hours, error: hoursError } = brief
-      ? await supabase
-          .from('sales_by_hour')
-          .select(HOURS_SELECT)
-          .eq('business_date', brief.brief_date)
-          .order('hour', { ascending: true })
+      ? requestedHours ?? await hoursFor(brief.brief_date)
       : { data: [], error: null }
     if (hoursError) console.error('Brief hourly sales lookup failed:', hoursError.message)
 

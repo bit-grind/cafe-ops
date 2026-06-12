@@ -25,24 +25,39 @@ function getEnvBranding(): Branding | null {
   return normalizeBranding({ displayName, subtitle, logoSrc })
 }
 
+// Branding changes rarely, so warm instances reuse the last storage read for a
+// few minutes (matching the logo route's max-age) instead of re-downloading on
+// every page render. Failures are cached briefly so an outage can't hammer
+// storage but still recovers quickly.
+const BRANDING_CACHE_OK_MS = 5 * 60 * 1000
+const BRANDING_CACHE_FAIL_MS = 30 * 1000
+let brandingCache: { value: Branding; expiresAt: number } | null = null
+
 export const getServerBranding = cache(async function getServerBranding(): Promise<Branding> {
   const envBranding = getEnvBranding()
   if (envBranding) return envBranding
 
+  if (brandingCache && Date.now() < brandingCache.expiresAt) return brandingCache.value
+
+  let branding = DEFAULT_BRANDING
+  let ttl = BRANDING_CACHE_FAIL_MS
   try {
     const { data, error } = await adminClient()
       .storage
       .from(BRANDING_BUCKET)
       .download(BRANDING_CONFIG_PATH)
 
-    if (error || !data) return DEFAULT_BRANDING
-
-    const config = JSON.parse(await data.text()) as Partial<Branding>
-    return normalizeBranding({
-      ...config,
-      logoSrc: config.logoSrc || '/api/branding/logo',
-    })
+    if (!error && data) {
+      const config = JSON.parse(await data.text()) as Partial<Branding>
+      branding = normalizeBranding({
+        ...config,
+        logoSrc: config.logoSrc || '/api/branding/logo',
+      })
+      ttl = BRANDING_CACHE_OK_MS
+    }
   } catch {
-    return DEFAULT_BRANDING
+    // fall through: default branding with the short failure TTL
   }
+  brandingCache = { value: branding, expiresAt: Date.now() + ttl }
+  return branding
 })

@@ -7,7 +7,7 @@ export async function GET() {
   const branding = await getServerBranding()
   return NextResponse.json(branding, {
     headers: {
-      'Cache-Control': 'no-store',
+      'Cache-Control': 'public, max-age=300, stale-while-revalidate=86400',
     },
   })
 }

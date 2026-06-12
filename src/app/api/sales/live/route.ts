@@ -35,19 +35,20 @@ export async function GET(req: Request) {
   if (!businessDate) return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
 
   const supabase = adminClient()
-  const { data, error } = await supabase
-    .from('sales_business_day')
-    .select(DAY_SELECT)
-    .eq('business_date', businessDate)
-    .maybeSingle()
+  const [{ data, error }, { data: hours, error: hoursError }] = await Promise.all([
+    supabase
+      .from('sales_business_day')
+      .select(DAY_SELECT)
+      .eq('business_date', businessDate)
+      .maybeSingle(),
+    supabase
+      .from('sales_by_hour')
+      .select(HOURS_SELECT)
+      .eq('business_date', businessDate)
+      .order('hour', { ascending: true }),
+  ])
 
   if (error) return NextResponse.json({ error: 'Failed to load live sales data' }, { status: 500 })
-
-  const { data: hours, error: hoursError } = await supabase
-    .from('sales_by_hour')
-    .select(HOURS_SELECT)
-    .eq('business_date', businessDate)
-    .order('hour', { ascending: true })
   if (hoursError) console.error('Hourly sales lookup failed:', hoursError.message)
 
   return NextResponse.json({

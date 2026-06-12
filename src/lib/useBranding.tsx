@@ -6,7 +6,7 @@ import { DEFAULT_BRANDING, normalizeBranding, type Branding } from '@/lib/brandi
 const BrandingContext = createContext<Branding>(DEFAULT_BRANDING)
 
 async function fetchBranding(): Promise<Branding> {
-  const response = await fetch('/api/branding', { cache: 'no-store' })
+  const response = await fetch('/api/branding')
   if (!response.ok) return DEFAULT_BRANDING
   return normalizeBranding(await response.json())
 }

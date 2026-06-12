@@ -223,14 +223,27 @@ export async function generateBrief(supabase: SupabaseClient): Promise<DailyBrie
  * making the dashboard card disappear.
  */
 export async function getLatestBrief(supabase: SupabaseClient): Promise<DailyBriefRow | null> {
-  const { data: latest } = await supabase
-    .from('sales_business_day')
-    .select('business_date')
-    .order('business_date', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const [{ data: latest }, { data: newest }] = await Promise.all([
+    supabase
+      .from('sales_business_day')
+      .select('business_date')
+      .order('business_date', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('daily_brief')
+      .select(BRIEF_SELECT)
+      .eq('generation_status', 'completed')
+      .order('brief_date', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
   if (!latest) return null
+  if (newest && newest.brief_date <= latest.business_date) return newest as DailyBriefRow
+  if (!newest) return null
 
+  // A brief dated after the newest sales day shouldn't exist; fall back to the
+  // bounded lookup so the caller still gets the right row if it ever does.
   const { data: existing } = await supabase
     .from('daily_brief')
     .select(BRIEF_SELECT)
@@ -239,9 +252,7 @@ export async function getLatestBrief(supabase: SupabaseClient): Promise<DailyBri
     .order('brief_date', { ascending: false })
     .limit(1)
     .maybeSingle()
-  if (existing) return existing as DailyBriefRow
-
-  return null
+  return (existing as DailyBriefRow | null) ?? null
 }
 
 export async function getBriefByDate(

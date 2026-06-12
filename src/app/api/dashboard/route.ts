@@ -59,15 +59,16 @@ export async function GET(req: Request) {
         .select(SALES_SELECT)
         .order('business_date', { ascending: false })
         .limit(limit)
-  const { data, error } = await salesQuery
+  const [{ data, error }, { data: hours, error: hoursError }] = await Promise.all([
+    salesQuery,
+    supabase
+      .from('sales_by_hour')
+      .select(HOURS_SELECT)
+      .eq('business_date', liveBusinessDate)
+      .order('hour', { ascending: true }),
+  ])
 
   if (error) return NextResponse.json({ error: 'Failed to load dashboard data' }, { status: 500 })
-
-  const { data: hours, error: hoursError } = await supabase
-    .from('sales_by_hour')
-    .select(HOURS_SELECT)
-    .eq('business_date', liveBusinessDate)
-    .order('hour', { ascending: true })
   if (hoursError) console.error('Hourly sales lookup failed:', hoursError.message)
 
   return NextResponse.json({
