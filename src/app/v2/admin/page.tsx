@@ -24,6 +24,8 @@ type UserDetail = {
   }>
 }
 
+type ManagedRole = 'staff' | 'guest' | 'kitchen' | 'team'
+
 export default function AdminPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -35,7 +37,7 @@ export default function AdminPage() {
 
   const [newEmail, setNewEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
-  const [newRole, setNewRole] = useState<'staff' | 'guest' | 'kitchen'>('staff')
+  const [newRole, setNewRole] = useState<ManagedRole>('staff')
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<UserDetail | null>(null)
@@ -169,7 +171,7 @@ export default function AdminPage() {
     await loadUsers()
   }
 
-  async function updateUserRole(id: string, newRole: 'staff' | 'guest' | 'kitchen') {
+  async function updateUserRole(id: string, newRole: ManagedRole) {
     setBusy(true)
     setMsg(null)
     const res = await fetch(`/api/admin/users/${id}`, {
@@ -199,7 +201,7 @@ export default function AdminPage() {
       <V2Shell
         activeTab="admin"
         email={email}
-        allowedTabs={getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: false })}
+        allowedTabs={getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: false, isTeam: false })}
         onSignOut={signOut}
         eyebrow="Workspace controls"
         title="Admin"
@@ -217,7 +219,7 @@ export default function AdminPage() {
     <V2Shell
       activeTab="admin"
       email={email}
-      allowedTabs={getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: false })}
+      allowedTabs={getAllowedTabs({ isAdmin: true, isGuest: false, isKitchen: false, isTeam: false })}
       onSignOut={signOut}
       eyebrow="Workspace controls"
       title="Admin"
@@ -280,11 +282,12 @@ export default function AdminPage() {
             <select
               className="bp-input"
               value={newRole}
-              onChange={(e) => setNewRole(e.target.value as 'staff' | 'guest' | 'kitchen')}
+              onChange={(e) => setNewRole(e.target.value as ManagedRole)}
             >
               <option value="staff">staff (operational access)</option>
               <option value="guest">guest (sales only)</option>
               <option value="kitchen">kitchen (suppliers and recipes)</option>
+              <option value="team">team (calendar only)</option>
             </select>
             <button type="submit" disabled={busy} className="bp-btn">
               {busy ? 'Working…' : 'Create user'}
@@ -390,7 +393,7 @@ export default function AdminPage() {
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                               <select
                                 value={detail.user.role}
-                                onChange={(e) => updateUserRole(detail.user.id, e.target.value as 'staff' | 'guest' | 'kitchen')}
+                                onChange={(e) => updateUserRole(detail.user.id, e.target.value as ManagedRole)}
                                 disabled={busy}
                                 className="bp-input"
                                 style={{ padding: '6px 10px', fontSize: 12, width: 'auto', cursor: busy ? 'not-allowed' : 'pointer' }}
@@ -398,6 +401,7 @@ export default function AdminPage() {
                                 <option value="staff">staff (operational access)</option>
                                 <option value="guest">guest (sales only)</option>
                                 <option value="kitchen">kitchen (suppliers and recipes)</option>
+                                <option value="team">team (calendar only)</option>
                               </select>
                             </div>
                           </div>

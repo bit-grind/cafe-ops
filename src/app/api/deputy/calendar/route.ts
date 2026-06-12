@@ -198,7 +198,7 @@ async function loadStoredEvents(from: string, to: string) {
 export async function GET(req: Request) {
   const session = await getSessionUser(req)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.isGuest) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (session.isGuest && !session.isTeam) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const url = new URL(req.url)
   const defaults = defaultRange()

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin, adminClient, setUserRole, getUserRoles, normalizeAppRole } from '@/lib/adminAuth'
+import { requireAdmin, adminClient, setUserRole, getUserRoles, isTeamEmail, normalizeAppRole } from '@/lib/adminAuth'
 
 export async function GET(req: Request) {
   const auth = await requireAdmin(req)
@@ -37,6 +37,9 @@ export async function POST(req: Request) {
 
   if (!email || !password) {
     return NextResponse.json({ error: 'email and password are required' }, { status: 400 })
+  }
+  if (role === 'team' && !isTeamEmail(email)) {
+    return NextResponse.json({ error: 'team role is reserved for the configured Team account' }, { status: 400 })
   }
   if (password.length < 12) {
     return NextResponse.json({ error: 'password must be at least 12 characters' }, { status: 400 })

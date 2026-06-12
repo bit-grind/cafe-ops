@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import Chip from '@/components/Chip'
 import V2Shell from '@/components/v2/V2Shell'
-import type { AppTab } from '@/lib/permissions'
+import { getLandingHref, type AppTab } from '@/lib/permissions'
 
 type Msg = { role: 'user' | 'ai', text: string, display?: string }
 
@@ -158,8 +158,13 @@ export default function AskPage() {
           headers: { Authorization: `Bearer ${data.session.access_token}` },
         })
         if (meRes.ok) {
-          const me = await meRes.json()
-          setAllowedTabs(me.allowedTabs ?? [])
+          const me = await meRes.json() as { allowedTabs?: AppTab[] }
+          const tabs = me.allowedTabs ?? []
+          if (!tabs.includes('ask')) {
+            window.location.replace(getLandingHref(tabs, 'v2'))
+            return
+          }
+          setAllowedTabs(tabs)
         }
       } catch { /* non-fatal */ }
     }

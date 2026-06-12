@@ -76,6 +76,7 @@ export async function POST(req: Request) {
     // server-controlled user_role table (not user-writable metadata).
     const session = await getSessionUser(req)
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (session.isTeam) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const isGuest = session.isGuest
     const withinLimit = await consumeRateLimit('ask-ai', session.id, {
       windowSeconds: 60,

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import V2Shell from '@/components/v2/V2Shell'
 import { supabase } from '@/lib/supabaseClient'
-import type { AppTab } from '@/lib/permissions'
+import { getLandingHref, type AppTab } from '@/lib/permissions'
 
 type CalendarEventType = 'leave' | 'unavailable' | 'available' | 'shift' | 'birthday' | 'public_holiday' | 'school_holiday'
 
@@ -33,7 +33,6 @@ type CalendarResponse = {
 type MeResponse = {
   email?: string | null
   allowedTabs?: AppTab[]
-  isGuest?: boolean
 }
 
 type CalendarFilter = CalendarEventType | 'holiday'
@@ -260,11 +259,12 @@ export default function TeamCalendarPage() {
 
       if (meRes?.ok) {
         const me = await meRes.json() as MeResponse
-        if (me.isGuest) {
-          window.location.replace('/v2')
+        const tabs = me.allowedTabs ?? []
+        if (!tabs.includes('calendar')) {
+          window.location.replace(getLandingHref(tabs, 'v2'))
           return
         }
-        setAllowedTabs(me.allowedTabs ?? [])
+        setAllowedTabs(tabs)
       }
     }
     init()

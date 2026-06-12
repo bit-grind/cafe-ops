@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin, adminClient, isAdminEmail, setUserRole, deleteUserRole, getUserRoles, normalizeAppRole } from '@/lib/adminAuth'
+import { requireAdmin, adminClient, isAdminEmail, isTeamEmail, setUserRole, deleteUserRole, getUserRoles, normalizeAppRole } from '@/lib/adminAuth'
 
 export async function GET(
   req: Request,
@@ -66,6 +66,9 @@ export async function PATCH(
   }
   if (isAdminEmail(target.user.email)) {
     return NextResponse.json({ error: 'Cannot change the admin account role' }, { status: 400 })
+  }
+  if (newRole === 'team' && !isTeamEmail(target.user.email)) {
+    return NextResponse.json({ error: 'team role is reserved for the configured Team account' }, { status: 400 })
   }
 
   // Update the user's role in metadata

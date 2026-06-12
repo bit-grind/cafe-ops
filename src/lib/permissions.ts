@@ -4,6 +4,7 @@ export type SessionFlags = {
   isAdmin: boolean
   isGuest: boolean
   isKitchen: boolean
+  isTeam: boolean
 }
 
 export const ALL_TABS: Array<{ label: string; tab: AppTab; href: string }> = [
@@ -16,9 +17,17 @@ export const ALL_TABS: Array<{ label: string; tab: AppTab; href: string }> = [
   { label: 'Admin', tab: 'admin', href: '/ops/admin' },
 ]
 
-export function getAllowedTabs({ isAdmin, isGuest, isKitchen }: SessionFlags): AppTab[] {
+export function getAllowedTabs({ isAdmin, isGuest, isKitchen, isTeam }: SessionFlags): AppTab[] {
+  if (isTeam) return ['calendar']
   if (isKitchen) return ['dashboard', 'kitchen', 'calendar', 'bills', 'recipes']
   if (isAdmin) return ['dashboard', 'kitchen', 'calendar', 'ask', 'bills', 'recipes', 'admin']
   if (isGuest) return ['dashboard', 'ask']
   return ['dashboard', 'kitchen', 'calendar', 'ask', 'bills', 'recipes']
+}
+
+export function getLandingHref(allowedTabs: AppTab[], workspace: 'ops' | 'v2' = 'ops'): string {
+  const first = ALL_TABS.find(({ tab }) => allowedTabs.includes(tab))
+  if (!first) return '/login'
+  if (workspace === 'ops') return first.href
+  return first.tab === 'dashboard' ? '/v2' : `/v2/${first.tab}`
 }
