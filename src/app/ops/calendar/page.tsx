@@ -39,10 +39,9 @@ type MeResponse = {
 
 const FILTERS: Array<{ key: TeamCalendarFilter; label: string }> = [
   { key: 'shift', label: 'Shifts' },
+  { key: 'leave_unavailable', label: 'Unavailability & Leave' },
   { key: 'holiday', label: 'Holidays' },
   { key: 'birthday', label: 'Birthdays' },
-  { key: 'leave_unavailable', label: 'Leave & Unavailable' },
-  { key: 'available', label: 'Available' },
 ]
 
 const TYPE_LABEL: Record<CalendarEventType, string> = {
