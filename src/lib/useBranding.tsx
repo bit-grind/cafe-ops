@@ -6,7 +6,10 @@ import { DEFAULT_BRANDING, normalizeBranding, type Branding } from '@/lib/brandi
 const BrandingContext = createContext<Branding>(DEFAULT_BRANDING)
 
 async function fetchBranding(): Promise<Branding> {
-  const response = await fetch('/api/branding')
+  // no-store: never let the browser keep a stale (possibly default) copy — this
+  // re-fetch is what corrects a server render that fell back to default. The
+  // payload is tiny and the server response is itself CDN-cached when real.
+  const response = await fetch('/api/branding', { cache: 'no-store' })
   if (!response.ok) return DEFAULT_BRANDING
   return normalizeBranding(await response.json())
 }
