@@ -36,9 +36,16 @@ permissions:
   contents: read
   actions: write
 
+# A running monitor must never be cancelled — cancelling it mid-poll kills the
+# chain AND (via the always() successor dispatch) used to spawn an immediate
+# replacement, which the next trigger cancelled in turn: a tight
+# cancel/respawn storm where runs died in setup before polling. With
+# cancel-in-progress: false a cron/successor that overlaps a live monitor
+# queues behind it instead of killing it (GitHub keeps at most one pending run
+# per group), so exactly one monitor polls at a time.
 concurrency:
   group: ${{ (github.event_name == 'schedule' || github.event.inputs.continue_monitoring == 'true') && 'kounta-live-sales-monitor' || format('kounta-live-sales-manual-{0}', github.run_id) }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   live-summary:
@@ -101,8 +108,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
+      # !cancelled() (not always()): a monitor cancelled by concurrency must NOT
+      # dispatch a successor, or a cancellation spawns an instant replacement and
+      # restarts the storm. Successors are still chained after a clean run, and
+      # after a genuine failure (retry path below).
       - name: Continue live monitor during trading
-        if: always() && steps.pre.outputs.ready == 'true'
+        if: ${{ !cancelled() && steps.pre.outputs.ready == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           CONTINUE_MONITORING: ${{ github.event_name == 'schedule' && 'true' || github.event.inputs.continue_monitoring || 'false' }}
