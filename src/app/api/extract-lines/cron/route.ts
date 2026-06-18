@@ -5,6 +5,7 @@ import { listBills } from '@/lib/xero'
 import { isKitchenSupplierBill } from '@/lib/suppliers'
 import { getKitchenSuppliers } from '@/lib/suppliers-db'
 import { checkCronAuth } from '@/lib/serverAuth'
+import { ensureLiveMonitor } from '@/lib/kountaMonitor'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const maxDuration = 60
@@ -45,6 +46,11 @@ async function handleCron(req: Request) {
     if (authError) return authError
 
     const supabase = adminClient()
+
+    // Piggyback the Kounta live-monitor self-heal on this reliable 15-min cron
+    // (Vercel Cron doesn't run on this project). Never throws; if the monitor
+    // died because GitHub dropped a schedule, this restarts it within one tick.
+    await ensureLiveMonitor(supabase)
 
     // Refresh the bill cache if it's stale. Skip gracefully on Xero 429.
     const cacheAge = await getCacheAgeMs(supabase)
