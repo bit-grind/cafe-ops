@@ -50,7 +50,15 @@ concurrency:
 jobs:
   live-summary:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    # Headroom over the poll loop. The monitor polls for LIVE_MONITOR_MINUTES
+    # (70 on schedule) and must EXIT cleanly so its `!cancelled()` continue step
+    # can dispatch the chain successor. With timeout-minutes only 5 above the
+    # poll, a slow run (checkout + npm ci + Chromium download + Kounta login)
+    # crossed the timeout, GitHub marked it `cancelled`, the successor was never
+    # dispatched, and the chain died until the next cron — an intermittent
+    # mid-morning sales gap. 90 leaves ~20 min for setup so the poll always
+    # finishes first.
+    timeout-minutes: 90
     steps:
       - name: Preflight — skip cleanly until secrets are set
         id: pre
