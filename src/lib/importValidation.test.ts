@@ -80,4 +80,41 @@ describe('parseHourlyImport', () => {
       rows: [{ ...hourlyRow, business_date: '2026-05-28' }],
     })).toThrow('must match business_date')
   })
+
+  // Kounta's by-hour export only carries Sale Amount, so the sync sends null for
+  // the rest. Null must survive: coerced to 0 it reads as a real zero.
+  it('preserves nulls for metrics the source cannot provide', () => {
+    const unavailable = {
+      business_date: '2026-05-29',
+      hour: 8,
+      gross_sales: 120,
+      net_sales: null,
+      tax: null,
+      order_count: null,
+      aov: null,
+    }
+    expect(parseHourlyImport({ business_date: '2026-05-29', rows: [unavailable] }).rows).toEqual([unavailable])
+  })
+
+  it('treats an omitted optional metric as null rather than zero', () => {
+    const [row] = parseHourlyImport({
+      business_date: '2026-05-29',
+      rows: [{ business_date: '2026-05-29', hour: 8, gross_sales: 120 }],
+    }).rows
+    expect(row.order_count).toBeNull()
+    expect(row.aov).toBeNull()
+    expect(row.net_sales).toBeNull()
+    expect(row.tax).toBeNull()
+  })
+
+  it('still rejects a non-numeric value and a missing gross_sales', () => {
+    expect(() => parseHourlyImport({
+      business_date: '2026-05-29',
+      rows: [{ ...hourlyRow, order_count: 'twelve' }],
+    })).toThrow('order_count must be a finite number')
+    expect(() => parseHourlyImport({
+      business_date: '2026-05-29',
+      rows: [{ ...hourlyRow, gross_sales: null }],
+    })).toThrow('gross_sales must be a finite number')
+  })
 })

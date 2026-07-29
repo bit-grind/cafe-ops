@@ -1,9 +1,25 @@
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
+/**
+ * Required numeric field. null/undefined are rejected rather than coerced:
+ * Number(null) is 0, so an omitted figure would otherwise be stored as a real
+ * zero and become indistinguishable from a genuinely zero hour or day.
+ */
 function finiteNumber(value: unknown, field: string): number {
+  if (value === null || value === undefined) throw new Error(`${field} must be a finite number`)
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) throw new Error(`${field} must be a finite number`)
   return parsed
+}
+
+/**
+ * For metrics a source may genuinely not carry. null means "not available" and
+ * must survive the round trip — coercing it to 0 would be the same fabrication
+ * finiteNumber guards against.
+ */
+function nullableFiniteNumber(value: unknown, field: string): number | null {
+  if (value === null || value === undefined) return null
+  return finiteNumber(value, field)
 }
 
 function isoDate(value: unknown, field = 'business_date'): string {
@@ -38,14 +54,20 @@ export type ProductSalesRow = {
   gross_profit_pct: number
 }
 
+/**
+ * Kounta's by-hour export only carries Sale Amount per hour — order count, tax,
+ * net and AOV are not obtainable from it (see kounta-sync/hourMapping.mjs for
+ * the full probe). Those four are `number | null` so a consumer has to handle
+ * "not available" rather than silently trusting a fabricated 0.
+ */
 export type HourlySalesRow = {
   business_date: string
   hour: number
   gross_sales: number
-  net_sales: number
-  tax: number
-  order_count: number
-  aov: number
+  net_sales: number | null
+  tax: number | null
+  order_count: number | null
+  aov: number | null
 }
 
 export function parseDailySalesRows(input: unknown): DailySalesRow[] {
@@ -137,10 +159,10 @@ export function parseHourlyImport(input: unknown): {
       business_date: businessDate,
       hour,
       gross_sales: finiteNumber(value.gross_sales, 'gross_sales'),
-      net_sales: finiteNumber(value.net_sales, 'net_sales'),
-      tax: finiteNumber(value.tax, 'tax'),
-      order_count: finiteNumber(value.order_count, 'order_count'),
-      aov: finiteNumber(value.aov, 'aov'),
+      net_sales: nullableFiniteNumber(value.net_sales, 'net_sales'),
+      tax: nullableFiniteNumber(value.tax, 'tax'),
+      order_count: nullableFiniteNumber(value.order_count, 'order_count'),
+      aov: nullableFiniteNumber(value.aov, 'aov'),
     }
   })
   return { businessDate, rows, allowEmpty: body.allow_empty === true }
