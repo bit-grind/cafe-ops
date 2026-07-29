@@ -19,14 +19,16 @@ type Day = {
   updated_at?: string
 }
 
+// Only gross_sales is real per hour — Kounta's by-hour export carries a single
+// measure. The rest are null (not 0); see kounta-sync/hourMapping.mjs.
 type HourlySale = {
   business_date: string
   hour: number
   gross_sales: number
-  net_sales: number
-  tax: number
-  order_count: number
-  aov: number
+  net_sales: number | null
+  tax: number | null
+  order_count: number | null
+  aov: number | null
   updated_at?: string
 }
 
