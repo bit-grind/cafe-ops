@@ -5,7 +5,7 @@ import { listBills } from '@/lib/xero'
 import { isKitchenSupplierBill } from '@/lib/suppliers'
 import { getKitchenSuppliers } from '@/lib/suppliers-db'
 import { checkCronAuth } from '@/lib/serverAuth'
-import { ensureLiveMonitor } from '@/lib/kountaMonitor'
+import { ensureLiveMonitor, type EnsureResult } from '@/lib/kountaMonitor'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const maxDuration = 60
@@ -50,23 +50,23 @@ async function handleCron(req: Request) {
     // Piggyback the Kounta live-monitor self-heal on this reliable 15-min cron
     // (Vercel Cron doesn't run on this project). Never throws; if the monitor
     // died because GitHub dropped a schedule, this restarts it within one tick.
-    await ensureLiveMonitor(supabase)
+    const salesMonitor = await ensureLiveMonitor(supabase)
 
     // Refresh the bill cache if it's stale. Skip gracefully on Xero 429.
     const cacheAge = await getCacheAgeMs(supabase)
     if (cacheAge > CACHE_TTL_MS) {
       const refreshResult = await tryRefreshCache(supabase)
       if (refreshResult === 'rate_limited') {
-        return NextResponse.json({
+        return cronResponse({
           skipped: 'rate_limited',
           elapsed: elapsedSec(start),
-        })
+        }, salesMonitor)
       }
     }
 
     const candidates = await pickCandidates(supabase, MAX_PER_RUN)
     if (candidates.length === 0) {
-      return NextResponse.json({ processed: 0, message: 'All done' })
+      return cronResponse({ processed: 0, message: 'All done' }, salesMonitor)
     }
 
     let processed = 0
@@ -83,15 +83,22 @@ async function handleCron(req: Request) {
       else failed++
     }
 
-    return NextResponse.json({
+    return cronResponse({
       processed, failed, rateLimited,
       cacheAgeHours: cacheAge === Infinity ? null : Math.round(cacheAge / 3600000),
       elapsed: elapsedSec(start),
-    })
+    }, salesMonitor)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error'
     return NextResponse.json({ error: msg, elapsed: elapsedSec(start) }, { status: 500 })
   }
+}
+
+function cronResponse(body: Record<string, unknown>, salesMonitor: EnsureResult) {
+  return NextResponse.json(
+    { ...body, salesMonitor },
+    { status: salesMonitor.ok ? 200 : 503 },
+  )
 }
 
 // ── Candidate selection ───────────────────────────────────────────────────────
