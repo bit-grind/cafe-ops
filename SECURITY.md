@@ -22,6 +22,7 @@ Rotate these after applying the migration:
 | --- | --- |
 | `CRON_SECRET` | Vercel cron and any manual cron caller |
 | `IMPORT_SECRET` | Vercel app and GitHub Actions Kounta sync |
+| `GH_DISPATCH_TOKEN` | Vercel app; fine-grained to `cafe-ops` with Actions read/write only |
 | `RATE_LIMIT_KEY` | Vercel app only |
 | `XERO_CLIENT_SECRET` | Vercel app and Xero OAuth app |
 
@@ -30,6 +31,11 @@ never derive their destination from an inbound request host.
 
 Keep `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, Xero secrets, and Kounta
 credentials server-side. Never prefix them with `NEXT_PUBLIC_`.
+
+After setting or rotating `GH_DISPATCH_TOKEN`, redeploy production and call the
+protected `/api/kounta/dispatch` endpoint once. It must return `dispatched: true`;
+a missing or rejected token returns a non-2xx response and writes a production
+error log so the external monitor can alert instead of accepting a silent no-op.
 
 ## Edge protection
 
