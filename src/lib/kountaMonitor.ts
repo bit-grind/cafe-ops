@@ -60,8 +60,27 @@ function brisbaneDateString(now: Date): string {
 }
 
 export type EnsureResult =
-  | { dispatched: false; reason: string }
-  | { dispatched: true }
+  | { ok: true; dispatched: false; reason: 'outside_trading_window' | 'monitor_healthy' }
+  | { ok: true; dispatched: true; reason: 'monitor_dispatched' }
+  | {
+      ok: false
+      dispatched: false
+      reason:
+        | 'missing_dispatch_token'
+        | 'sales_status_query_failed'
+        | 'dispatch_failed'
+        | 'unexpected_error'
+      status?: number
+    }
+
+function monitorFailure(
+  reason: Extract<EnsureResult, { ok: false }>['reason'],
+  detail?: string,
+  status?: number,
+): EnsureResult {
+  console.error(`[kounta-monitor] ${reason}${detail ? `: ${detail}` : ''}`)
+  return { ok: false, dispatched: false, reason, ...(status === undefined ? {} : { status }) }
+}
 
 /**
  * Ensure a live monitor is running if it should be. Safe to call on every cron
@@ -69,23 +88,28 @@ export type EnsureResult =
  */
 export async function ensureLiveMonitor(supabase: SupabaseClient): Promise<EnsureResult> {
   try {
-    const token = process.env.GH_DISPATCH_TOKEN
-    if (!token) return { dispatched: false, reason: 'no GH_DISPATCH_TOKEN' }
-
     const now = new Date()
     const brisbaneMinute = brisbaneMinuteOfDay(now)
+    if (brisbaneMinute < TRADING_START_MIN || brisbaneMinute >= TRADING_STOP_MIN) {
+      return { ok: true, dispatched: false, reason: 'outside_trading_window' }
+    }
+
     const today = brisbaneDateString(now)
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('sales_business_day')
       .select('updated_at')
       .eq('business_date', today)
       .maybeSingle()
+    if (error) return monitorFailure('sales_status_query_failed', error.message)
 
     const lastUpdateMs = data?.updated_at ? new Date(data.updated_at).getTime() : null
     if (!shouldKickMonitor({ brisbaneMinute, lastUpdateMs, nowMs: now.getTime() })) {
-      return { dispatched: false, reason: 'monitor healthy or outside trading window' }
+      return { ok: true, dispatched: false, reason: 'monitor_healthy' }
     }
+
+    const token = process.env.GH_DISPATCH_TOKEN
+    if (!token) return monitorFailure('missing_dispatch_token')
 
     const repo = process.env.GH_DISPATCH_REPO ?? 'bit-grind/cafe-ops'
     const ref = process.env.GH_DISPATCH_REF ?? 'main'
@@ -94,9 +118,12 @@ export async function ensureLiveMonitor(supabase: SupabaseClient): Promise<Ensur
       monitor_minutes: '70',
       poll_seconds: '60',
     })
-    if (result.ok) return { dispatched: true }
-    return { dispatched: false, reason: `dispatch failed: ${result.status} ${result.message}` }
+    if (result.ok) {
+      console.info(`[kounta-monitor] dispatched ${WORKFLOW} for ${repo}@${ref}`)
+      return { ok: true, dispatched: true, reason: 'monitor_dispatched' }
+    }
+    return monitorFailure('dispatch_failed', result.message, result.status)
   } catch (e: unknown) {
-    return { dispatched: false, reason: e instanceof Error ? e.message : 'unknown error' }
+    return monitorFailure('unexpected_error', e instanceof Error ? e.message : 'unknown error')
   }
 }

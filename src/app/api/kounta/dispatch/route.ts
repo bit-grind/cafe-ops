@@ -3,20 +3,18 @@ import { checkCronAuth } from '@/lib/serverAuth'
 import { dispatchWorkflow } from '@/lib/githubDispatch'
 
 /**
- * Reliable morning kick for the Kounta live-sales monitor.
+ * Protected manual/recovery kick for the Kounta live-sales monitor.
  *
  * GitHub's `schedule` trigger drops runs for hours at a time, which left the
  * dashboard with no current-day sales on mornings when the cron simply never
- * fired. Vercel Cron (see vercel.json) is reliable, so we use it to start the
- * self-chaining live monitor each trading morning. Once started the monitor
- * chains its own successors until close, so a single daily kick is enough; the
- * GitHub crons remain as redundant backups (they now queue behind a running
- * monitor instead of cancelling it).
+ * fired. The external 15-minute cron normally calls ensureLiveMonitor through
+ * /api/extract-lines/cron; this endpoint provides a direct authenticated probe
+ * and recovery path.
  *
  * Auth: Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` (same as the
  * brief cron). Dispatching needs a GitHub token with `actions:write` on the
- * repo in `GH_DISPATCH_TOKEN`; if it is unset the route is a clean no-op so a
- * deploy never breaks before the secret is provisioned.
+ * repo in `GH_DISPATCH_TOKEN`. Missing configuration is a service failure, not
+ * a successful no-op, so monitoring can alert on it.
  */
 const WORKFLOW = 'kounta-live-sales.yml'
 
@@ -28,9 +26,10 @@ async function handle(req: Request) {
   const repo = process.env.GH_DISPATCH_REPO ?? 'bit-grind/cafe-ops'
   const ref = process.env.GH_DISPATCH_REF ?? 'main'
   if (!token) {
+    console.error('[kounta-dispatch] missing_dispatch_token')
     return NextResponse.json(
       { ok: false, dispatched: false, message: 'GH_DISPATCH_TOKEN not set' },
-      { status: 200 },
+      { status: 503 },
     )
   }
 
@@ -40,6 +39,7 @@ async function handle(req: Request) {
     poll_seconds: '60',
   })
   if (result.ok) return NextResponse.json({ ok: true, dispatched: true })
+  console.error(`[kounta-dispatch] dispatch_failed: ${result.status} ${result.message}`)
   return NextResponse.json(
     { ok: false, dispatched: false, status: result.status, message: result.message },
     { status: 502 },
