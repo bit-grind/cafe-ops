@@ -30,8 +30,9 @@ const HOLIDAYS = [
   { name: "Anzac Day", date: "2026-04-25" },
   { name: "Labour Day (QLD)", date: "2026-05-04" },
   { name: "Mother's Day", date: "2026-05-10" },
+  { name: "Ekka (QLD)", date: "2026-08-12" },
   { name: "Father's Day", date: "2026-09-06" },
-  { name: "King's Birthday (QLD)", date: "2026-10-26" },
+  { name: "King's Birthday (QLD)", date: "2026-10-05" },
   { name: "Christmas Day 2026", date: "2026-12-25" },
   { name: "Boxing Day 2026", date: "2026-12-26" },
   { name: "New Year's Day 2027", date: "2027-01-01" },
@@ -41,6 +42,7 @@ const HOLIDAYS = [
   { name: "Anzac Day 2027", date: "2027-04-25" },
   { name: "Labour Day (QLD) 2027", date: "2027-05-03" },
   { name: "Mother's Day 2027", date: "2027-05-09" },
+  { name: "Ekka (QLD) 2027", date: "2027-08-11" },
 ]
 
 function formatHolidayDate(dateStr: string) {

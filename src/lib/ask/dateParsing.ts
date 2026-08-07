@@ -1,4 +1,5 @@
 import { isoDate, mondayOf } from '@/lib/dates'
+import { royalQueenslandShowDay } from '@/lib/queenslandCalendar'
 
 type ParsedQuestionDate = {
   date?: string
@@ -183,8 +184,16 @@ export function resolveHolidayDate(q: string): HolidayInfo | null {
     return e
   })
   if (/easter/.test(s)) return pickYear(y => easterSunday(y))
-  if (/queens?\s*birthday|king'?s?\s*birthday/.test(s)) return pickYear(y => nthWeekday(y, 6, 1, 2))
+  // Queensland observes the Monarch's Birthday on the first Monday in October,
+  // not the second Monday in June the other states use.
+  if (/queens?\s*birthday|king'?s?\s*birthday/.test(s)) return pickYear(y => nthWeekday(y, 10, 1, 1))
   if (/labour\s*day|labor\s*day/.test(s)) return pickYear(y => nthWeekday(y, 5, 1, 1))
+  // Ekka (Royal Queensland Show) People's Day. Reuses the Team Calendar's rule
+  // so the two can't drift apart.
+  if (/\bekka\b|royal\s*queensland\s*show/.test(s)) return pickYear(y => {
+    const [year, month, day] = royalQueenslandShowDay(y).split('-').map(Number)
+    return new Date(year, month - 1, day)
+  })
 
   return null
 }
