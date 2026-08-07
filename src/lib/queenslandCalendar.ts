@@ -102,7 +102,7 @@ function addWeekendExtraHoliday(holidays: PublicHoliday[], name: string, date: s
   holidays.push({ name: `${name} public holiday`, date: observedDate })
 }
 
-function royalQueenslandShowDay(year: number) {
+export function royalQueenslandShowDay(year: number) {
   const firstFriday = firstWeekday(year, 8, 5)
   const start = firstFriday.getUTCDate() < 5 ? addDays(isoDate(firstFriday), 7) : isoDate(firstFriday)
   return addDays(start, 5)
