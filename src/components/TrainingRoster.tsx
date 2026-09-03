@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import MetricCard from '@/components/MetricCard'
 import { supabase } from '@/lib/supabaseClient'
 import { TRAINING_MODULES } from '@/lib/training/content'
+import { buildQr } from '@/lib/training/qr'
 
 export type Trainee = {
   id: string
@@ -24,6 +25,44 @@ const TOTAL_MODULES = TRAINING_MODULES.length
 function when(value: string | null): string {
   if (!value) return '—'
   return new Date(value).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+}
+
+
+/**
+ * The invite link as a scannable code, so a new starter can point their phone
+ * at the manager's screen instead of waiting for a message.
+ *
+ * Rendered locally from the token we already hold — never by sending the link
+ * to a QR web service, which would leak a bearer credential to a third party.
+ * Always dark-on-white with a quiet zone, whatever the surrounding theme:
+ * inverted or margin-less codes are the two classic ways to make a QR that
+ * looks right and does not scan.
+ */
+function InviteQr({ link, name }: { link: string; name: string }) {
+  const qr = useMemo(() => buildQr(link), [link])
+  return (
+    <div
+      style={{
+        background: '#fff',
+        borderRadius: 10,
+        padding: 8,
+        flex: '0 0 auto',
+        lineHeight: 0,
+      }}
+    >
+      <svg
+        width={148}
+        height={148}
+        viewBox={`0 0 ${qr.viewBoxSize} ${qr.viewBoxSize}`}
+        shapeRendering="crispEdges"
+        role="img"
+        aria-label={`QR code for ${name}'s training invite link`}
+      >
+        <rect width={qr.viewBoxSize} height={qr.viewBoxSize} fill="#fff" />
+        <path d={qr.path} fill="#000" />
+      </svg>
+    </div>
+  )
 }
 
 /**
@@ -184,30 +223,37 @@ export default function TrainingRoster({ isAdmin }: { isAdmin: boolean }) {
               padding: 14,
             }}
           >
-            <div style={{ fontSize: 13, marginBottom: 8 }}>
-              Send this to <strong>{freshLink.name}</strong>. It’s shown once — it can’t be
-              looked up later, only reissued.
+            <div style={{ fontSize: 13, marginBottom: 12 }}>
+              Give this to <strong>{freshLink.name}</strong> — they can scan the code, or you
+              can send them the link. It’s shown once; it can’t be looked up later, only reissued.
             </div>
-            <div
-              style={{
-                fontFamily: 'var(--font-mono), monospace',
-                fontSize: 12,
-                wordBreak: 'break-all',
-                color: 'var(--muted)',
-                background: 'rgba(255,255,255,0.04)',
-                borderRadius: 8,
-                padding: '10px 12px',
-              }}
-            >
-              {freshLink.link}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <button type="button" className="bp-btn" onClick={() => void copyLink(freshLink.link)}>
-                {copied ? 'Copied' : 'Copy link'}
-              </button>
-              <button type="button" className="bp-btn" onClick={() => { setFreshLink(null); setCopied(false) }}>
-                Done
-              </button>
+
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              <InviteQr link={freshLink.link} name={freshLink.name} />
+
+              <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono), monospace',
+                    fontSize: 12,
+                    wordBreak: 'break-all',
+                    color: 'var(--muted)',
+                    background: 'rgba(255,255,255,0.04)',
+                    borderRadius: 8,
+                    padding: '10px 12px',
+                  }}
+                >
+                  {freshLink.link}
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  <button type="button" className="bp-btn" onClick={() => void copyLink(freshLink.link)}>
+                    {copied ? 'Copied' : 'Copy link'}
+                  </button>
+                  <button type="button" className="bp-btn" onClick={() => { setFreshLink(null); setCopied(false) }}>
+                    Done
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

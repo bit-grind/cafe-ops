@@ -58,6 +58,10 @@ checked it.
   `sha256(token)` is stored; the raw link is shown once, at creation. Trainee
   routes re-derive quiz length and module unlock order from the course content,
   never from the request — the client is not trusted about its own progress.
+  The invite QR (`src/lib/training/qr.ts`) is rendered **locally** from the
+  token the page already holds. Never hand an invite link to a QR image
+  service: it is a bearer credential, and that would leak it to a third party
+  exactly the way the course's original Apps Script reporting did.
 - All secret comparisons are constant-time (`secureCompare` / `timingSafeEqual`).
   Don't introduce `===` on a secret.
 

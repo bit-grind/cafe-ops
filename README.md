@@ -91,7 +91,7 @@ Then open [http://localhost:3000](http://localhost:3000).
   `DEPUTY_ZAPIER_WEBHOOK_SECRET` plus the
   `supabase/migrations/202606050002_deputy_calendar_events.sql` migration.
 - Guest users cannot read supplier costs, Xero bills, extracted invoice lines, recipes, or generated daily briefs.
-- Staff onboarding is visible to admins and standard staff only. New starters reach the course through a per-person invite link (`/training#<token>`) rather than an account; only the SHA-256 of that token is stored, and the raw link is shown once at creation.
+- Staff onboarding is visible to admins and standard staff only. New starters reach the course through a per-person invite link (`/training#<token>`) rather than an account; only the SHA-256 of that token is stored, and the raw link is shown once at creation, alongside a QR code the new starter can scan. The QR is generated in the browser, never by a third-party image service.
 - Kounta imports require timestamped HMAC signatures and replay protection.
 
 ## Security Rollout
