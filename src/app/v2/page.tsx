@@ -46,7 +46,7 @@ type LiveSalesResponse = {
 
 const LIVE_SALES_INTERVAL_MS = 10 * 60 * 1000
 
-const NAV_ORDER: AppTab[] = ['dashboard', 'kitchen', 'recipes', 'bills', 'ask', 'calendar', 'admin']
+const NAV_ORDER: AppTab[] = ['dashboard', 'kitchen', 'recipes', 'bills', 'ask', 'calendar', 'training', 'admin']
 
 const NAV_LABELS: Record<AppTab, string> = {
   dashboard: 'Overview',
@@ -55,6 +55,7 @@ const NAV_LABELS: Record<AppTab, string> = {
   bills: 'Bills',
   ask: 'Ask AI',
   calendar: 'Calendar',
+  training: 'Training',
   admin: 'Admin',
 }
 
@@ -65,6 +66,7 @@ const NAV_HREFS: Record<AppTab, string> = {
   bills: '/v2/bills',
   ask: '/v2/ask',
   calendar: '/v2/calendar',
+  training: '/v2/training',
   admin: '/v2/admin',
 }
 

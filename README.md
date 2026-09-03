@@ -9,6 +9,8 @@ Internal operations dashboard for cafe teams. This app combines sales reporting,
 - `/ops/bills`: Xero bills and extracted invoice line items.
 - `/ops/ask`: AI assistant for sales, products, bills, and supplier questions.
 - `/ops/admin`: user management for admins.
+- `/ops/training`: staff onboarding — invite links for new starters and their progress.
+- `/training`: the onboarding course itself, opened by a new starter from a personal invite link (no ops account required).
 
 ## Stack
 
@@ -41,6 +43,7 @@ requires an exact `TEAM_LOGIN_EMAIL` match and a restricted `guest` role row.
 - `ask_queries`: logged Ask AI prompts and responses.
 - `xero_connection`: stored Xero OAuth connection metadata.
 - `extracted_line_items` and related extraction tables: product-level purchase data parsed from supplier PDFs.
+- `training_trainee` and `training_module_progress`: staff onboarding records. Course content itself lives in code at `src/lib/training/content.ts`.
 
 ## Environment Variables
 
@@ -88,6 +91,7 @@ Then open [http://localhost:3000](http://localhost:3000).
   `DEPUTY_ZAPIER_WEBHOOK_SECRET` plus the
   `supabase/migrations/202606050002_deputy_calendar_events.sql` migration.
 - Guest users cannot read supplier costs, Xero bills, extracted invoice lines, recipes, or generated daily briefs.
+- Staff onboarding is visible to admins and standard staff only. New starters reach the course through a per-person invite link (`/training#<token>`) rather than an account; only the SHA-256 of that token is stored, and the raw link is shown once at creation.
 - Kounta imports require timestamped HMAC signatures and replay protection.
 
 ## Security Rollout

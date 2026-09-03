@@ -51,6 +51,13 @@ checked it.
 - **Cron** routes use `checkCronAuth` (`CRON_SECRET`). **Webhooks** (Deputy/Zapier)
   use a header secret with a timing-safe compare. Secrets go in **headers, never
   query strings** (query strings land in request logs).
+- **Training invite links** (`src/lib/training/traineeAuth.ts`) authenticate new
+  starters who have no ops account. The token is 32 random bytes (base64url) and
+  travels in the URL **fragment** (`/training#<token>`) so browsers never send it
+  to the server — the page moves it into an `x-training-token` header. Only
+  `sha256(token)` is stored; the raw link is shown once, at creation. Trainee
+  routes re-derive quiz length and module unlock order from the course content,
+  never from the request — the client is not trusted about its own progress.
 - All secret comparisons are constant-time (`secureCompare` / `timingSafeEqual`).
   Don't introduce `===` on a secret.
 
@@ -85,6 +92,13 @@ checked it.
 - **Deputy birthdays are computed live** from employee `DateOfBirth` each request,
   never persisted. The `deputy_calendar_events` table only stores Zapier-pushed
   leave/unavailable/available/shift.
+- **Training content lives in code**, not the database
+  (`src/lib/training/content.ts`), and was transcribed verbatim from a
+  standalone HTML course a team member wrote. Keep the wording as authored —
+  it is the cafe's own voice. `content.test.ts` guards the structural
+  invariants across all 44 slides.
+- **A module passes only on full marks.** That was the original course's rule
+  and it is deliberate; `hasPassed` is the single place it is expressed.
 - **Deputy availability** (available vs unavailable) is inferred best-effort from
   Deputy's fields (`src/lib/deputyCalendar.ts`). Verify against a real
   `EmployeeAvailability` payload before changing the inference — changing it blind
