@@ -8,5 +8,8 @@
   },
   "crons": [
     { "path": "/api/brief/cron", "schedule": "30 4 * * *" }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": false
+  }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { adminClient } from '@/lib/adminAuth'
 import { internalError } from '@/lib/apiError'
+import { getTrainingIdentity } from '@/lib/training/identityServer'
 import { resolveTrainee, touchTrainee } from '@/lib/training/traineeAuth'
 
 /**
@@ -25,6 +26,7 @@ export async function GET(req: Request) {
   void touchTrainee(trainee.id, trainee.started_at === null)
 
   return NextResponse.json({
+    identity: getTrainingIdentity(),
     name: trainee.full_name,
     signedOffAt: trainee.signed_off_at,
     signedOffName: trainee.signed_off_name,
@@ -35,5 +37,5 @@ export async function GET(req: Request) {
       attempts: row.attempts as number,
       completedAt: row.first_completed_at as string,
     })),
-  })
+  }, { headers: { 'Cache-Control': 'no-store' } })
 }

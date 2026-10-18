@@ -302,7 +302,7 @@ const from = process.env.SYNC_DATE_FROM || brisbaneTodayISO()
 const to = process.env.SYNC_DATE_TO || from
 const syncDays = eachDay(from, to)
 const liveMonitor = Number.isFinite(LIVE_MONITOR_MINUTES) && LIVE_MONITOR_MINUTES > 0
-console.log(`Kounta ${liveMonitor ? 'live monitor' : SYNC_PRODUCTS ? 'sync' : 'summary sync'}: ${from} → ${to} (app: ${APP_URL})`)
+console.log(`Kounta ${liveMonitor ? 'live monitor' : SYNC_PRODUCTS ? 'sync' : 'summary sync'}: ${from} → ${to}`)
 
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage()

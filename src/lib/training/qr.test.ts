@@ -32,7 +32,7 @@ describe('qrSvgPath', () => {
 })
 
 describe('buildQr', () => {
-  const link = `https://ops.example.com/training#${'A'.repeat(43)}`
+  const link = `https://ops.example.invalid/training#${'A'.repeat(43)}`
 
   it('encodes a real invite link', () => {
     const qr = buildQr(link)
@@ -63,7 +63,7 @@ describe('buildQr', () => {
   })
 
   it('produces a different code for a different token', () => {
-    const other = `https://ops.example.com/training#${'B'.repeat(43)}`
+    const other = `https://ops.example.invalid/training#${'B'.repeat(43)}`
     expect(buildQr(link).path).not.toBe(buildQr(other).path)
   })
 })

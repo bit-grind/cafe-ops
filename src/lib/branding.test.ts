@@ -10,11 +10,11 @@ describe('isDefaultBranding', () => {
 
   it('is false once any field is real branding', () => {
     expect(
-      isDefaultBranding(normalizeBranding({ displayName: 'The Cafe' })),
+      isDefaultBranding(normalizeBranding({ displayName: 'Example Cafe' })),
     ).toBe(false)
     expect(
       isDefaultBranding({
-        displayName: 'The Cafe',
+        displayName: 'Example Cafe',
         subtitle: 'Ops Dashboard',
         logoSrc: '/api/branding/logo',
       }),

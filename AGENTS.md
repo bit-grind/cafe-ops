@@ -99,7 +99,9 @@ checked it.
 - **Training content lives in code**, not the database
   (`src/lib/training/content.ts`), and was transcribed verbatim from a
   standalone HTML course a team member wrote. Keep the wording as authored —
-  it is the cafe's own voice. `content.test.ts` guards the structural
+  it is the cafe's own voice. Identity labels are parameterized from server-only
+  configuration after invite authentication; keep generic defaults in Git.
+  `content.test.ts` guards the structural
   invariants across all 44 slides.
 - **A module passes only on full marks.** That was the original course's rule
   and it is deliberate; `hasPassed` is the single place it is expressed.

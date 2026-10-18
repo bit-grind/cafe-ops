@@ -43,7 +43,7 @@ requires an exact `TEAM_LOGIN_EMAIL` match and a restricted `guest` role row.
 - `ask_queries`: logged Ask AI prompts and responses.
 - `xero_connection`: stored Xero OAuth connection metadata.
 - `extracted_line_items` and related extraction tables: product-level purchase data parsed from supplier PDFs.
-- `training_trainee` and `training_module_progress`: staff onboarding records. Course content itself lives in code at `src/lib/training/content.ts`.
+- `training_trainee` and `training_module_progress`: staff onboarding records. Course structure and generic copy live in code at `src/lib/training/content.ts`; private runtime configuration supplies the course identity.
 
 ## Environment Variables
 
@@ -66,6 +66,7 @@ RATE_LIMIT_KEY=...
 XERO_CLIENT_ID=...
 XERO_CLIENT_SECRET=...
 XERO_REDIRECT_URI=...
+TRAINING_IDENTITY_JSON='{"businessName":"Example Cafe","shortName":"Cafe","readinessName":"Cafe","founderName":"Alex Morgan","footerLocation":"Your neighbourhood"}'
 ```
 
 ## Local Development
@@ -83,6 +84,9 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 - The login page authenticates directly against Supabase.
 - App branding can be supplied outside GitHub via server env or Supabase Storage; the committed defaults stay generic.
+- `TRAINING_IDENTITY_JSON` is a server-only setting for course names and location. Only the allowed display fields are returned after a valid training invite is authenticated; never place service keys or tokens in it. Missing or invalid values use generic defaults.
+- This public source distribution disables automatic Vercel Git deployments with `git.deploymentEnabled: false`. Deployment and comment settings for any existing private project are managed separately.
+- Kounta Actions require `APP_URL` as a repository secret so its value is masked in workflow logs.
 - Most authenticated client pages call `/api/me` to determine role-specific navigation and redirects.
 - The Ask AI route blends multiple data sources: sales totals, product sales, holiday/date parsing, Brisbane weather, Xero bills, and extracted invoice line items.
 - Xero bills support line-item drilldown and attachment viewing.

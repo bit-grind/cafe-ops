@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useBranding } from '@/lib/useBranding'
 import {
-  SIGNOFF_DECLARATION,
+  createSignoffDeclaration,
+  createTrainingModules,
   SIGNOFF_STANDARD,
   SIGNOFF_STANDARD_BOLD,
-  TRAINING_MODULES,
 } from '@/lib/training/content'
+import { DEFAULT_TRAINING_IDENTITY, normalizeTrainingIdentity } from '@/lib/training/identity'
 import { completionSummary, isUnlocked } from '@/lib/training/progress'
 import { slideGateCount } from '@/lib/training/types'
 import type { ContentBlock, RichText, Slide, TrainingModule } from '@/lib/training/types'
@@ -400,6 +401,9 @@ function fireConfetti(canvas: HTMLCanvasElement | null) {
 
 export default function TrainingPage() {
   const branding = useBranding()
+  const [identity, setIdentity] = useState(DEFAULT_TRAINING_IDENTITY)
+  const modules = useMemo(() => createTrainingModules(identity), [identity])
+  const declaration = useMemo(() => createSignoffDeclaration(identity), [identity])
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [token, setToken] = useState<string | null>(null)
@@ -422,7 +426,7 @@ export default function TrainingPage() {
 
   const confettiRef = useRef<HTMLCanvasElement | null>(null)
 
-  const currentModule: TrainingModule | undefined = TRAINING_MODULES[moduleIdx]
+  const currentModule: TrainingModule | undefined = modules[moduleIdx]
   const summary = useMemo(() => completionSummary(completedIds), [completedIds])
 
   // The page is the only light surface in a dark app; the body background is
@@ -482,6 +486,7 @@ export default function TrainingPage() {
         }
         const data = await res.json()
         if (!alive) return
+        setIdentity(normalizeTrainingIdentity(data.identity))
         setToken(stored)
         setName(data.name ?? '')
         setSignName(data.signedOffName ?? data.name ?? '')
@@ -634,7 +639,7 @@ export default function TrainingPage() {
         </div>
         {children}
         <p className={styles.footer}>
-          {branding.displayName} · Asquith St, Morningside · Est. 2010
+          {branding.displayName} · {identity.footerLocation} · Est. 2010
           <br />
           Fast, funky &amp; fresh — customers first, coffee second, food third.
         </p>
@@ -650,7 +655,7 @@ export default function TrainingPage() {
         <div className={styles.hubHead}>
           <h1>
             {summary.allComplete
-              ? `You’re Cafe ready, ${name.split(' ')[0]}`
+              ? `You’re ${identity.readinessName} ready, ${name.split(' ')[0]}`
               : `Welcome, ${name.split(' ')[0]}`}
           </h1>
           <p>
@@ -672,7 +677,7 @@ export default function TrainingPage() {
 
         <div className={styles.sectionLabel}>Modules</div>
         <div className={styles.modList}>
-          {TRAINING_MODULES.map((module, i) => {
+          {modules.map((module, i) => {
             const done = completedIds.includes(module.id)
             const unlocked = isUnlocked(module.id, completedIds)
             const isNext = unlocked && !done
@@ -709,13 +714,13 @@ export default function TrainingPage() {
 
         {summary.allComplete && (
           <div className={styles.card} style={{ marginTop: 20 }}>
-            <p className={styles.eyebrow}>The Cafe standard</p>
+            <p className={styles.eyebrow}>{identity.businessName} standard</p>
             <div className={styles.standard}>
               {SIGNOFF_STANDARD}
               <b>{SIGNOFF_STANDARD_BOLD}</b>
             </div>
             <h2 className={styles.h2}>Sign-off</h2>
-            <p className={styles.p}>{SIGNOFF_DECLARATION}</p>
+            <p className={styles.p}>{declaration}</p>
 
             <div className={styles.field}>
               <label htmlFor="signoff-name">Full name</label>
@@ -905,7 +910,7 @@ export default function TrainingPage() {
 
   const total = currentModule.quiz.length
   const passed = quizScore === total
-  const hasNext = moduleIdx < TRAINING_MODULES.length - 1
+  const hasNext = moduleIdx < modules.length - 1
 
   return chrome(
     <>

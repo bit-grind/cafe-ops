@@ -17,8 +17,8 @@ describe('normalizeAppRole', () => {
 
 describe('isTeamEmail', () => {
   it('only matches the server-configured team account', () => {
-    process.env.TEAM_LOGIN_EMAIL = 'team@cafe.internal'
-    expect(isTeamEmail('team@cafe.internal')).toBe(true)
-    expect(isTeamEmail('other@cafe.internal')).toBe(false)
+    process.env.TEAM_LOGIN_EMAIL = 'team@example.invalid'
+    expect(isTeamEmail('team@example.invalid')).toBe(true)
+    expect(isTeamEmail('other@example.invalid')).toBe(false)
   })
 })

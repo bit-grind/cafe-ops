@@ -37,7 +37,7 @@ The full daily sync:
 
 No data is stored on any local machine; everything runs in GitHub's cloud runner.
 
-## One-time setup — add these repo secrets and variable
+## One-time setup — add these repo secrets
 
 In GitHub: **Settings → Secrets and variables → Actions → New repository secret**.
 Add each yourself (so the password is never handled by anyone else):
@@ -47,11 +47,6 @@ Add each yourself (so the password is never handled by anyone else):
 | `KOUNTA_USER` | your Kounta login email |
 | `KOUNTA_PASS` | your Kounta password |
 | `IMPORT_SECRET` | **the same value** as `IMPORT_SECRET` in the Vercel project env (the app uses it to authenticate imports) |
-
-Then open the **Variables** tab in the same screen and add:
-
-| Variable | Value |
-|----------|-------|
 | `APP_URL` | the deployed Cafe Ops app URL, for example `https://your-app.example.invalid` |
 
 That's it — the daily run starts automatically.

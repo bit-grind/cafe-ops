@@ -1,4 +1,5 @@
 import type { TrainingModule } from './types'
+import { DEFAULT_TRAINING_IDENTITY, type TrainingIdentity } from './identity'
 
 /**
  * Bumped whenever the course content changes materially. Stamped onto a
@@ -10,13 +11,15 @@ export const CONTENT_VERSION = '2026-09-03'
 /** Every quiz question in a module must be answered correctly to pass it. */
 export const PASS_REQUIRES_FULL_MARKS = true
 
-export const TRAINING_MODULES: TrainingModule[] = [
+export const createTrainingModules = (
+  identity: TrainingIdentity = DEFAULT_TRAINING_IDENTITY,
+): TrainingModule[] => [
   {
     id: 'welcome',
     icon: '👋',
-    title: 'Welcome to The Cafe',
+    title: `Welcome to ${identity.businessName}`,
     tag: 'Flip cards',
-    blurb: 'Our story, your role and the Cafe mindset.',
+    blurb: `Our story, your role and the ${identity.shortName} mindset.`,
     slides: [
       {
         type: 'content',
@@ -26,7 +29,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
           {
             kind: 'para',
             text: [
-              'The Cafe is a community café that prides itself on being ',
+              `${identity.businessName} is a community café that prides itself on being `,
               { hl: 'fast, funky and fresh' },
               '.',
             ],
@@ -35,7 +38,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
             kind: 'para',
             text: [
               'Founder ',
-              { strong: 'Cafe Founder' },
+              { strong: identity.founderName },
               " has spent 16 years building a café loved by its community — and you're now part of the magic that makes it happen.",
             ],
           },
@@ -44,7 +47,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
       {
         type: 'reveal',
         kicker: 'More than coffee',
-        heading: '“Cafe” is a feeling, not just a place',
+        heading: `“${identity.shortName}” is a feeling, not just a place`,
         intro: [
           'A warm, energetic space where ',
           { strong: 'customers feel welcome' },
@@ -80,7 +83,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
             text: [
               "Whatever you're doing — coffee, food, service, tables or behind the scenes — ",
               { hl: 'your role matters' },
-              '. Every smile, every conversation and every coffee helps create the Cafe experience.',
+              `. Every smile, every conversation and every coffee helps create the ${identity.shortName} experience.`,
             ],
           },
           {
@@ -111,7 +114,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
       },
       {
         type: 'reveal',
-        kicker: 'The Cafe mindset',
+        kicker: `The ${identity.shortName} mindset`,
         quote: '“See It, Own It, Act.”',
         emphasised: true,
         items: [
@@ -135,13 +138,13 @@ export const TRAINING_MODULES: TrainingModule[] = [
     ],
     quiz: [
       {
-        question: 'What year was The Cafe established?',
+        question: `What year was ${identity.businessName} established?`,
         answers: ['2016', '2010', '2019'],
         correct: 1,
       },
       {
-        question: 'Who founded The Cafe?',
-        answers: ['Cafe Founder', 'Nathan Norris', 'Nico Bianchi'],
+        question: `Who founded ${identity.businessName}?`,
+        answers: [identity.founderName, 'Nathan Norris', 'Nico Bianchi'],
         correct: 0,
       },
       {
@@ -204,7 +207,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
                 text: 'Finish your conversation first, then serve them',
                 correct: false,
                 feedback:
-                  "Team chats pause the moment a customer is near. Nobody at Cafe should ever feel like they're waiting.",
+                  `Team chats pause the moment a customer is near. Nobody at ${identity.shortName} should ever feel like they're waiting.`,
               },
               {
                 text: 'Pause, make eye contact and greet them warmly',
@@ -301,7 +304,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
           {
             kind: 'para',
             text: [
-              '“No” ends a conversation. At Cafe, we always offer a ',
+              `“No” ends a conversation. At ${identity.shortName}, we always offer a `,
               { hl: 'path to “yes.”' },
               ' If we don’t have exactly what a customer asks for, our job is to help them find something they’ll love instead.',
             ],
@@ -311,7 +314,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
       {
         type: 'choice',
         kicker: 'Same café, different result',
-        heading: 'Choose the Cafe response',
+        heading: `Choose the ${identity.shortName} response`,
         groups: [
           {
             prompt: 'Customer: “Do you do eggs benedict?” — we don’t. What do you say?',
@@ -325,7 +328,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
               {
                 text: '“Not benedict, but our ham & cheese toastie is a favourite, and the quiche just came out — coffee with that?”',
                 correct: true,
-                feedback: 'That’s the Cafe way. They stay, eat, love it, and come back tomorrow.',
+                feedback: `That’s the ${identity.shortName} way. They stay, eat, love it, and come back tomorrow.`,
               },
             ],
           },
@@ -349,7 +352,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
               {
                 text: '“Would you like a coffee with that?”',
                 correct: true,
-                feedback: 'Perfect — genuine, helpful suggestion. That’s the Cafe way.',
+                feedback: `Perfect — genuine, helpful suggestion. That’s the ${identity.shortName} way.`,
               },
             ],
           },
@@ -394,7 +397,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
         type: 'content',
         kicker: 'What we’re known for',
         blocks: [
-          { kind: 'heading', text: 'Coffee is a massive part of Cafe' },
+          { kind: 'heading', text: `Coffee is a massive part of ${identity.shortName}` },
           {
             kind: 'para',
             text: 'Customers expect their coffee made well, handled carefully and delivered quickly. It’s our reputation in a cup.',
@@ -545,7 +548,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
       {
         type: 'choice',
         kicker: 'On the floor',
-        heading: 'What’s the Cafe move?',
+        heading: `What’s the ${identity.shortName} move?`,
         groups: [
           {
             prompt:
@@ -873,10 +876,10 @@ export const TRAINING_MODULES: TrainingModule[] = [
         kicker: 'Owning mistakes',
         heading: 'When you stuff up',
         intro:
-          'We’re all human and things go wrong. Nobody at Cafe is ever in trouble for an honest mistake fixed fast — hiding it is a different story.',
+          `We’re all human and things go wrong. Nobody at ${identity.shortName} is ever in trouble for an honest mistake fixed fast — hiding it is a different story.`,
         groups: [
           {
-            prompt: 'You make a mistake on an order mid-shift. What’s the Cafe move?',
+            prompt: `You make a mistake on an order mid-shift. What’s the ${identity.shortName} move?`,
             options: [
               {
                 text: 'Quietly hope nobody notices',
@@ -887,7 +890,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
               {
                 text: 'Own it and fix it immediately',
                 correct: true,
-                feedback: 'Exactly. Own it, fix it fast. That’s the Cafe way.',
+                feedback: `Exactly. Own it, fix it fast. That’s the ${identity.shortName} way.`,
               },
             ],
           },
@@ -935,7 +938,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
         correct: 1,
       },
       {
-        question: 'A customer complains about their order. The Cafe response is…',
+        question: `A customer complains about their order. The ${identity.shortName} response is…`,
         answers: [
           'Work out whose fault it was',
           'Apologise and fix it, without arguing',
@@ -1134,7 +1137,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
     ],
     quiz: [
       {
-        question: 'Asking questions at Cafe is…',
+        question: `Asking questions at ${identity.shortName} is…`,
         answers: [
           'A sign you’re struggling',
           'A good thing — it shows you care',
@@ -1155,6 +1158,9 @@ export const TRAINING_MODULES: TrainingModule[] = [
   },
 ]
 
+// Generic content remains authoritative for module order and quiz lengths.
+export const TRAINING_MODULES = createTrainingModules()
+
 /** The sign-off statement shown once every module is complete. */
 export const SIGNOFF_STANDARD =
   'A strong team member notices, cares, acts and keeps learning.'
@@ -1162,5 +1168,8 @@ export const SIGNOFF_STANDARD =
 export const SIGNOFF_STANDARD_BOLD =
   'Customers first. Be the nicest person they meet today. Never a flat no. If in doubt, throw it out. Clean as you go. Own your mistakes. Back the team. See It, Own It, Act.'
 
-export const SIGNOFF_DECLARATION =
-  'I have read and understand what’s required to be an effective member of The Cafe team, and I know this guide is a reference tool I can always come back to.'
+export function createSignoffDeclaration(identity: TrainingIdentity = DEFAULT_TRAINING_IDENTITY): string {
+  return `I have read and understand what’s required to be an effective member of ${identity.businessName} team, and I know this guide is a reference tool I can always come back to.`
+}
+
+export const SIGNOFF_DECLARATION = createSignoffDeclaration()
