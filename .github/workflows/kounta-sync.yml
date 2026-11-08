@@ -39,15 +39,25 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Preflight — skip cleanly until secrets are set
+      - name: Check import configuration
         id: pre
+        env:
+          KOUNTA_USER: ${{ secrets.KOUNTA_USER }}
+          KOUNTA_PASS: ${{ secrets.KOUNTA_PASS }}
+          IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
         run: |
-          if [ -n "${{ secrets.KOUNTA_USER }}" ] && [ -n "${{ secrets.KOUNTA_PASS }}" ] && [ -n "${{ secrets.IMPORT_SECRET }}" ] && [ -n "${{ secrets.APP_URL }}" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::KOUNTA_USER / KOUNTA_PASS / IMPORT_SECRET / APP_URL secrets not set yet; skipping. See kounta-sync/README.md."
+          missing=false
+          for required in KOUNTA_USER KOUNTA_PASS IMPORT_SECRET APP_URL; do
+            if [ -z "${!required}" ]; then
+              echo "::error::Missing required import configuration: $required" >&2
+              missing=true
+            fi
+          done
+          if [ "$missing" = "true" ]; then
+            exit 1
           fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - if: steps.pre.outputs.ready == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -59,13 +69,37 @@ jobs:
 
       - name: Install deps
         if: steps.pre.outputs.ready == 'true'
+        timeout-minutes: 4
         working-directory: kounta-sync
-        run: npm ci
+        run: |
+          for attempt in 1 2 3; do
+            if npm ci; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Dependency installation failed after three attempts." >&2
+              exit 1
+            fi
+            echo "::warning::Dependency installation failed (attempt $attempt/3); retrying."
+            sleep "$((attempt * 10))"
+          done
 
       - name: Install Chromium
         if: steps.pre.outputs.ready == 'true'
+        timeout-minutes: 6
         working-directory: kounta-sync
-        run: npx playwright install --with-deps chromium
+        run: |
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Chromium installation failed after three attempts." >&2
+              exit 1
+            fi
+            echo "::warning::Chromium installation failed (attempt $attempt/3); retrying."
+            sleep "$((attempt * 10))"
+          done
 
       - name: Run sync
         if: steps.pre.outputs.ready == 'true'
@@ -95,15 +129,25 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
-      - name: Preflight — skip cleanly until secrets are set
+      - name: Check import configuration
         id: pre
+        env:
+          KOUNTA_USER: ${{ secrets.KOUNTA_USER }}
+          KOUNTA_PASS: ${{ secrets.KOUNTA_PASS }}
+          IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
         run: |
-          if [ -n "${{ secrets.KOUNTA_USER }}" ] && [ -n "${{ secrets.KOUNTA_PASS }}" ] && [ -n "${{ secrets.IMPORT_SECRET }}" ] && [ -n "${{ secrets.APP_URL }}" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::KOUNTA_USER / KOUNTA_PASS / IMPORT_SECRET / APP_URL secrets not set yet; skipping. See kounta-sync/README.md."
+          missing=false
+          for required in KOUNTA_USER KOUNTA_PASS IMPORT_SECRET APP_URL; do
+            if [ -z "${!required}" ]; then
+              echo "::error::Missing required import configuration: $required" >&2
+              missing=true
+            fi
+          done
+          if [ "$missing" = "true" ]; then
+            exit 1
           fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - if: steps.pre.outputs.ready == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -115,13 +159,37 @@ jobs:
 
       - name: Install deps
         if: steps.pre.outputs.ready == 'true'
+        timeout-minutes: 4
         working-directory: kounta-sync
-        run: npm ci
+        run: |
+          for attempt in 1 2 3; do
+            if npm ci; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Dependency installation failed after three attempts." >&2
+              exit 1
+            fi
+            echo "::warning::Dependency installation failed (attempt $attempt/3); retrying."
+            sleep "$((attempt * 10))"
+          done
 
       - name: Install Chromium
         if: steps.pre.outputs.ready == 'true'
+        timeout-minutes: 6
         working-directory: kounta-sync
-        run: npx playwright install --with-deps chromium
+        run: |
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Chromium installation failed after three attempts." >&2
+              exit 1
+            fi
+            echo "::warning::Chromium installation failed (attempt $attempt/3); retrying."
+            sleep "$((attempt * 10))"
+          done
 
       - name: Run live summary refresh
         if: steps.pre.outputs.ready == 'true'

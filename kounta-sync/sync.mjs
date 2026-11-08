@@ -25,9 +25,9 @@
  *                              defaults to today's Brisbane business date
  */
 import { chromium } from 'playwright'
-import { createHmac, randomUUID } from 'crypto'
 import { shouldSkipMissingCurrentDaySummary } from './syncPolicy.mjs'
 import { mapHours, num } from './hourMapping.mjs'
+import { postSignedJson, requestKountaCsv, runLiveSample, withKountaSession } from './syncRequests.mjs'
 
 const { APP_URL: rawAppUrl, KOUNTA_USER, KOUNTA_PASS, IMPORT_SECRET } = process.env
 
@@ -163,37 +163,34 @@ function mapProducts(rows, businessDate) {
 
 async function exportCsv(page, report, from, to) {
   const url = `https://my.kounta.com/report/${report}?export=true&DateFrom=${from}&DateTo=${to}&SiteID=0&TerminalID=0`
-  return page.evaluate(async (u) => {
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const r = await fetch(u, { credentials: 'include' })
-      if (r.status === 200) return r.text()
-      await new Promise(res => setTimeout(res, 1500))
+  const request = () => page.evaluate(async (u) => {
+    try {
+      const response = await fetch(u, { credentials: 'include', signal: AbortSignal.timeout(30_000) })
+      return {
+        status: response.status,
+        url: response.url,
+        body: await response.text(),
+        retryAfter: response.headers.get('retry-after'),
+      }
+    } catch {
+      return { networkError: true }
     }
-    throw new Error('export failed (non-200 after retries): ' + u)
   }, url)
+  return withKountaSession(() => requestKountaCsv(request, report, retryOptions), async () => {
+    console.log('Kounta session expired; signing in again once.')
+    await login(page)
+  })
 }
 
-async function postJson(path, payload) {
-  const body = JSON.stringify(payload)
-  const timestamp = String(Math.floor(Date.now() / 1000))
-  const nonce = randomUUID()
-  const signature = createHmac('sha256', IMPORT_SECRET)
-    .update(`${timestamp}.${nonce}.${body}`)
-    .digest('hex')
-  const r = await fetch(`${APP_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-import-timestamp': timestamp,
-      'x-import-nonce': nonce,
-      'x-import-signature': signature,
-    },
-    body,
-  })
-  const responseBody = await r.text()
-  if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${responseBody.slice(0, 200)}`)
-  return responseBody
+const retryOptions = {
+  onRetry: ({ attempt, attempts, error, delayMs }) => {
+    console.warn(`${error.message}; retrying (${attempt + 1}/${attempts}) in ${delayMs / 1000}s.`)
+  },
 }
+
+const postJson = (path, payload) => postSignedJson({
+  appUrl: APP_URL, path, payload, secret: IMPORT_SECRET, retryOptions,
+})
 
 async function login(page) {
   await page.goto('https://my.kounta.com/login', { waitUntil: 'networkidle' })
@@ -260,6 +257,8 @@ async function runLiveMonitor(page, from, to) {
   const deadline = Date.now() + LIVE_MONITOR_MINUTES * 60_000
   let lastKey = ''
   let sample = 0
+  let consecutiveFailures = 0
+  let lastSampleError = null
 
   while (Date.now() < deadline) {
     if (stopMinute != null && brisbaneMinuteOfDay() > stopMinute) {
@@ -269,7 +268,25 @@ async function runLiveMonitor(page, from, to) {
 
     sample += 1
     const sampledAt = new Date().toISOString()
-    const { summary, summaryByDate, skippedMissingCurrentDay } = await importSummary(page, from, to)
+    const result = await runLiveSample(async () => {
+      const summaryResult = await importSummary(page, from, to)
+      if (summaryResult.skippedMissingCurrentDay) return summaryResult
+      const subject = summaryResult.summaryByDate.get(to) ?? summaryResult.summary[summaryResult.summary.length - 1]
+      const allowEmptyHours = !subject || (subject.order_count === 0 && subject.gross_sales === 0)
+      const hours = SYNC_HOURS ? await importHours(page, to, allowEmptyHours) : []
+      return { ...summaryResult, subject, hours }
+    }, consecutiveFailures)
+    consecutiveFailures = result.consecutiveFailures
+    if (!result.ok) {
+      lastSampleError = result.error
+      console.warn(`Live sample ${sample} failed after transient retries (${consecutiveFailures}/3); keeping the browser for the next sample.`)
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) throw result.error
+      await sleep(Math.min(LIVE_POLL_SECONDS * 1000, remaining))
+      continue
+    }
+    lastSampleError = null
+    const { skippedMissingCurrentDay, subject, hours } = result.value
     if (skippedMissingCurrentDay) {
       console.log(`Live sample ${sample} @ ${sampledAt}: Kounta has no summary row for ${to} yet; skipped.`)
       const remaining = deadline - Date.now()
@@ -277,9 +294,6 @@ async function runLiveMonitor(page, from, to) {
       await sleep(Math.min(LIVE_POLL_SECONDS * 1000, remaining))
       continue
     }
-    const subject = summaryByDate.get(to) ?? summary[summary.length - 1]
-    const allowEmptyHours = !subject || (subject.order_count === 0 && subject.gross_sales === 0)
-    const hours = SYNC_HOURS ? await importHours(page, to, allowEmptyHours) : []
     const key = subject
       ? `${subject.business_date}:${subject.gross_sales}:${subject.order_count}:${subject.aov}`
       : ''
@@ -295,6 +309,8 @@ async function runLiveMonitor(page, from, to) {
     if (remaining <= 0) break
     await sleep(Math.min(LIVE_POLL_SECONDS * 1000, remaining))
   }
+  // Do not report a clean monitor completion if its final samples never recovered.
+  if (lastSampleError) throw lastSampleError
 }
 
 // ── run ──────────────────────────────────────────────────────────────────
