@@ -49,7 +49,8 @@ concurrency:
 
 jobs:
   live-summary:
-    runs-on: ubuntu-latest
+    # Playwright 1.60.0 supports Ubuntu 24.04; ubuntu-latest can move ahead.
+    runs-on: ubuntu-24.04
     # Headroom over the poll loop. The monitor polls for LIVE_MONITOR_MINUTES
     # (70 on schedule) and must EXIT cleanly so its `!cancelled()` continue step
     # can dispatch the chain successor. With timeout-minutes only 5 above the

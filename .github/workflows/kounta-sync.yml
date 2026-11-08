@@ -35,7 +35,8 @@ concurrency:
 jobs:
   sync:
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 4 * * *'
-    runs-on: ubuntu-latest
+    # Playwright 1.60.0 supports Ubuntu 24.04; ubuntu-latest can move ahead.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Preflight — skip cleanly until secrets are set
@@ -90,7 +91,8 @@ jobs:
 
   live-summary:
     if: github.event_name == 'schedule' && github.event.schedule != '30 4 * * *'
-    runs-on: ubuntu-latest
+    # Playwright 1.60.0 supports Ubuntu 24.04; ubuntu-latest can move ahead.
+    runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
       - name: Preflight — skip cleanly until secrets are set
