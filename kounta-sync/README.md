@@ -56,6 +56,11 @@ and `SYNC_PRODUCTS=false` skips product rows. Scheduled live refreshes also set
 `ALLOW_MISSING_CURRENT_DAY=true`, which exits cleanly when Kounta has not created
 today's summary row yet; manual and final daily syncs remain strict.
 
+Automatic one-shot live repairs use the `allow_missing_current_day` dispatch
+input to allow the same first-sales wait. Missing today's row then skips without
+writing sales or successful import receipts. The option defaults to false for
+manual runs; historical and multi-day gaps still fail when it is enabled.
+
 ## Backfill / manual run
 
 **Actions → "Kounta daily sync" → Run workflow.** Leave the date fields blank to

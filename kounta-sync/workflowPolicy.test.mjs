@@ -144,6 +144,13 @@ it('keeps cancelled monitors from spawning successors and backs off failed chain
   expect(live).toContain("format('kounta-live-sales-manual-{0}', github.run_id)")
 })
 
+it('accepts an explicit missing-today opt-in for independent live repairs while keeping manual runs strict', () => {
+  const live = workflows.find(workflow => workflow.name === 'kounta-live-sales.yml').source
+  expect(live).toMatch(/      allow_missing_current_day:\n(?:        .+\n)*        type: boolean\n        default: false/)
+  const allowMissing = live.match(/^          ALLOW_MISSING_CURRENT_DAY: (.+)$/m)?.[1]
+  expect(allowMissing).toBe("${{ (github.event_name == 'schedule' || github.event.inputs.continue_monitoring == 'true' || github.event.inputs.allow_missing_current_day == 'true') && 'true' || 'false' }}")
+})
+
 describe('monitor successor timing', () => {
   const live = workflows.find(workflow => workflow.name === 'kounta-live-sales.yml').source
   const [script] = scriptsNamed(live, 'Continue live monitor during trading')
