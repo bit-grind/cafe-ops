@@ -88,6 +88,18 @@ describe.each(workflows)('$name import setup', ({ source }) => {
     }
   })
 
+  it('allows cold-runner setup time and installs the headless shell used by sync', () => {
+    const installs = [...source.matchAll(/      - name: Install Chromium\n([\s\S]*?)(?=\n      - name:|$)/g)]
+    expect(installs).toHaveLength(preflights.length)
+    for (const [, block] of installs) {
+      expect(block).toContain('timeout-minutes: 12')
+      expect(block).toContain('npx playwright install --with-deps --only-shell chromium')
+      expect(block).not.toContain('continue-on-error')
+    }
+    const sync = readFileSync(new URL('./sync.mjs', import.meta.url), 'utf8')
+    expect(sync).toContain('chromium.launch({ headless: true })')
+  })
+
   describe.each([
     ['Install deps', 'npm'],
     ['Install Chromium', 'npx'],
