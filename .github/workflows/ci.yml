@@ -31,3 +31,36 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
           SUPABASE_SERVICE_ROLE_KEY: ci-dummy-service-key
+
+
+  # Exercise the real cold Linux browser setup without Kounta credentials,
+  # import secrets, network navigation, or production writes.
+  kounta-browser-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+      - run: npm ci
+        working-directory: kounta-sync
+      - name: Install headless Chromium
+        timeout-minutes: 12
+        working-directory: kounta-sync
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: Launch headless Chromium without production access
+        working-directory: kounta-sync
+        run: |
+          node --input-type=module -e "
+            import { chromium } from 'playwright';
+            const browser = await chromium.launch({ headless: true });
+            try {
+              const page = await browser.newPage();
+              await page.setContent('<title>Kounta browser smoke</title>');
+              if (await page.title() !== 'Kounta browser smoke') throw new Error('Browser smoke failed');
+              console.log('Headless browser smoke passed');
+            } finally {
+              await browser.close();
+            }
+          "

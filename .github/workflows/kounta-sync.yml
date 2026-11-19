@@ -84,13 +84,15 @@ jobs:
             sleep "$((attempt * 10))"
           done
 
+      # Ubuntu mirror downloads can exceed six minutes before the browser is
+      # ready. Keep setup bounded, but allow real cold-runner install headroom.
       - name: Install Chromium
         if: steps.pre.outputs.ready == 'true'
-        timeout-minutes: 6
+        timeout-minutes: 12
         working-directory: kounta-sync
         run: |
           for attempt in 1 2 3; do
-            if npx playwright install --with-deps chromium; then
+            if npx playwright install --with-deps --only-shell chromium; then
               exit 0
             fi
             if [ "$attempt" -eq 3 ]; then
@@ -174,13 +176,15 @@ jobs:
             sleep "$((attempt * 10))"
           done
 
+      # Ubuntu mirror downloads can exceed six minutes before the browser is
+      # ready. Keep setup bounded, but allow real cold-runner install headroom.
       - name: Install Chromium
         if: steps.pre.outputs.ready == 'true'
-        timeout-minutes: 6
+        timeout-minutes: 12
         working-directory: kounta-sync
         run: |
           for attempt in 1 2 3; do
-            if npx playwright install --with-deps chromium; then
+            if npx playwright install --with-deps --only-shell chromium; then
               exit 0
             fi
             if [ "$attempt" -eq 3 ]; then
