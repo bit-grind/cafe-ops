@@ -25,6 +25,7 @@
  *                              defaults to today's Brisbane business date
  */
 import { chromium } from 'playwright'
+import { navigateKounta } from './navigation.mjs'
 import { shouldSkipMissingCurrentDaySummary } from './syncPolicy.mjs'
 import { mapHours, num } from './hourMapping.mjs'
 import { postSignedJson, requestKountaCsv, runLiveSample, withKountaSession } from './syncRequests.mjs'
@@ -193,7 +194,7 @@ const postJson = (path, payload) => postSignedJson({
 })
 
 async function login(page) {
-  await page.goto('https://my.kounta.com/login', { waitUntil: 'networkidle' })
+  await navigateKounta(page, 'https://my.kounta.com/login', retryOptions)
   const emailSel = 'input[type=email], input[name=username], input[name=email], #username, #email'
   const passSel = 'input[type=password], input[name=password], #password'
 
@@ -208,13 +209,13 @@ async function login(page) {
   await page.fill(passSel, KOUNTA_PASS)
 
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
     page.click('button[type=submit], input[type=submit], button:has-text("Log in"), button:has-text("Sign in")'),
   ])
 
   // Land on a report page: confirms the session and puts us on the right origin
   // for the same-origin export fetches.
-  await page.goto('https://my.kounta.com/report/salesummary', { waitUntil: 'networkidle' })
+  await navigateKounta(page, 'https://my.kounta.com/report/salesummary', retryOptions)
   if (/login|sign[-_ ]?in|auth/i.test(page.url())) {
     throw new Error('Login failed — still on ' + page.url())
   }

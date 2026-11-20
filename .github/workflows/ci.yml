@@ -64,3 +64,6 @@ jobs:
               await browser.close();
             }
           "
+      - name: Verify navigation with persistent background traffic
+        working-directory: kounta-sync
+        run: node navigation.smoke.mjs
